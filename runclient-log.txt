@@ -7,63 +7,138 @@ Project directory 'C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П 
 > Task :processResources UP-TO-DATE
 > Task :classes UP-TO-DATE
 
-> Task :compileClientJava FAILED
-.\gradlew : C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\modules\impl\render\worldpar
-ticles\Particle.java:222: error: cannot find symbol
-C:\Users\awepu\AppData\Local\Temp\ps-script-bac56345-d074-4272-9cef-ec59bca6df6f.ps1:74 знак:65
+.\gradlew : Note: C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\client\draggables\HudM
+anager.java uses unchecked or unsafe operations.
+C:\Users\awepu\AppData\Local\Temp\ps-script-22a09abd-63e0-41e6-b128-560094470a38.ps1:74 знак:65
 + ... u\OneDrive\Desktop\Новая папка (5)"; .\gradlew runClient 2>&1 | Out-F ...
 +                                          ~~~~~~~~~~~~~~~~~~~~~~~~
-    + CategoryInfo          : NotSpecified: (C:\Users\awepu\...not find symbol:String) [], RemoteException
+    + CategoryInfo          : NotSpecified: (Note: C:\Users\...afe operations.:String) [], RemoteException
     + FullyQualifiedErrorId : NativeCommandError
  
-      RenderLayer var14 = ClientPipelines.WORLD_PARTICLES_GLOW.getTickProgress(this.texture);
-                                                              ^
-  symbol:   method getTickProgress(Identifier)
-  location: variable WORLD_PARTICLES_GLOW of type Function<Identifier,RenderLayer>
-C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\modules\impl\render\worldparticles\Parti
-cleRenderer.java:22: error: cannot find symbol
-      return ClientPipelines.WORLD_PARTICLES_GLOW.getTickProgress(GLOW_TEXTURE);
-                                                 ^
-  symbol:   method getTickProgress(Identifier)
-  location: variable WORLD_PARTICLES_GLOW of type Function<Identifier,RenderLayer>
-C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\modules\impl\render\worldparticles\Parti
-cleRenderer.java:26: error: cannot find symbol
-      return ClientPipelines.WORLD_PARTICLES_GLOW.getTickProgress(GLOW_TEXTURE_SECONDARY);
-                                                 ^
-  symbol:   method getTickProgress(Identifier)
-  location: variable WORLD_PARTICLES_GLOW of type Function<Identifier,RenderLayer>
-3 errors
+Note: Recompile with -Xlint:unchecked for details.
+> Task :compileClientJava
+
+> Task :processClientResources UP-TO-DATE
+> Task :clientClasses
+> Task :generateLog4jConfig UP-TO-DATE
+> Task :generateRemapClasspath UP-TO-DATE
+> Task :generateDLIConfig UP-TO-DATE
+> Task :configureLaunch UP-TO-DATE
+> Task :downloadAssets UP-TO-DATE
+> Task :configureClientLaunch UP-TO-DATE
+
+> Task :runClient
+[23:34:21] [main/WARN] (FabricLoader/Knot) Class path entries reference missing files: C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\build\classes\java\main - the game may not load properly!
+[23:34:21] [main/INFO] (FabricLoader/GameProvider) Loading Minecraft 1.21.11 with Fabric Loader 0.19.2
+[23:34:22] [main/INFO] (FabricLoader) Loading 52 mods:
+	- copyright 1.0.1
+	- crm 1.21.11-fabric-2.7.1
+	- fabric-api 0.141.1+1.21.11
+	- fabric-api-base 1.0.5+4ebb5c083e
+	- fabric-api-lookup-api-v1 1.6.113+1fb1cde93e
+	- fabric-biome-api-v1 17.1.1+4fc5413f3e
+	- fabric-block-api-v1 1.1.10+4ebb5c083e
+	- fabric-block-view-api-v2 1.0.39+4ebb5c083e
+	- fabric-client-gametest-api-v1 4.3.5+bfe9fcf43e
+	- fabric-command-api-v2 2.4.7+6b42a6003e
+	- fabric-content-registries-v0 10.2.14+4fc5413f3e
+	- fabric-convention-tags-v1 2.1.55+7f945d5b3e
+	- fabric-convention-tags-v2 2.17.3+8ef948ba3e
+	- fabric-crash-report-info-v1 0.3.23+4ebb5c083e
+	- fabric-data-attachment-api-v1 1.8.46+b6ef3aec3e
+	- fabric-data-generation-api-v1 23.4.0+69974c4e3e
+	- fabric-dimensions-v1 4.0.28+4fc5413f3e
+	- fabric-entity-events-v1 3.1.1+1d0ab4303e
+	- fabric-events-interaction-v0 4.1.0+3b89ecf63e
+	- fabric-game-rule-api-v1 2.0.3+4fc5413f3e
+	- fabric-gametest-api-v1 3.1.27+4fc5413f3e
+	- fabric-item-api-v1 11.5.20+d0c46b9e3e
+	- fabric-item-group-api-v1 4.2.36+4fc5413f3e
+	- fabric-key-binding-api-v1 1.1.7+4fc5413f3e
+	- fabric-lifecycle-events-v1 2.6.15+4ebb5c083e
+	- fabric-loot-api-v2 3.0.73+3f89f5a53e
+	- fabric-loot-api-v3 2.0.20+78c8b4663e
+	- fabric-message-api-v1 6.1.12+4ebb5c083e
+	- fabric-model-loading-api-v1 6.0.14+4fc5413f3e
+	- fabric-networking-api-v1 5.1.5+ae1e07683e
+	- fabric-object-builder-api-v1 21.1.39+4fc5413f3e
+	- fabric-particles-v1 4.2.11+4fc5413f3e
+	- fabric-recipe-api-v1 8.2.3+4ebb5c083e
+	- fabric-registry-sync-v0 6.2.5+1718722b3e
+	- fabric-renderer-api-v1 8.0.2+f4ffd2e53e
+	- fabric-renderer-indigo 5.0.2+f4ffd2e53e
+	- fabric-rendering-fluids-v1 3.1.43+4ebb5c083e
+	- fabric-rendering-v1 16.2.9+7edacff13e
+	- fabric-resource-conditions-api-v1 5.0.35+4fc5413f3e
+	- fabric-resource-loader-v0 3.3.4+4fc5413f3e
+	- fabric-resource-loader-v1 1.0.10+78c8b4663e
+	- fabric-screen-api-v1 3.1.7+4ebb5c083e
+	- fabric-screen-handler-api-v1 1.3.161+4fc5413f3e
+	- fabric-serialization-api-v1 1.0.5+4ebb5c083e
+	- fabric-sound-api-v1 1.0.51+4fc5413f3e
+	- fabric-tag-api-v1 1.2.20+4fc5413f3e
+	- fabric-transfer-api-v1 6.0.24+4fc5413f3e
+	- fabric-transitive-access-wideners-v1 7.1.0+014c8cec3e
+	- fabricloader 0.19.2
+	- java 21
+	- minecraft 1.21.11
+	- mixinextras 0.5.4
+[23:34:22] [main/INFO] (FabricLoader/Mixin) SpongePowered MIXIN Subsystem Version=0.8.7 Source=file:/C:/Users/awepu/.gradle/caches/modules-2/files-2.1/net.fabricmc/sponge-mixin/0.17.2+mixin.0.8.7/edf98d1d98229e46e36c61774ae2b54dcd852981/sponge-mixin-0.17.2+mixin.0.8.7.jar Service=Knot/Fabric Env=CLIENT
+[23:34:23] [main/INFO] (FabricLoader/Mixin) Loaded Fabric development mappings for mixin remapper!
+[23:34:23] [main/INFO] (FabricLoader/Mixin) Compatibility level set to JAVA_21
+[23:34:26] [main/INFO] (FabricLoader/MixinExtras|Service) Initializing MixinExtras via com.llamalad7.mixinextras.service.MixinExtrasServiceImpl(version=0.5.4).
+[23:34:29] [Datafixer Bootstrap/INFO] (Minecraft) 287 Datafixer optimizations took 1446 milliseconds
+[23:34:37] [main/ERROR] (FabricLoader) Minecraft has crashed!
+
+net.fabricmc.loader.impl.FormattedException: java.lang.RuntimeException: Mixin transformation of net.minecraft.client.network.ClientPlayerEntity failed
+	at net.fabricmc.loader.impl.FormattedException.ofLocalized(FormattedException.java:63)
+	at net.fabricmc.loader.impl.game.minecraft.MinecraftGameProvider.launch(MinecraftGameProvider.java:516)
+	at net.fabricmc.loader.impl.launch.knot.Knot.launch(Knot.java:72)
+	at net.fabricmc.loader.impl.launch.knot.KnotClient.main(KnotClient.java:23)
+	at net.fabricmc.devlaunchinjector.Main.main(Main.java:86)
+Caused by: java.lang.RuntimeException: Mixin transformation of net.minecraft.client.network.ClientPlayerEntity failed
+	at net.fabricmc.loader.impl.launch.knot.KnotClassDelegate.getPostMixinClassByteArray(KnotClassDelegate.java:440)
+	at net.fabricmc.loader.impl.launch.knot.KnotClassDelegate.tryLoadClass(KnotClassDelegate.java:336)
+	at net.fabricmc.loader.impl.launch.knot.KnotClassDelegate.loadClass(KnotClassDelegate.java:231)
+	at net.fabricmc.loader.impl.launch.knot.KnotClassLoader.loadClass(KnotClassLoader.java:119)
+	at java.base/java.lang.ClassLoader.loadClass(ClassLoader.java:526)
+	at knot//net.minecraft.client.main.Main.main(Main.java:207)
+	at net.fabricmc.loader.impl.game.minecraft.MinecraftGameProvider.launch(MinecraftGameProvider.java:514)
+	... 3 more
+Caused by: org.spongepowered.asm.mixin.transformer.throwables.MixinTransformerError: An unexpected critical error was encountered
+	at org.spongepowered.asm.mixin.transformer.MixinProcessor.applyMixins(MixinProcessor.java:380)
+	at org.spongepowered.asm.mixin.transformer.MixinTransformer.transformClass(MixinTransformer.java:237)
+	at org.spongepowered.asm.mixin.transformer.MixinTransformer.transformClassBytes(MixinTransformer.java:202)
+	at net.fabricmc.loader.impl.launch.knot.KnotClassDelegate.getPostMixinClassByteArray(KnotClassDelegate.java:435)
+	... 9 more
+Caused by: org.spongepowered.asm.mixin.injection.throwables.InjectionError: Critical injection failure: Callback method onMoveHook(Lnet/minecraft/entity/MovementType;Lnet/minecraft/util/math/Vec3d;Lorg/spongepowered/asm/mixin/injection/callback/CallbackInfo;)V in mixins.json:ClientPlayerEntityMixin from mod copyright failed injection check, (0/1) succeeded. Scanned 0 target(s). No refMap loaded.
+	at org.spongepowered.asm.mixin.injection.struct.InjectionInfo.postInject(InjectionInfo.java:531)
+	at org.spongepowered.asm.mixin.transformer.MixinTargetContext.applyInjections(MixinTargetContext.java:1477)
+	at org.spongepowered.asm.mixin.transformer.MixinApplicatorStandard.applyInjections(MixinApplicatorStandard.java:832)
+	at org.spongepowered.asm.mixin.transformer.MixinApplicatorStandard.lambda$runApplicatorPass$7(MixinApplicatorStandard.java:362)
+	at org.spongepowered.asm.mixin.transformer.MixinApplicatorStandard.processMixins(MixinApplicatorStandard.java:381)
+	at org.spongepowered.asm.mixin.transformer.MixinApplicatorStandard.runApplicatorPass(MixinApplicatorStandard.java:360)
+	at org.spongepowered.asm.mixin.transformer.MixinApplicatorStandard.apply(MixinApplicatorStandard.java:240)
+	at org.spongepowered.asm.mixin.transformer.TargetClassContext.apply(TargetClassContext.java:437)
+	at org.spongepowered.asm.mixin.transformer.TargetClassContext.applyMixins(TargetClassContext.java:418)
+	at org.spongepowered.asm.mixin.transformer.MixinProcessor.applyMixins(MixinProcessor.java:351)
+	... 12 more
+
+> Task :runClient FAILED
 
 [Incubating] Problems report is available at: file:///C:/Users/awepu/OneDrive/Desktop/%D0%9D%D0%BE%D0%B2%D0%B0%D1%8F%20%D0%BF%D0%B0%D0%BF%D0%BA%D0%B0%20(5)/build/reports/problems/problems-report.html
 
 FAILURE: Build failed with an exception.
 
 * What went wrong:
-Execution failed for task ':compileClientJava'.
-> Compilation failed; see the compiler output below.
-  C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\modules\impl\render\worldparticles\Par
-ticle.java:222: error: cannot find symbol
-        RenderLayer var14 = ClientPipelines.WORLD_PARTICLES_GLOW.getTickProgress(this.texture);
-                                                                ^
-    symbol:   method getTickProgress(Identifier)
-    location: variable WORLD_PARTICLES_GLOW of type Function<Identifier,RenderLayer>
-  C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\modules\impl\render\worldparticles\Par
-ticleRenderer.java:22: error: cannot find symbol
-        return ClientPipelines.WORLD_PARTICLES_GLOW.getTickProgress(GLOW_TEXTURE);
-                                                   ^
-    symbol:   method getTickProgress(Identifier)
-    location: variable WORLD_PARTICLES_GLOW of type Function<Identifier,RenderLayer>
-  C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\modules\impl\render\worldparticles\Par
-ticleRenderer.java:26: error: cannot find symbol
-        return ClientPipelines.WORLD_PARTICLES_GLOW.getTickProgress(GLOW_TEXTURE_SECONDARY);
-                                                   ^
-    symbol:   method getTickProgress(Identifier)
-    location: variable WORLD_PARTICLES_GLOW of type Function<Identifier,RenderLayer>
-  3 errors
+Execution failed for task ':runClient'.
+> Process 'command 'C:\Program Files\Java\jdk-21\bin\java.exe'' finished with non-zero exit value 1
 
 * Try:
-> Check your code and dependencies to fix the compilation error(s)
+> Run with --stacktrace option to get the stack trace.
+> Run with --info or --debug option to get more log output.
 > Run with --scan to get full insights from a Build Scan (powered by Develocity).
+> Get more help at https://help.gradle.org.
+8 actionable tasks: 2 executed, 6 up-to-date
 
-BUILD FAILED in 4s
-2 actionable tasks: 1 executed, 1 up-to-date
+BUILD FAILED in 22s

@@ -17,7 +17,7 @@ public class Setting {
    }
 
    public boolean isVisible() {
-      return this.visible == null || this.visible.getName();
+      return this.visible == null || this.visible.get();
    }
 
    public String getName() {

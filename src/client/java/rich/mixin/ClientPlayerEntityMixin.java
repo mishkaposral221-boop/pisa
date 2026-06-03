@@ -57,7 +57,7 @@ public abstract class ClientPlayerEntityMixin extends AbstractClientPlayerEntity
       }
    }
 
-   @Inject(method = "tickMovement", at = @At(value = "INVOKE", target = "Lnet/minecraft/Input;tick()V", shift = Shift.AFTER))
+   @Inject(method = "tickMovement", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/input/Input;tick()V", shift = Shift.AFTER))
    private void onInputTick(CallbackInfo var1) {
       if (IMinecraft.mc.player != null) {
          PlayerTravelEvent var2 = new PlayerTravelEvent(Vec3d.ZERO, false);
@@ -65,7 +65,7 @@ public abstract class ClientPlayerEntityMixin extends AbstractClientPlayerEntity
       }
    }
 
-   @Redirect(method = "applyMovementSpeedFactors", at = @At(value = "INVOKE", target = "Lnet/minecraft/Vec2f;multiply(F)Lnet/minecraft/Vec2f;", ordinal = 1))
+   @Redirect(method = "applyMovementSpeedFactors", at = @At(value = "INVOKE", target = "Lnet/minecraft/util/math/Vec2f;multiply(F)Lnet/minecraft/util/math/Vec2f;", ordinal = 1))
    private Vec2f cancelItemSlowdown(Vec2f var1, float var2) {
       UsingItemEvent var3 = new UsingItemEvent((byte)1);
       EventManager.callEvent(var3);
@@ -90,11 +90,7 @@ public abstract class ClientPlayerEntityMixin extends AbstractClientPlayerEntity
       }
    }
 
-   @Inject(
-      method = "move",
-      at = @At(value = "INVOKE", target = "Lnet/minecraft/AbstractClientPlayerEntity;move(Lnet/minecraft/MovementType;Lnet/minecraft/Vec3d;)V"),
-      cancellable = true
-   )
+   @Inject(method = "move", at = @At("HEAD"), cancellable = true)
    public void onMoveHook(MovementType var1, Vec3d var2, CallbackInfo var3) {
       MoveEvent var4 = new MoveEvent(var2);
       EventManager.callEvent(var4);
@@ -105,7 +101,7 @@ public abstract class ClientPlayerEntityMixin extends AbstractClientPlayerEntity
       var3.cancel();
    }
 
-   @ModifyExpressionValue(method = {"sendMovementPackets", "tick"}, at = @At(value = "INVOKE", target = "Lnet/minecraft/ClientPlayerEntity;getYaw()F"))
+   @ModifyExpressionValue(method = {"sendMovementPackets", "tick"}, at = @At(value = "INVOKE", target = "Lnet/minecraft/client/network/ClientPlayerEntity;getYaw()F"))
    private float hookSilentRotationYaw(float var1) {
       if (IMinecraft.mc.player != null && AngleConnection.INSTANCE.getRotation() != null) {
          float var2 = AngleConnection.INSTANCE.getRotation().getYaw();
@@ -128,7 +124,7 @@ public abstract class ClientPlayerEntityMixin extends AbstractClientPlayerEntity
       }
    }
 
-   @ModifyExpressionValue(method = {"sendMovementPackets", "tick"}, at = @At(value = "INVOKE", target = "Lnet/minecraft/ClientPlayerEntity;getPitch()F"))
+   @ModifyExpressionValue(method = {"sendMovementPackets", "tick"}, at = @At(value = "INVOKE", target = "Lnet/minecraft/client/network/ClientPlayerEntity;getPitch()F"))
    private float hookSilentRotationPitch(float var1) {
       return AngleConnection.INSTANCE.getRotation() != null ? AngleConnection.INSTANCE.getRotation().getPitch() : var1;
    }

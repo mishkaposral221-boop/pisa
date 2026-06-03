@@ -15,7 +15,7 @@ public class SelectSetting extends Setting {
 
    public SelectSetting value(String... var1) {
       this.list = Arrays.asList(var1);
-      this.selected = this.list.isEmpty() ? "" : this.list.getName(0);
+      this.selected = this.list.isEmpty() ? "" : this.list.get(0);
       return this;
    }
 

@@ -204,7 +204,7 @@ public class AccountRenderer {
       Scissor.enable(var30 * var10, var31 * var10, var32 * var10, var33 * var10, var37);
 
       for (int var38 = 0; var38 < var6.size(); var38++) {
-         AccountEntry var39 = (AccountEntry)var6.get(var38);
+         AccountEntry var39 = var6.get(var38);
          int var40 = var38 % 2;
          int var41 = var38 / 2;
          float var42 = var30 + var40 * (var34 + var36);

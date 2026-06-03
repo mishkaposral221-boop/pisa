@@ -26,12 +26,12 @@ public abstract class PlayerEntityMixin implements IMinecraft {
       }
    }
 
-   @ModifyExpressionValue(method = "knockbackTarget", at = @At(value = "INVOKE", target = "Lnet/minecraft/PlayerEntity;getYaw()F"))
+   @ModifyExpressionValue(method = "knockbackTarget", at = @At(value = "INVOKE", target = "Lnet/minecraft/entity/player/PlayerEntity;getYaw()F"))
    private float hookKnockbackRotation(float var1) {
       return (Object)this == mc.player && AngleConnection.INSTANCE.getMoveRotation() != null ? AngleConnection.INSTANCE.getMoveRotation().getYaw() : var1;
    }
 
-   @ModifyExpressionValue(method = "doSweepingAttack", at = @At(value = "INVOKE", target = "Lnet/minecraft/PlayerEntity;getYaw()F"))
+   @ModifyExpressionValue(method = "doSweepingAttack", at = @At(value = "INVOKE", target = "Lnet/minecraft/entity/player/PlayerEntity;getYaw()F"))
    private float hookSweepRotation(float var1) {
       return (Object)this == mc.player && AngleConnection.INSTANCE.getMoveRotation() != null ? AngleConnection.INSTANCE.getMoveRotation().getYaw() : var1;
    }
@@ -47,7 +47,7 @@ public abstract class PlayerEntityMixin implements IMinecraft {
       }
    }
 
-   @ModifyExpressionValue(method = "travel", at = @At(value = "INVOKE", target = "Lnet/minecraft/PlayerEntity;getRotationVector()Lnet/minecraft/Vec3d;"))
+   @ModifyExpressionValue(method = "travel", at = @At(value = "INVOKE", target = "Lnet/minecraft/entity/player/PlayerEntity;getRotationVector()Lnet/minecraft/util/math/Vec3d;"))
    public Vec3d travelHook(Vec3d var1) {
       SwimmingEvent var2 = new SwimmingEvent(var1);
       EventManager.callEvent(var2);

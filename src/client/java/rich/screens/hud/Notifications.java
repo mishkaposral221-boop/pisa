@@ -98,7 +98,7 @@ public class Notifications extends AbstractHudElement {
       float var1 = 0.0F;
 
       for (int var2 = 0; var2 < this.list.size(); var2++) {
-         Notifications.Notification var3 = this.list.get(var2);
+         Notifications.Notification var3 = this.list.getName(var2);
          float var4 = var3.anim.getOutput().floatValue();
          var3.targetY = var1;
          var1 += 19.0F * var4;

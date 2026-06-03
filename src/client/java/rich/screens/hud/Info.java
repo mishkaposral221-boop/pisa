@@ -62,7 +62,7 @@ public class Info extends AbstractHudElement {
          float var18 = Fonts.BOLD.getWidth(var14, 6.0F);
          float var19 = Fonts.BOLD.getWidth(var15, 6.0F);
          float var20 = Fonts.BOLD.getWidth(var16, 6.0F);
-         float var21 = Fonts.BOLD.getWidth("b/s", 6.0F);
+         float var21 = Fonts.BOLD.getWidth("elementCodec/s", 6.0F);
          float var22 = Fonts.BOLD.getWidth("x", 6.0F);
          float var23 = Fonts.BOLD.getWidth("y", 6.0F);
          float var24 = Fonts.BOLD.getWidth("z", 6.0F);
@@ -103,7 +103,7 @@ public class Info extends AbstractHudElement {
             var31 += 8.0F;
             Fonts.BOLD.draw(var16, var31, var28 + 3.0F, 6.0F, new Color(255, 255, 255, 255).getRGB());
             var31 += var20 + 2.0F;
-            Fonts.BOLD.draw("b/s", var31, var28 + 3.0F, 6.0F, new Color(155, 155, 155, 255).getRGB());
+            Fonts.BOLD.draw("elementCodec/s", var31, var28 + 3.0F, 6.0F, new Color(155, 155, 155, 255).getRGB());
          }
       }
    }
