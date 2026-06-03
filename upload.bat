@@ -5,7 +5,7 @@ setlocal
 cd /d "%~dp0"
 
 REM ====== НАСТРОЙКИ ======
-set "REPO_URL=https://github.com/gavnikpauk221-netizen/popa.git"
+set "REPO_URL=https://github.com/mishkaposral221-boop/pisa.git"
 set "BRANCH=main"
 set "COMMIT_MSG=Initial commit"
 set "GIT_NAME=gavnikpauk221-netizen"
