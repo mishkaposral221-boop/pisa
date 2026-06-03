@@ -1,5 +1,6 @@
 package com.example.client;
 
+import com.example.ExampleMod;
 import com.example.client.config.ConfigManager;
 import com.example.client.hud.HudManager;
 import com.example.client.hud.widgets.ActiveModsWidget;
@@ -22,13 +23,12 @@ import com.example.client.module.Nametags;
 import com.example.client.module.NoRender;
 import com.example.client.module.Prediction;
 import com.example.client.module.Triggerbot;
+import com.ferra13671.cometrenderer.minecraft.CRM;
 import com.ferra13671.cometrenderer.minecraft.CRMInstance;
-import com.ferra13671.cometrenderer.minecraft.event.AfterInitializeCallback;
 import com.ferra13671.cometrenderer.minecraft.event.RenderHudCallback;
 import com.ferra13671.cometrenderer.minecraft.event.RenderWorldCallback;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
-import net.fabricmc.loader.api.entrypoint.PreLaunchEntrypoint;
 import net.minecraft.client.util.Window;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.LivingEntity;
@@ -36,8 +36,7 @@ import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.util.InputUtil;
 
-public class ModMenuInitializer
-implements PreLaunchEntrypoint {
+public class ModMenuInitializer {
     public static CRMInstance crmInstance;
     public static final ModMenu MENU;
     public static final AimAssist AIM_ASSIST;
@@ -53,27 +52,38 @@ implements PreLaunchEntrypoint {
     public static final HudManager HUD;
     public static final TargetHudWidget TARGET_HUD;
     private static int saveCounter;
+    private static boolean setupDone;
 
-    public void onPreLaunch() {
-        AfterInitializeCallback.EVENT.register(() -> {
-            crmInstance = new CRMInstance(() -> MinecraftClient.getInstance().getWindow().getScaleFactor());
-            ConfigManager.load();
-        });
+    public static void setup() {
+        if (setupDone) {
+            return;
+        }
+        setupDone = true;
+
+        MinecraftClient client = MinecraftClient.getInstance();
+        crmInstance = new CRMInstance(() -> client.getWindow().getScaleFactor());
+
         RenderHudCallback.EVENT.register(() -> {
+            if (crmInstance == null) {
+                ExampleMod.LOGGER.warn("RenderHudCallback: crmInstance is null, skipping menu shapes");
+                return;
+            }
+            if (CRM.getPrograms() == null) {
+                ExampleMod.LOGGER.warn("RenderHudCallback: CometRenderer not initialized yet, skipping menu shapes");
+                return;
+            }
             try {
                 crmInstance.setupUIMatrix();
                 if (MENU.isOpen()) {
                     MENU.renderShapes();
                 }
-            }
-            catch (Exception exception) {
-                // empty catch block
+            } catch (Exception e) {
+                ExampleMod.LOGGER.error("Failed to render menu shapes", e);
             }
             try {
                 crmInstance.restoreUIMatrix();
-            }
-            catch (Exception exception) {
-                // empty catch block
+            } catch (Exception e) {
+                ExampleMod.LOGGER.error("Failed to restore UI matrix after menu shapes", e);
             }
         });
         HudRenderCallback.EVENT.register((guiGraphics, deltaTracker) -> {
@@ -89,27 +99,26 @@ implements PreLaunchEntrypoint {
                 HUD.renderText(guiGraphics, 1.0f);
             }
         });
-        ClientTickEvents.START_CLIENT_TICK.register(client -> TRIGGERBOT.tick(client));
+        ClientTickEvents.START_CLIENT_TICK.register(c -> TRIGGERBOT.tick(c));
         RenderWorldCallback.EVENT.register(() -> {
             try {
                 GLOW_ESP.renderWorld();
                 PREDICTION.renderWorld();
-            }
-            catch (Exception exception) {
-                // empty catch block
+            } catch (Exception e) {
+                ExampleMod.LOGGER.error("Failed to render world overlays", e);
             }
         });
-        ClientTickEvents.END_CLIENT_TICK.register(client -> {
+        ClientTickEvents.END_CLIENT_TICK.register(c -> {
             Entity patt0$temp;
-            AUTO_SPRINT.tick(client);
-            FULLBRIGHT.tick(client);
-            if (client.player != null && (patt0$temp = client.targetedEntity) instanceof LivingEntity) {
+            AUTO_SPRINT.tick(c);
+            FULLBRIGHT.tick(c);
+            if (c.player != null && (patt0$temp = c.targetedEntity) instanceof LivingEntity) {
                 LivingEntity living = (LivingEntity)patt0$temp;
-                if (client.player.getAttackCooldownProgress(0.0f) < 0.5f && living != client.player) {
+                if (c.player.getAttackCooldownProgress(0.0f) < 0.5f && living != c.player) {
                     TARGET_HUD.setTarget(living);
                 }
             }
-            ModMenuInitializer.processKeybinds(client);
+            ModMenuInitializer.processKeybinds(c);
             HUD.tick();
             if (++saveCounter >= 100) {
                 saveCounter = 0;
@@ -117,6 +126,7 @@ implements PreLaunchEntrypoint {
             }
         });
         ModMenuInitializer.initHud();
+        ConfigManager.load();
     }
 
     private static void initHud() {
@@ -190,4 +200,3 @@ implements PreLaunchEntrypoint {
         saveCounter = 0;
     }
 }
-

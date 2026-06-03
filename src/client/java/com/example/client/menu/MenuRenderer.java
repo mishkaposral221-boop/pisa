@@ -7,6 +7,7 @@ import com.example.client.menu.data.ModModule;
 import com.example.client.menu.data.Setting;
 import com.example.client.menu.layout.MenuColors;
 import com.example.client.menu.layout.MenuLayout;
+import com.example.ExampleMod;
 import com.example.client.menu.util.ColorUtil;
 import com.ferra13671.cometrenderer.CometRenderer;
 import com.ferra13671.cometrenderer.minecraft.RectColors;
@@ -37,8 +38,8 @@ public class MenuRenderer {
         try {
             this.renderShapesInternal();
         }
-        catch (Exception exception) {
-            // empty catch block
+        catch (Exception e) {
+            ExampleMod.LOGGER.error("Failed to render menu shapes internally", e);
         }
     }
 

@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "id": "crm",
+  "version": "1.21.11-fabric-2.7.1",
+  "name": "CometRenderer Mod",
+  "description": "A mod that provides utilities for using CometRenderer in Minecraft.",
+  "authors": ["ferra13671"],
+  "contact": {
+    "repo": "https://github.com/Ferra13671/CometRenderer"
+  },
+  "license": "MIT",
+  "icon": "icon.png",
+  "environment": "*",
+  "entrypoints": {
+  },
+  "mixins": [
+    "crm.mixins.json"
+  ],
+  "accessWidener" : "crm.accesswidener",
+  "depends": {
+    "minecraft": "1.21.11",
+    "fabric-api-base": "*"
+  }
+}

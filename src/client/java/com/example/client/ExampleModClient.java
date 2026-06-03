@@ -1,11 +1,11 @@
 package com.example.client;
 
-import com.example.client.ModMenuInitializer;
 import net.fabricmc.api.ClientModInitializer;
-public class ExampleModClient
-implements ClientModInitializer {
+
+public class ExampleModClient implements ClientModInitializer {
+    @Override
     public void onInitializeClient() {
+        ModMenuInitializer.setup();
         ModMenuInitializer.MENU.registerKeybind();
     }
 }
-
