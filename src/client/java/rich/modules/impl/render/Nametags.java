@@ -1,5 +1,7 @@
 package rich.modules.impl.render;
 
+import java.util.ArrayList;
+import net.minecraft.client.font.TextRenderer;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EquipmentSlot;
@@ -14,7 +16,7 @@ import org.joml.Quaternionf;
 import org.joml.Quaternionfc;
 import org.joml.Vector4f;
 import rich.events.api.EventHandler;
-import rich.events.impl.WorldRenderEvent;
+import rich.events.impl.DrawEvent;
 import rich.modules.module.ModuleStructure;
 import rich.modules.module.category.ModuleCategory;
 import rich.modules.module.setting.implement.BooleanSetting;
@@ -23,48 +25,29 @@ import rich.util.c;
 public class Nametags extends ModuleStructure {
     public BooleanSetting showArmor = new BooleanSetting("ShowArmor", "Display player armor info").setValue(true);
 
-    public static Nametags getInstance() {
-        return c.a(Nametags.class);
-    }
-
     public Nametags() {
         super("Nametags", "Display player names above heads", ModuleCategory.VISUALS);
         this.settings(this.showArmor);
     }
 
+    public static Nametags getInstance() {
+        return c.a(Nametags.class);
+    }
+
+    public boolean showArmor() {
+        return this.showArmor.isValue();
+    }
+
     @EventHandler
-    public void onWorldRender(WorldRenderEvent event) {
-        if (mc.world == null || mc.player == null) {
-            return;
-        }
-        Quaternionf quat = new Quaternionf((Quaternionfc)mc.gameRenderer.getCamera().getRotation()).conjugate();
-        Matrix4f viewMatrix = new Matrix4f().rotation((Quaternionfc)quat);
-        float fov = ((Integer)mc.options.getFov().getValue()).intValue();
-        Matrix4f projMatrix = mc.gameRenderer.getBasicProjectionMatrix(fov);
-        int sw = mc.getWindow().getScaledWidth();
-        int sh = mc.getWindow().getScaledHeight();
-        Vec3d camPos = mc.gameRenderer.getCamera().getCameraPos();
-        
-        for (Entity entity : mc.world.getEntities()) {
-            if (entity == mc.player || entity.isSpectator() || !(entity instanceof PlayerEntity)) continue;
-            PlayerEntity target = (PlayerEntity)entity;
-            double dist = mc.player.squaredDistanceTo(entity);
-            if (dist > 4096.0) continue;
-            double lerpX = entity.lastRenderX + (entity.getX() - entity.lastRenderX) * event.getPartialTicks();
-            double lerpY = entity.lastRenderY + (entity.getY() - entity.lastRenderY) * event.getPartialTicks();
-            double lerpZ = entity.lastRenderZ + (entity.getZ() - entity.lastRenderZ) * event.getPartialTicks();
-            double headY = lerpY + entity.getHeight() + 0.5;
-            float[] screen = this.worldToScreen(lerpX, headY, lerpZ, camPos, viewMatrix, projMatrix, sw, sh);
-            if (screen == null) continue;
-            float screenX = Math.round(screen[0]);
-            float screenY = Math.round(screen[1]);
-            float distance = (float)Math.sqrt(dist);
-            float scale = Math.max(0.5f, Math.min(1.0f, 1.0f - distance / 20.0f));
-            this.renderNametag(target, screenX, screenY, scale, distance);
+    public void onDraw(DrawEvent event) {
+        try {
+            this.renderInternal(event.getDrawContext(), event.getPartialTicks());
+        } catch (Exception exception) {
+            // ignore
         }
     }
 
-    private float[] worldToScreen(double wx, double wy, double wz, Vec3d camPos, Matrix4f viewMatrix, Matrix4f projMatrix, int sw, int sh) {
+    private static float[] worldToScreen(double wx, double wy, double wz, Vec3d camPos, Matrix4f viewMatrix, Matrix4f projMatrix, int sw, int sh) {
         float dx = (float)(wx - camPos.x);
         float dy = (float)(wy - camPos.y);
         float dz = (float)(wz - camPos.z);
@@ -81,29 +64,102 @@ public class Nametags extends ModuleStructure {
         return new float[]{screenX, screenY};
     }
 
-    private void renderNametag(PlayerEntity player, float cx, float cy, float scale, float distance) {
+    private void renderInternal(DrawContext guiGraphics, float partialTick) {
+        if (mc.world == null || mc.player == null) {
+            return;
+        }
+        Quaternionf quat = new Quaternionf((Quaternionfc)mc.gameRenderer.getCamera().getRotation()).conjugate();
+        Matrix4f viewMatrix = new Matrix4f().rotation((Quaternionfc)quat);
+        float fov = ((Integer)mc.options.getFov().getValue()).intValue();
+        Matrix4f projMatrix = mc.gameRenderer.getBasicProjectionMatrix(fov);
+        int sw = mc.getWindow().getScaledWidth();
+        int sh = mc.getWindow().getScaledHeight();
+        Vec3d camPos = mc.gameRenderer.getCamera().getCameraPos();
+        TextRenderer font = mc.textRenderer;
+        for (Entity entity : mc.world.getEntities()) {
+            if (entity == mc.player || entity.isSpectator() || !(entity instanceof PlayerEntity)) continue;
+            PlayerEntity target = (PlayerEntity)entity;
+            double dist = mc.player.squaredDistanceTo(entity);
+            if (dist > 4096.0) continue;
+            double lerpX = entity.lastRenderX + (entity.getX() - entity.lastRenderX) * (double)partialTick;
+            double lerpY = entity.lastRenderY + (entity.getY() - entity.lastRenderY) * (double)partialTick;
+            double lerpZ = entity.lastRenderZ + (entity.getZ() - entity.lastRenderZ) * (double)partialTick;
+            double headY = lerpY + (double)entity.getHeight() + 0.5;
+            float[] screen = Nametags.worldToScreen(lerpX, headY, lerpZ, camPos, viewMatrix, projMatrix, sw, sh);
+            if (screen == null) continue;
+            float screenX = Math.round(screen[0]);
+            float screenY = Math.round(screen[1]);
+            float distance = (float)Math.sqrt(dist);
+            float scale = Math.max(0.5f, Math.min(1.0f, 1.0f - distance / 20.0f));
+            this.renderNametag(guiGraphics, font, target, screenX, screenY, scale, distance);
+        }
+    }
+
+    private void renderNametag(DrawContext guiGraphics, TextRenderer font, PlayerEntity player, float cx, float cy, float scale, float distance) {
         float health = player.getHealth();
         float absorption = player.getAbsorptionAmount();
         float maxHp = Math.max(1.0f, player.getMaxHealth());
         float totalHealth = health + absorption;
         String name = player.getName().getString();
-        String hpStr = String.format("%.0f", totalHealth);
-        
-        MutableText nameComp = Text.literal(name);
-        MutableText hpComp = Text.literal(" " + hpStr);
-        
-        int nameW = mc.textRenderer.getWidth((StringVisitable)nameComp);
-        int hpW = mc.textRenderer.getWidth((StringVisitable)hpComp);
+        String hpStr = String.format("%.0f", Float.valueOf(totalHealth));
+        MutableText nameComp = Text.literal((String)name);
+        MutableText hpComp = Text.literal((String)(" " + hpStr));
+        int nameW = font.getWidth((StringVisitable)nameComp);
+        int hpW = font.getWidth((StringVisitable)hpComp);
         int totalW = nameW + hpW;
-        
         float bgPad = 5.0f;
         float bgW = Math.max((float)totalW + bgPad * 2.0f, 60.0f);
-        float bgH = 19;
+        float bgH = 9 + 10;
         float bgX = -bgW / 2.0f;
         float bgY = 0.0f;
-        
-        // Note: This is a simplified version without actual DrawContext rendering
-        // To render properly, we would need access to a DrawEvent with DrawContext
-        // For now, just keep the calculation logic
+        guiGraphics.getMatrices().pushMatrix();
+        guiGraphics.getMatrices().translate(cx, cy);
+        guiGraphics.getMatrices().scale(scale, scale);
+        guiGraphics.fill((int)bgX, (int)bgY, (int)(bgX + bgW), (int)(bgY + bgH), -1879048192);
+        guiGraphics.fill((int)bgX, (int)bgY, (int)(bgX + bgW), (int)(bgY + 1.0f), 1085564159);
+        int textY = (int)(bgY + 3.0f);
+        guiGraphics.drawText(font, (Text)nameComp, -totalW / 2, textY, -1, true);
+        float hpPct = Math.min(1.0f, health / maxHp);
+        int hpColor = hpPct > 0.6f ? -11141291 : (hpPct > 0.3f ? -171 : -43691);
+        guiGraphics.drawText(font, (Text)hpComp, -totalW / 2 + nameW, textY, hpColor, true);
+        float barX = bgX + 3.0f;
+        float barY = bgY + 9.0f + 5.0f;
+        float barW = bgW - 6.0f;
+        float barH = 2.5f;
+        guiGraphics.fill((int)barX, (int)barY, (int)(barX + barW), (int)(barY + barH), 0x50000000);
+        float fillW = barW * Math.min(1.0f, health / maxHp);
+        if (fillW > 0.0f) {
+            int barColor = hpPct > 0.6f ? -11141291 : (hpPct > 0.3f ? -171 : -43691);
+            guiGraphics.fill((int)barX, (int)barY, (int)(barX + fillW), (int)(barY + barH), barColor);
+        }
+        if (absorption > 0.0f) {
+            float absW = barW * Math.min(1.0f, absorption / maxHp);
+            guiGraphics.fill((int)(barX + barW - absW), (int)barY, (int)(barX + barW), (int)(barY + barH), -9166);
+        }
+        if (this.showArmor()) {
+            ArrayList<ItemStack> items = new ArrayList<ItemStack>();
+            ItemStack helmet = player.getEquippedStack(EquipmentSlot.HEAD);
+            ItemStack chest = player.getEquippedStack(EquipmentSlot.CHEST);
+            ItemStack legs = player.getEquippedStack(EquipmentSlot.LEGS);
+            ItemStack boots = player.getEquippedStack(EquipmentSlot.FEET);
+            ItemStack mainHand = player.getEquippedStack(EquipmentSlot.MAINHAND);
+            ItemStack offHand = player.getEquippedStack(EquipmentSlot.OFFHAND);
+            if (!helmet.isEmpty()) items.add(helmet);
+            if (!chest.isEmpty()) items.add(chest);
+            if (!legs.isEmpty()) items.add(legs);
+            if (!boots.isEmpty()) items.add(boots);
+            if (!mainHand.isEmpty()) items.add(mainHand);
+            if (!offHand.isEmpty()) items.add(offHand);
+            if (!items.isEmpty()) {
+                int count = items.size();
+                float totalItemW = (float)(count - 1) * 18.0f + 16.0f;
+                float startX = -totalItemW / 2.0f;
+                for (int i = 0; i < count; ++i) {
+                    int ix = (int)(startX + (float)(i * 18));
+                    guiGraphics.drawItem((ItemStack)items.get(i), ix, -16);
+                }
+            }
+        }
+        guiGraphics.getMatrices().popMatrix();
     }
 }
