@@ -1,46 +1,46 @@
 plugins {
-    id 'fabric-loom' version '1.16.2'
+	id 'fabric-loom' version '1.16.2'
 }
 
 version = "1.0.0"
 group = "com.example"
 
 loom {
-    splitEnvironmentSourceSets()
+	splitEnvironmentSourceSets()
 }
 
 repositories {
-    maven { url = "https://maven.fabricmc.net/repository/release/" }
-    mavenCentral()
-    maven { url = "https://jitpack.io" }
-    maven { url = "local-maven" }
+	maven { url = "https://maven.fabricmc.net/repository/release/" }
+	mavenCentral()
+	maven { url = "https://jitpack.io" }
+	maven { url = "local-maven" }
 }
 
 dependencies {
-    minecraft "com.mojang:minecraft:1.21.11"
-    mappings "net.fabricmc:yarn:1.21.11+build.5:v2"
-    modImplementation "net.fabricmc:fabric-loader:0.16.14"
+	minecraft "com.mojang:minecraft:1.21.11"
+	mappings "net.fabricmc:yarn:1.21.11+build.5:v2"
+	modImplementation "net.fabricmc:fabric-loader:0.19.2"
 
-    modImplementation "net.fabricmc.fabric-api:fabric-api:0.141.1+1.21.11"
+	modImplementation "net.fabricmc.fabric-api:fabric-api:0.141.1+1.21.11"
 
-    modImplementation "com.ferra13671:CometRenderer:3.0.0"
-    include "com.ferra13671:CometRenderer:3.0.0"
+	modImplementation "com.ferra13671:CometRenderer:3.0.0"
+	include "com.ferra13671:CometRenderer:3.0.0"
 
-    implementation "org.joml:joml:1.5.4"
+	implementation "org.joml:joml:1.5.4"
 }
 
 processResources {
-    inputs.property "version", project.version
-    filesMatching("fabric.mod.json") {
-        expand "version": project.version
-    }
+	inputs.property "version", project.version
+	filesMatching("fabric.mod.json") {
+		expand "version": project.version
+	}
 }
 
 tasks.withType(JavaCompile).configureEach {
-    it.options.release = 21
+	it.options.release = 21
 }
 
 java {
-    sourceCompatibility = JavaVersion.VERSION_21
-    targetCompatibility = JavaVersion.VERSION_21
+	sourceCompatibility = JavaVersion.VERSION_21
+	targetCompatibility = JavaVersion.VERSION_21
 }
