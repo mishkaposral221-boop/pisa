@@ -2,11 +2,12 @@ plugins {
 	id 'fabric-loom' version '1.16.2'
 }
 
-version = "1.0.0"
-group = "com.example"
+version = "1.0.01"
+group = "rich"
 
 loom {
 	splitEnvironmentSourceSets()
+	accessWidenerPath = file("src/main/resources/runtime_visuals.accesswidener")
 }
 
 repositories {
@@ -23,10 +24,15 @@ dependencies {
 
 	modImplementation "net.fabricmc.fabric-api:fabric-api:0.141.1+1.21.11"
 
+	// Used by rich render/aura code (com.ferra13671.*, org.joml.*)
 	modImplementation "com.ferra13671:CometRenderer:3.0.0"
 	include "com.ferra13671:CometRenderer:3.0.0"
 
 	implementation "org.joml:joml:1.5.4"
+
+	// Bundled in original JAR for proxy (META-INF/jars also listed in fabric.mod.json)
+	modImplementation include("io.netty:netty-codec-socks:4.1.82.Final")
+	modImplementation include("io.netty:netty-handler-proxy:4.1.82.Final")
 }
 
 processResources {

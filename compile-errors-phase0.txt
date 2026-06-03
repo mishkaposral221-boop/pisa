@@ -1,0 +1,851 @@
+﻿To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/9.4.1/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+
+> Configure project :
+Fabric Loom: 1.16.2
+Project directory 'C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)' is located in OneDrive. This is known to cause issues and slower performance. Consider moving the project to a different location.
+Previous process has disowned the lock due to abrupt termination.
+Found existing cache lock file (ACQUIRED_PREVIOUS_OWNER_DISOWNED), rebuilding loom cache. This may have been caused by a failed or canceled build.
+
+Cannot remap modifiers because it does not exist in any of the targets [] or their parents.
+Cannot remap modifiers because it does not exist in any of the targets [] or their parents.
+
+> Configure project :
+:remapping sources
+
+> Task :compileJava
+> Task :processResources
+> Task :classes
+
+> Task :compileClientJava
+.\gradlew : C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\events\api\EventManager.java
+:134: error: field declaration must be static
+C:\Users\awepu\AppData\Local\Temp\ps-script-1bb77394-8c1a-4750-ab05-f2c4bf39356b.ps1:79 знак:1
++ .\gradlew --no-daemon compileClientJava 2>&1 | Out-File -FilePath "co ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (C:\Users\awepu\... must be static:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+      private final Object source;
+                           ^
+  (consider replacing field with record component)
+C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\events\api\EventManager.java:135: error:
+ field declaration must be static
+      private final Method target;
+                           ^
+  (consider replacing field with record component)
+C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\events\api\EventManager.java:136: error:
+ field declaration must be static
+      private final byte priority;
+                         ^
+  (consider replacing field with record component)
+C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\events\impl\BlockBreakingEvent.java:8: e
+rror: field declaration must be static
+   private final class_2338 blockPos;
+                            ^
+  (consider replacing field with record component)
+C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\events\impl\BlockBreakingEvent.java:9: e
+rror: field declaration must be static
+   private final class_2350 direction;
+                            ^
+  (consider replacing field with record component)
+C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\irc\IrcManager.java:387: error: field de
+claration must be static
+      private final String sender;
+                           ^
+  (consider replacing field with record component)
+C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\irc\IrcManager.java:388: error: field de
+claration must be static
+      private final String prefix;
+                           ^
+  (consider replacing field with record component)
+C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\irc\IrcManager.java:389: error: field de
+claration must be static
+      private final String text;
+                           ^
+  (consider replacing field with record component)
+C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\irc\IrcManager.java:390: error: field de
+claration must be static
+      private final long time;
+                         ^
+  (consider replacing field with record component)
+C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\modules\impl\player\RadiusHelper.java:55
+1: error: field declaration must be static
+      private final List<class_243> trajectory;
+                                    ^
+  (consider replacing field with record component)
+C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\modules\impl\player\RadiusHelper.java:55
+2: error: field declaration must be static
+      private final class_243 landingPos;
+                              ^
+  (consider replacing field with record component)
+C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\modules\impl\render\CustomCrosshair.java
+:131: error: field declaration must be static
+      private final float size;
+                          ^
+  (consider replacing field with record component)
+C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\modules\impl\render\CustomCrosshair.java
+:132: error: field declaration must be static
+      private final float gap;
+                          ^
+  (consider replacing field with record component)
+C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\modules\impl\render\CustomCrosshair.java
+:133: error: field declaration must be static
+      private final float thickness;
+                          ^
+  (consider replacing field with record component)
+C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\modules\impl\render\CustomCrosshair.java
+:134: error: field declaration must be static
+      private final boolean circle;
+                            ^
+  (consider replacing field with record component)
+C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\modules\impl\render\CustomCrosshair.java
+:135: error: field declaration must be static
+      private final boolean outline;
+                            ^
+  (consider replacing field with record component)
+C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\modules\impl\render\CustomCrosshair.java
+:136: error: field declaration must be static
+      private final boolean tShape;
+                            ^
+  (consider replacing field with record component)
+C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\modules\impl\render\GhostTrail.java:256:
+ error: field declaration must be static
+      private final double x;
+                           ^
+  (consider replacing field with record component)
+C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\modules\impl\render\GhostTrail.java:257:
+ error: field declaration must be static
+      private final double y;
+                           ^
+  (consider replacing field with record component)
+C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\modules\impl\render\GhostTrail.java:258:
+ error: field declaration must be static
+      private final double z;
+                           ^
+  (consider replacing field with record component)
+C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\modules\impl\render\GhostTrail.java:259:
+ error: field declaration must be static
+      private final float yaw;
+                          ^
+  (consider replacing field with record component)
+C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\modules\impl\render\GhostTrail.java:260:
+ error: field declaration must be static
+      private final float lLeg;
+                          ^
+  (consider replacing field with record component)
+C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\modules\impl\render\GhostTrail.java:261:
+ error: field declaration must be static
+      private final float rLeg;
+                          ^
+  (consider replacing field with record component)
+C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\modules\impl\render\GhostTrail.java:262:
+ error: field declaration must be static
+      private final float lArm;
+                          ^
+  (consider replacing field with record component)
+C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\modules\impl\render\GhostTrail.java:263:
+ error: field declaration must be static
+      private final float rArm;
+                          ^
+  (consider replacing field with record component)
+C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\modules\impl\render\GhostTrail.java:264:
+ error: field declaration must be static
+      private final float headPitch;
+                          ^
+  (consider replacing field with record component)
+C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\modules\impl\render\GhostTrail.java:265:
+ error: field declaration must be static
+      private final float headYaw;
+                          ^
+  (consider replacing field with record component)
+C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\modules\impl\render\GhostTrail.java:266:
+ error: field declaration must be static
+      private final long spawnTime;
+                         ^
+  (consider replacing field with record component)
+C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\modules\impl\render\GhostTrail.java:267:
+ error: field declaration must be static
+      private final float fadeDurationMs;
+                          ^
+  (consider replacing field with record component)
+C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\modules\impl\render\HitSounds.java:94: e
+rror: field declaration must be static
+      private final String name;
+                           ^
+  (consider replacing field with record component)
+C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\modules\impl\render\HitSounds.java:95: e
+rror: field declaration must be static
+      private final Object soundSource;
+                           ^
+  (consider replacing field with record component)
+C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\modules\impl\render\JumpCircle.java:243:
+ error: field declaration must be static
+      private final class_243 pos;
+                              ^
+  (consider replacing field with record component)
+C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\modules\impl\render\JumpCircle.java:244:
+ error: field declaration must be static
+      private final StopWatch timer;
+                              ^
+  (consider replacing field with record component)
+C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\modules\impl\render\KillEffect.java:126:
+ error: field declaration must be static
+      private final class_243 startPos;
+                              ^
+  (consider replacing field with record component)
+C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\modules\impl\render\KillEffect.java:127:
+ error: field declaration must be static
+      private final long startTime;
+                         ^
+  (consider replacing field with record component)
+C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\screens\hud\Inventory.java:129: error: f
+ield declaration must be static
+      private final float slotX;
+                          ^
+  (consider replacing field with record component)
+C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\screens\hud\Inventory.java:130: error: f
+ield declaration must be static
+      private final float slotY;
+                          ^
+  (consider replacing field with record component)
+C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\screens\hud\Inventory.java:131: error: f
+ield declaration must be static
+      private final int count;
+                        ^
+  (consider replacing field with record component)
+C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\update\UpdateChecker.java:111: error: fi
+eld declaration must be static
+      private final String version;
+                           ^
+  (consider replacing field with record component)
+C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\update\UpdateChecker.java:112: error: fi
+eld declaration must be static
+      private final String description;
+                           ^
+  (consider replacing field with record component)
+C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\update\UpdateChecker.java:113: error: fi
+eld declaration must be static
+      private final String downloadUrl;
+                           ^
+  (consider replacing field with record component)
+C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\util\inventory\InventoryResult.java:6: e
+rror: field declaration must be static
+   private final int slot;
+                     ^
+  (consider replacing field with record component)
+C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\util\inventory\InventoryResult.java:7: e
+rror: field declaration must be static
+   private final boolean found;
+                         ^
+  (consider replacing field with record component)
+C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\util\inventory\InventoryResult.java:8: e
+rror: field declaration must be static
+   private final class_1799 stack;
+                            ^
+  (consider replacing field with record component)
+C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\util\inventory\SwapSequence.java:62: err
+or: field declaration must be static
+      private final int delayTicks;
+                        ^
+  (consider replacing field with record component)
+C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\util\inventory\SwapSequence.java:63: err
+or: field declaration must be static
+      private final Runnable action;
+                             ^
+  (consider replacing field with record component)
+C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\util\inventory\SwapSequence.java:64: err
+or: field declaration must be static
+      private final BooleanSupplier condition;
+                                    ^
+  (consider replacing field with record component)
+C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\util\math\Projection.java:315: error: fi
+eld declaration must be static
+      private final double x;
+                           ^
+  (consider replacing field with record component)
+C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\util\math\Projection.java:316: error: fi
+eld declaration must be static
+      private final double y;
+                           ^
+  (consider replacing field with record component)
+C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\util\math\Projection.java:317: error: fi
+eld declaration must be static
+      private final double z;
+                           ^
+  (consider replacing field with record component)
+C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\util\math\Projection.java:318: error: fi
+eld declaration must be static
+      private final double w;
+                           ^
+  (consider replacing field with record component)
+C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\util\math\Projection.java:319: error: fi
+eld declaration must be static
+      private final double viewZ;
+                           ^
+  (consider replacing field with record component)
+C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\util\render\item\ItemRender.java:155: er
+ror: field declaration must be static
+      private final class_1058 sprite;
+                               ^
+  (consider replacing field with record component)
+C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\util\render\Render3D.java:818: error: fi
+eld declaration must be static
+      private final class_243 p1;
+                              ^
+  (consider replacing field with record component)
+C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\util\render\Render3D.java:819: error: fi
+eld declaration must be static
+      private final class_243 p2;
+                              ^
+  (consider replacing field with record component)
+C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\util\render\Render3D.java:820: error: fi
+eld declaration must be static
+      private final class_243 p3;
+                              ^
+  (consider replacing field with record component)
+C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\util\render\Render3D.java:821: error: fi
+eld declaration must be static
+      private final class_243 p4;
+                              ^
+  (consider replacing field with record component)
+C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\util\render\Render3D.java:822: error: fi
+eld declaration must be static
+      private final int c1;
+                        ^
+  (consider replacing field with record component)
+C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\util\render\Render3D.java:823: error: fi
+eld declaration must be static
+      private final int c2;
+                        ^
+  (consider replacing field with record component)
+C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\util\render\Render3D.java:824: error: fi
+eld declaration must be static
+      private final int c3;
+                        ^
+  (consider replacing field with record component)
+C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\util\render\Render3D.java:825: error: fi
+eld declaration must be static
+      private final int c4;
+                        ^
+  (consider replacing field with record component)
+C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\util\render\Render3D.java:840: error: fi
+eld declaration must be static
+      private final class_4665 entry;
+                               ^
+  (consider replacing field with record component)
+C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\util\render\Render3D.java:841: error: fi
+eld declaration must be static
+      private final class_243 start;
+                              ^
+  (consider replacing field with record component)
+C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\util\render\Render3D.java:842: error: fi
+eld declaration must be static
+      private final class_243 end;
+                              ^
+  (consider replacing field with record component)
+C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\util\render\Render3D.java:843: error: fi
+eld declaration must be static
+      private final int colorStart;
+                        ^
+  (consider replacing field with record component)
+C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\util\render\Render3D.java:844: error: fi
+eld declaration must be static
+      private final int colorEnd;
+                        ^
+  (consider replacing field with record component)
+C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\util\render\Render3D.java:845: error: fi
+eld declaration must be static
+      private final float width;
+                          ^
+  (consider replacing field with record component)
+C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\util\render\Render3D.java:858: error: fi
+eld declaration must be static
+      private final class_4665 entry;
+                               ^
+  (consider replacing field with record component)
+C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\util\render\Render3D.java:859: error: fi
+eld declaration must be static
+      private final class_243 x;
+                              ^
+  (consider replacing field with record component)
+C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\util\render\Render3D.java:860: error: fi
+eld declaration must be static
+      private final class_243 y;
+                              ^
+  (consider replacing field with record component)
+C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\util\render\Render3D.java:861: error: fi
+eld declaration must be static
+      private final class_243 w;
+                              ^
+  (consider replacing field with record component)
+C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\util\render\Render3D.java:862: error: fi
+eld declaration must be static
+      private final class_243 z;
+                              ^
+  (consider replacing field with record component)
+C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\util\render\Render3D.java:863: error: fi
+eld declaration must be static
+      private final int color;
+                        ^
+  (consider replacing field with record component)
+C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\util\repository\macro\Macro.java:4: erro
+r: field declaration must be static
+   private final String name;
+                        ^
+  (consider replacing field with record component)
+C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\util\repository\macro\Macro.java:5: erro
+r: field declaration must be static
+   private final String message;
+                        ^
+  (consider replacing field with record component)
+C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\util\repository\macro\Macro.java:6: erro
+r: field declaration must be static
+   private final int key;
+                     ^
+  (consider replacing field with record component)
+C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\util\repository\staff\Staff.java:4: erro
+r: field declaration must be static
+   private final String name;
+                        ^
+  (consider replacing field with record component)
+C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\util\repository\way\Way.java:6: error: f
+ield declaration must be static
+   private final String name;
+                        ^
+  (consider replacing field with record component)
+C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\util\repository\way\Way.java:7: error: f
+ield declaration must be static
+   private final class_2338 pos;
+                            ^
+  (consider replacing field with record component)
+C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\util\repository\way\Way.java:8: error: f
+ield declaration must be static
+   private final String server;
+                        ^
+  (consider replacing field with record component)
+80 errors
+
+> Task :compileClientJava FAILED
+
+[Incubating] Problems report is available at: file:///C:/Users/awepu/OneDrive/Desktop/%D0%9D%D0%BE%D0%B2%D0%B0%D1%8F%20%D0%BF%D0%B0%D0%BF%D0%BA%D0%B0%20(5)/build/reports/problems/problems-report.html
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':compileClientJava'.
+> Compilation failed; see the compiler output below.
+  C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\events\api\EventManager.java:134: erro
+r: field declaration must be static
+        private final Object source;
+                             ^
+    (consider replacing field with record component)
+  C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\events\api\EventManager.java:135: erro
+r: field declaration must be static
+        private final Method target;
+                             ^
+    (consider replacing field with record component)
+  C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\events\api\EventManager.java:136: erro
+r: field declaration must be static
+        private final byte priority;
+                           ^
+    (consider replacing field with record component)
+  C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\events\impl\BlockBreakingEvent.java:8:
+ error: field declaration must be static
+     private final class_2338 blockPos;
+                              ^
+    (consider replacing field with record component)
+  C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\events\impl\BlockBreakingEvent.java:9:
+ error: field declaration must be static
+     private final class_2350 direction;
+                              ^
+    (consider replacing field with record component)
+  C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\irc\IrcManager.java:387: error: field 
+declaration must be static
+        private final String sender;
+                             ^
+    (consider replacing field with record component)
+  C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\irc\IrcManager.java:388: error: field 
+declaration must be static
+        private final String prefix;
+                             ^
+    (consider replacing field with record component)
+  C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\irc\IrcManager.java:389: error: field 
+declaration must be static
+        private final String text;
+                             ^
+    (consider replacing field with record component)
+  C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\irc\IrcManager.java:390: error: field 
+declaration must be static
+        private final long time;
+                           ^
+    (consider replacing field with record component)
+  C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\modules\impl\player\RadiusHelper.java:
+551: error: field declaration must be static
+        private final List<class_243> trajectory;
+                                      ^
+    (consider replacing field with record component)
+  C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\modules\impl\player\RadiusHelper.java:
+552: error: field declaration must be static
+        private final class_243 landingPos;
+                                ^
+    (consider replacing field with record component)
+  C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\modules\impl\render\CustomCrosshair.ja
+va:131: error: field declaration must be static
+        private final float size;
+                            ^
+    (consider replacing field with record component)
+  C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\modules\impl\render\CustomCrosshair.ja
+va:132: error: field declaration must be static
+        private final float gap;
+                            ^
+    (consider replacing field with record component)
+  C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\modules\impl\render\CustomCrosshair.ja
+va:133: error: field declaration must be static
+        private final float thickness;
+                            ^
+    (consider replacing field with record component)
+  C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\modules\impl\render\CustomCrosshair.ja
+va:134: error: field declaration must be static
+        private final boolean circle;
+                              ^
+    (consider replacing field with record component)
+  C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\modules\impl\render\CustomCrosshair.ja
+va:135: error: field declaration must be static
+        private final boolean outline;
+                              ^
+    (consider replacing field with record component)
+  C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\modules\impl\render\CustomCrosshair.ja
+va:136: error: field declaration must be static
+        private final boolean tShape;
+                              ^
+    (consider replacing field with record component)
+  C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\modules\impl\render\GhostTrail.java:25
+6: error: field declaration must be static
+        private final double x;
+                             ^
+    (consider replacing field with record component)
+  C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\modules\impl\render\GhostTrail.java:25
+7: error: field declaration must be static
+        private final double y;
+                             ^
+    (consider replacing field with record component)
+  C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\modules\impl\render\GhostTrail.java:25
+8: error: field declaration must be static
+        private final double z;
+                             ^
+    (consider replacing field with record component)
+  C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\modules\impl\render\GhostTrail.java:25
+9: error: field declaration must be static
+        private final float yaw;
+                            ^
+    (consider replacing field with record component)
+  C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\modules\impl\render\GhostTrail.java:26
+0: error: field declaration must be static
+        private final float lLeg;
+                            ^
+    (consider replacing field with record component)
+  C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\modules\impl\render\GhostTrail.java:26
+1: error: field declaration must be static
+        private final float rLeg;
+                            ^
+    (consider replacing field with record component)
+  C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\modules\impl\render\GhostTrail.java:26
+2: error: field declaration must be static
+        private final float lArm;
+                            ^
+    (consider replacing field with record component)
+  C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\modules\impl\render\GhostTrail.java:26
+3: error: field declaration must be static
+        private final float rArm;
+                            ^
+    (consider replacing field with record component)
+  C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\modules\impl\render\GhostTrail.java:26
+4: error: field declaration must be static
+        private final float headPitch;
+                            ^
+    (consider replacing field with record component)
+  C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\modules\impl\render\GhostTrail.java:26
+5: error: field declaration must be static
+        private final float headYaw;
+                            ^
+    (consider replacing field with record component)
+  C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\modules\impl\render\GhostTrail.java:26
+6: error: field declaration must be static
+        private final long spawnTime;
+                           ^
+    (consider replacing field with record component)
+  C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\modules\impl\render\GhostTrail.java:26
+7: error: field declaration must be static
+        private final float fadeDurationMs;
+                            ^
+    (consider replacing field with record component)
+  C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\modules\impl\render\HitSounds.java:94:
+ error: field declaration must be static
+        private final String name;
+                             ^
+    (consider replacing field with record component)
+  C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\modules\impl\render\HitSounds.java:95:
+ error: field declaration must be static
+        private final Object soundSource;
+                             ^
+    (consider replacing field with record component)
+  C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\modules\impl\render\JumpCircle.java:24
+3: error: field declaration must be static
+        private final class_243 pos;
+                                ^
+    (consider replacing field with record component)
+  C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\modules\impl\render\JumpCircle.java:24
+4: error: field declaration must be static
+        private final StopWatch timer;
+                                ^
+    (consider replacing field with record component)
+  C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\modules\impl\render\KillEffect.java:12
+6: error: field declaration must be static
+        private final class_243 startPos;
+                                ^
+    (consider replacing field with record component)
+  C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\modules\impl\render\KillEffect.java:12
+7: error: field declaration must be static
+        private final long startTime;
+                           ^
+    (consider replacing field with record component)
+  C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\screens\hud\Inventory.java:129: error:
+ field declaration must be static
+        private final float slotX;
+                            ^
+    (consider replacing field with record component)
+  C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\screens\hud\Inventory.java:130: error:
+ field declaration must be static
+        private final float slotY;
+                            ^
+    (consider replacing field with record component)
+  C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\screens\hud\Inventory.java:131: error:
+ field declaration must be static
+        private final int count;
+                          ^
+    (consider replacing field with record component)
+  C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\update\UpdateChecker.java:111: error: 
+field declaration must be static
+        private final String version;
+                             ^
+    (consider replacing field with record component)
+  C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\update\UpdateChecker.java:112: error: 
+field declaration must be static
+        private final String description;
+                             ^
+    (consider replacing field with record component)
+  C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\update\UpdateChecker.java:113: error: 
+field declaration must be static
+        private final String downloadUrl;
+                             ^
+    (consider replacing field with record component)
+  C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\util\inventory\InventoryResult.java:6:
+ error: field declaration must be static
+     private final int slot;
+                       ^
+    (consider replacing field with record component)
+  C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\util\inventory\InventoryResult.java:7:
+ error: field declaration must be static
+     private final boolean found;
+                           ^
+    (consider replacing field with record component)
+  C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\util\inventory\InventoryResult.java:8:
+ error: field declaration must be static
+     private final class_1799 stack;
+                              ^
+    (consider replacing field with record component)
+  C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\util\inventory\SwapSequence.java:62: e
+rror: field declaration must be static
+        private final int delayTicks;
+                          ^
+    (consider replacing field with record component)
+  C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\util\inventory\SwapSequence.java:63: e
+rror: field declaration must be static
+        private final Runnable action;
+                               ^
+    (consider replacing field with record component)
+  C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\util\inventory\SwapSequence.java:64: e
+rror: field declaration must be static
+        private final BooleanSupplier condition;
+                                      ^
+    (consider replacing field with record component)
+  C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\util\math\Projection.java:315: error: 
+field declaration must be static
+        private final double x;
+                             ^
+    (consider replacing field with record component)
+  C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\util\math\Projection.java:316: error: 
+field declaration must be static
+        private final double y;
+                             ^
+    (consider replacing field with record component)
+  C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\util\math\Projection.java:317: error: 
+field declaration must be static
+        private final double z;
+                             ^
+    (consider replacing field with record component)
+  C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\util\math\Projection.java:318: error: 
+field declaration must be static
+        private final double w;
+                             ^
+    (consider replacing field with record component)
+  C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\util\math\Projection.java:319: error: 
+field declaration must be static
+        private final double viewZ;
+                             ^
+    (consider replacing field with record component)
+  C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\util\render\item\ItemRender.java:155: 
+error: field declaration must be static
+        private final class_1058 sprite;
+                                 ^
+    (consider replacing field with record component)
+  C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\util\render\Render3D.java:818: error: 
+field declaration must be static
+        private final class_243 p1;
+                                ^
+    (consider replacing field with record component)
+  C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\util\render\Render3D.java:819: error: 
+field declaration must be static
+        private final class_243 p2;
+                                ^
+    (consider replacing field with record component)
+  C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\util\render\Render3D.java:820: error: 
+field declaration must be static
+        private final class_243 p3;
+                                ^
+    (consider replacing field with record component)
+  C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\util\render\Render3D.java:821: error: 
+field declaration must be static
+        private final class_243 p4;
+                                ^
+    (consider replacing field with record component)
+  C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\util\render\Render3D.java:822: error: 
+field declaration must be static
+        private final int c1;
+                          ^
+    (consider replacing field with record component)
+  C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\util\render\Render3D.java:823: error: 
+field declaration must be static
+        private final int c2;
+                          ^
+    (consider replacing field with record component)
+  C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\util\render\Render3D.java:824: error: 
+field declaration must be static
+        private final int c3;
+                          ^
+    (consider replacing field with record component)
+  C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\util\render\Render3D.java:825: error: 
+field declaration must be static
+        private final int c4;
+                          ^
+    (consider replacing field with record component)
+  C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\util\render\Render3D.java:840: error: 
+field declaration must be static
+        private final class_4665 entry;
+                                 ^
+    (consider replacing field with record component)
+  C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\util\render\Render3D.java:841: error: 
+field declaration must be static
+        private final class_243 start;
+                                ^
+    (consider replacing field with record component)
+  C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\util\render\Render3D.java:842: error: 
+field declaration must be static
+        private final class_243 end;
+                                ^
+    (consider replacing field with record component)
+  C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\util\render\Render3D.java:843: error: 
+field declaration must be static
+        private final int colorStart;
+                          ^
+    (consider replacing field with record component)
+  C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\util\render\Render3D.java:844: error: 
+field declaration must be static
+        private final int colorEnd;
+                          ^
+    (consider replacing field with record component)
+  C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\util\render\Render3D.java:845: error: 
+field declaration must be static
+        private final float width;
+                            ^
+    (consider replacing field with record component)
+  C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\util\render\Render3D.java:858: error: 
+field declaration must be static
+        private final class_4665 entry;
+                                 ^
+    (consider replacing field with record component)
+  C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\util\render\Render3D.java:859: error: 
+field declaration must be static
+        private final class_243 x;
+                                ^
+    (consider replacing field with record component)
+  C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\util\render\Render3D.java:860: error: 
+field declaration must be static
+        private final class_243 y;
+                                ^
+    (consider replacing field with record component)
+  C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\util\render\Render3D.java:861: error: 
+field declaration must be static
+        private final class_243 w;
+                                ^
+    (consider replacing field with record component)
+  C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\util\render\Render3D.java:862: error: 
+field declaration must be static
+        private final class_243 z;
+                                ^
+    (consider replacing field with record component)
+  C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\util\render\Render3D.java:863: error: 
+field declaration must be static
+        private final int color;
+                          ^
+    (consider replacing field with record component)
+  C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\util\repository\macro\Macro.java:4: er
+ror: field declaration must be static
+     private final String name;
+                          ^
+    (consider replacing field with record component)
+  C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\util\repository\macro\Macro.java:5: er
+ror: field declaration must be static
+     private final String message;
+                          ^
+    (consider replacing field with record component)
+  C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\util\repository\macro\Macro.java:6: er
+ror: field declaration must be static
+     private final int key;
+                       ^
+    (consider replacing field with record component)
+  C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\util\repository\staff\Staff.java:4: er
+ror: field declaration must be static
+     private final String name;
+                          ^
+    (consider replacing field with record component)
+  C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\util\repository\way\Way.java:6: error:
+ field declaration must be static
+     private final String name;
+                          ^
+    (consider replacing field with record component)
+  C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\util\repository\way\Way.java:7: error:
+ field declaration must be static
+     private final class_2338 pos;
+                              ^
+    (consider replacing field with record component)
+  C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\util\repository\way\Way.java:8: error:
+ field declaration must be static
+     private final String server;
+                          ^
+    (consider replacing field with record component)
+  80 errors
+
+* Try:
+> Check your code and dependencies to fix the compilation error(s)
+> Run with --scan to get full insights from a Build Scan (powered by Develocity).
+
+Deprecated Gradle features were used in this build, making it incompatible with Gradle 10.
+
+You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
+
+For more on this, please refer to https://docs.gradle.org/9.4.1/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+
+BUILD FAILED in 3m 12s
+3 actionable tasks: 3 executed

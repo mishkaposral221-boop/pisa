@@ -1,38 +1,41 @@
 {
   "schemaVersion": 1,
-  "id": "modid",
-  "version": "1.0.0",
-  "name": "Example Mod",
-  "description": "This is an example description! Tell everyone what your mod is about!",
+  "id": "copyright",
+  "version": "1.0.01",
+  "name": "RunTime Visuals",
+  "description": "Custom Minecraft client with shader-based rendering",
   "authors": [
-    "Me!"
+    "vavilovsky"
   ],
-  "contact": {
-    "homepage": "https://fabricmc.net/",
-    "sources": "https://github.com/FabricMC/fabric-example-mod"
-  },
-  "license": "CC0-1.0",
-  "icon": "assets/modid/icon.png",
-  "environment": "*",
+  "contact": {},
+  "license": "MIT",
+  "icon": "assets/rich/textures/capes/cape.png",
+  "environment": "client",
   "entrypoints": {
-    "main": [
-      "com.example.ExampleMod"
+    "preLaunch": [
+      "rich.util.mods.config.wave.WaveCapesConfigOverride"
     ],
     "client": [
-      "com.example.client.ExampleModClient"
+      "rich.Initialization"
     ]
   },
   "mixins": [
-    "modid.mixins.json",
-    {
-      "config": "modid.client.mixins.json",
-      "environment": "client"
-    }
+    "mixins.json",
+    "mixins.sodium.json"
   ],
+  "accessWidener": "runtime_visuals.accesswidener",
   "depends": {
-    "fabricloader": ">=0.19.2",
-    "minecraft": "~1.21.11",
-    "java": ">=21",
-    "fabric-api": "*"
-  }
+    "fabricloader": "\u003e\u003d0.18.4",
+    "fabric-api": "*",
+    "minecraft": "1.21.11",
+    "java": "\u003e\u003d21"
+  },
+  "jars": [
+    {
+      "file": "META-INF/jars/netty-codec-socks-4.1.82.Final.jar"
+    },
+    {
+      "file": "META-INF/jars/netty-handler-proxy-4.1.82.Final.jar"
+    }
+  ]
 }
