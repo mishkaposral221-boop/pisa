@@ -83,7 +83,7 @@ public class AuctionUtils {
    }
 
    private static String cleanString(String var0) {
-      return var0 == null ? "" : var0.toLowerCase().trim().replaceAll("§.", "").replaceAll("[^a-zа-яё0-9\\s\\[\\]★⚒+()]", "").replaceAll("\\s+", " ");
+      return var0 == null ? "" : var0.toLowerCase().trim().replaceAll("§.", "").replaceAll("[^keyCodec-zа-яё0-9\\s\\[\\]★⚒+()]", "").replaceAll("\\s+", " ");
    }
 
    private static List<String> getLoreStrings(ItemStack var0) {

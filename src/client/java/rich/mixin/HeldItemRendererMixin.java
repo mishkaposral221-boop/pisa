@@ -48,7 +48,10 @@ public abstract class HeldItemRendererMixin {
       }
    }
 
-   @Inject(method = "renderItem(FLnet/minecraft/MatrixStack;Lnet/minecraft/OrderedRenderCommandQueue;Lnet/minecraft/ClientPlayerEntity;I)V", at = @At("HEAD"))
+   @Inject(
+      method = "renderItem(FLnet/minecraft/client/util/math/MatrixStack;Lnet/minecraft/client/render/command/OrderedRenderCommandQueue;Lnet/minecraft/client/network/ClientPlayerEntity;I)V",
+      at = @At("HEAD")
+   )
    private void onRenderItemPre(float var1, MatrixStack var2, OrderedRenderCommandQueue var3, ClientPlayerEntity var4, int var5, CallbackInfo var6) {
       GlassHands var7 = GlassHands.getInstance();
       if (var7 != null && var7.isState()) {
@@ -57,7 +60,10 @@ public abstract class HeldItemRendererMixin {
       }
    }
 
-   @Inject(method = "renderItem(FLnet/minecraft/MatrixStack;Lnet/minecraft/OrderedRenderCommandQueue;Lnet/minecraft/ClientPlayerEntity;I)V", at = @At("TAIL"))
+   @Inject(
+      method = "renderItem(FLnet/minecraft/client/util/math/MatrixStack;Lnet/minecraft/client/render/command/OrderedRenderCommandQueue;Lnet/minecraft/client/network/ClientPlayerEntity;I)V",
+      at = @At("TAIL")
+   )
    private void onRenderItemPost(float var1, MatrixStack var2, OrderedRenderCommandQueue var3, ClientPlayerEntity var4, int var5, CallbackInfo var6) {
       GlassHands var7 = GlassHands.getInstance();
       if (var7 != null && var7.isState()) {
@@ -67,10 +73,10 @@ public abstract class HeldItemRendererMixin {
    }
 
    @WrapOperation(
-      method = "renderItem(FLnet/minecraft/MatrixStack;Lnet/minecraft/OrderedRenderCommandQueue;Lnet/minecraft/ClientPlayerEntity;I)V",
+      method = "renderItem(FLnet/minecraft/client/util/math/MatrixStack;Lnet/minecraft/client/render/command/OrderedRenderCommandQueue;Lnet/minecraft/client/network/ClientPlayerEntity;I)V",
       at = @At(
          value = "INVOKE",
-         target = "Lnet/minecraft/HeldItemRenderer;renderFirstPersonItem(Lnet/minecraft/AbstractClientPlayerEntity;FFLnet/minecraft/Hand;FLnet/minecraft/ItemStack;FLnet/minecraft/MatrixStack;Lnet/minecraft/OrderedRenderCommandQueue;I)V"
+         target = "Lnet/minecraft/client/render/item/HeldItemRenderer;renderFirstPersonItem(Lnet/minecraft/client/network/AbstractClientPlayerEntity;FFLnet/minecraft/util/Hand;FLnet/minecraft/item/ItemStack;FLnet/minecraft/client/util/math/MatrixStack;Lnet/minecraft/client/render/command/OrderedRenderCommandQueue;I)V"
       )
    )
    private void itemRenderHook(
@@ -92,7 +98,7 @@ public abstract class HeldItemRendererMixin {
       var12.call(new Object[]{var1, var13.getPlayer(), var3, var4, var13.getHand(), var6, var13.getStack(), var8, var9, var10, var11});
    }
 
-   @Inject(method = "renderFirstPersonItem", at = @At(value = "INVOKE", target = "Lnet/minecraft/MatrixStack;push()V", shift = Shift.AFTER))
+   @Inject(method = "renderFirstPersonItem", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/util/math/MatrixStack;push()V", shift = Shift.AFTER))
    private void renderFirstPersonItemHook(
       AbstractClientPlayerEntity var1,
       float var2,
@@ -116,7 +122,7 @@ public abstract class HeldItemRendererMixin {
 
    @WrapOperation(
       method = "renderFirstPersonItem",
-      at = @At(value = "INVOKE", target = "Lnet/minecraft/HeldItemRenderer;applyEquipOffset(Lnet/minecraft/MatrixStack;Lnet/minecraft/Arm;F)V")
+      at = @At(value = "INVOKE", target = "Lnet/minecraft/client/render/item/HeldItemRenderer;applyEquipOffset(Lnet/minecraft/client/util/math/MatrixStack;Lnet/minecraft/util/Arm;F)V")
    )
    private void wrapApplyEquipOffset(
       HeldItemRenderer var1,
@@ -147,7 +153,7 @@ public abstract class HeldItemRendererMixin {
 
    @WrapOperation(
       method = "renderFirstPersonItem",
-      at = @At(value = "INVOKE", target = "Lnet/minecraft/HeldItemRenderer;swingArm(FLnet/minecraft/MatrixStack;ILnet/minecraft/Arm;)V")
+      at = @At(value = "INVOKE", target = "Lnet/minecraft/client/render/item/HeldItemRenderer;swingArm(FLnet/minecraft/client/util/math/MatrixStack;ILnet/minecraft/util/Arm;)V")
    )
    private void wrapSwingArm(HeldItemRenderer var1, float var2, MatrixStack var3, int var4, Arm var5, Operation<Void> var6) {
       if (!this.richCustomAnimation) {

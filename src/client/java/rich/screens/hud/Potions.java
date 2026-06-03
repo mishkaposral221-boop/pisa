@@ -99,7 +99,7 @@ public class Potions extends AbstractHudElement {
          if (this.effectsList.isEmpty() && var7) {
             long var8 = System.currentTimeMillis();
             if (var8 - this.lastEffectChange >= 1000L) {
-               this.currentRandomEffect = RANDOM_EFFECTS.getName(new Random().nextInt(RANDOM_EFFECTS.size()));
+               this.currentRandomEffect = RANDOM_EFFECTS.get(new Random().nextInt(RANDOM_EFFECTS.size()));
                this.lastEffectChange = var8;
             }
          }
@@ -222,7 +222,7 @@ public class Potions extends AbstractHudElement {
                String var60 = (String)var58.getKey();
                float var62 = (Float)var58.getValue();
                if (!(var62 <= 0.0F)) {
-                  StatusEffectInstance var64 = this.cachedEffects.getName(var60);
+                  StatusEffectInstance var64 = this.cachedEffects.get(var60);
                   if (var64 != null) {
                      var54 += (int)(var62 * 11.0F);
                      String var20 = this.formatDuration(var64.getDuration()) + "";
@@ -290,7 +290,7 @@ public class Potions extends AbstractHudElement {
                String var71 = (String)var70.getKey();
                float var72 = (Float)var70.getValue();
                if (!(var72 <= 0.0F)) {
-                  StatusEffectInstance var73 = this.cachedEffects.getName(var71);
+                  StatusEffectInstance var73 = this.cachedEffects.get(var71);
                   if (var73 != null) {
                      String var74 = this.getEffectName(var73);
                      int var75 = var73.getAmplifier();

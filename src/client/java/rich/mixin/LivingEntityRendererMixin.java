@@ -1,6 +1,7 @@
 package rich.mixin;
 
 import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
+import com.llamalad7.mixinextras.injector.ModifyReturnValue;
 import com.llamalad7.mixinextras.sugar.Local;
 import java.util.Collections;
 import java.util.Map;
@@ -18,7 +19,6 @@ import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.ModifyArg;
 import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import rich.IMinecraft;
@@ -35,8 +35,8 @@ public abstract class LivingEntityRendererMixin<S extends LivingEntityRenderStat
    protected abstract RenderLayer getRenderLayer(S var1, boolean var2, boolean var3, boolean var4);
 
    @ModifyExpressionValue(
-      method = "updateRenderState(Lnet/minecraft/LivingEntity;Lnet/minecraft/LivingEntityRenderState;F)V",
-      at = @At(value = "INVOKE", target = "Lnet/minecraft/MathHelper;lerpAngleDegrees(FFF)F")
+      method = "updateRenderState(Lnet/minecraft/entity/LivingEntity;Lnet/minecraft/client/render/entity/state/LivingEntityRenderState;F)V",
+      at = @At(value = "INVOKE", target = "Lnet/minecraft/util/math/MathHelper;lerpAngleDegrees(FFF)F")
    )
    private float lerpAngleDegreesHook(float var1, @Local(ordinal = 0, argsOnly = true) LivingEntity var2, @Local(ordinal = 0, argsOnly = true) float var3) {
       AngleConnection var4 = AngleConnection.INSTANCE;
@@ -50,8 +50,8 @@ public abstract class LivingEntityRendererMixin<S extends LivingEntityRenderStat
    }
 
    @ModifyExpressionValue(
-      method = "updateRenderState(Lnet/minecraft/LivingEntity;Lnet/minecraft/LivingEntityRenderState;F)V",
-      at = @At(value = "INVOKE", target = "Lnet/minecraft/LivingEntity;getLerpedPitch(F)F")
+      method = "updateRenderState(Lnet/minecraft/entity/LivingEntity;Lnet/minecraft/client/render/entity/state/LivingEntityRenderState;F)V",
+      at = @At(value = "INVOKE", target = "Lnet/minecraft/entity/LivingEntity;getLerpedPitch(F)F")
    )
    private float getLerpedPitchHook(float var1, @Local(ordinal = 0, argsOnly = true) LivingEntity var2, @Local(ordinal = 0, argsOnly = true) float var3) {
       AngleConnection var4 = AngleConnection.INSTANCE;
@@ -64,14 +64,20 @@ public abstract class LivingEntityRendererMixin<S extends LivingEntityRenderStat
       }
    }
 
-   @Inject(method = "updateRenderState(Lnet/minecraft/LivingEntity;Lnet/minecraft/LivingEntityRenderState;F)V", at = @At("TAIL"))
+   @Inject(
+      method = "updateRenderState(Lnet/minecraft/entity/LivingEntity;Lnet/minecraft/client/render/entity/state/LivingEntityRenderState;F)V",
+      at = @At("TAIL")
+   )
    private void updateRenderStateHook(LivingEntity var1, S var2, float var3, CallbackInfo var4) {
       RICH$STATE_ENTITY_ID.put(var2, var1.getId());
    }
 
    @Redirect(
-      method = "render(Lnet/minecraft/LivingEntityRenderState;Lnet/minecraft/MatrixStack;Lnet/minecraft/OrderedRenderCommandQueue;Lnet/minecraft/CameraRenderState;)V",
-      at = @At(value = "INVOKE", target = "Lnet/minecraft/LivingEntityRenderer;getRenderLayer(Lnet/minecraft/LivingEntityRenderState;ZZZ)Lnet/minecraft/RenderLayer;")
+      method = "render(Lnet/minecraft/client/render/entity/state/LivingEntityRenderState;Lnet/minecraft/client/util/math/MatrixStack;Lnet/minecraft/client/render/command/OrderedRenderCommandQueue;Lnet/minecraft/client/render/state/CameraRenderState;)V",
+      at = @At(
+         value = "INVOKE",
+         target = "Lnet/minecraft/client/render/entity/LivingEntityRenderer;getRenderLayer(Lnet/minecraft/client/render/entity/state/LivingEntityRenderState;ZZZ)Lnet/minecraft/client/render/RenderLayer;"
+      )
    )
    private RenderLayer renderLayerHook(LivingEntityRenderer<?, ?, ?> var1, LivingEntityRenderState var2, boolean var3, boolean var4, boolean var5) {
       Integer var6 = RICH$STATE_ENTITY_ID.get(var2);
@@ -83,15 +89,11 @@ public abstract class LivingEntityRendererMixin<S extends LivingEntityRenderStat
       return this.getRenderLayer((S)var2, var3, var4, var5);
    }
 
-   @ModifyArg(
-      method = "render(Lnet/minecraft/LivingEntityRenderState;Lnet/minecraft/MatrixStack;Lnet/minecraft/OrderedRenderCommandQueue;Lnet/minecraft/CameraRenderState;)V",
-      at = @At(
-         value = "INVOKE",
-         target = "Lnet/minecraft/OrderedRenderCommandQueue;submitModel(Lnet/minecraft/Model;Ljava/lang/Object;Lnet/minecraft/MatrixStack;Lnet/minecraft/RenderLayer;IIILnet/minecraft/Sprite;ILnet/minecraft/ModelCommandRenderer$ItemBannerColorFix2;)V"
-      ),
-      index = 6
+   @ModifyReturnValue(
+      method = "getMixColor(Lnet/minecraft/client/render/entity/state/LivingEntityRenderState;)I",
+      at = @At("RETURN")
    )
-   private int modifyColor(int var1, @Local(argsOnly = true) S var2) {
+   private int modifyMixColor(int var1, @Local(argsOnly = true) S var2) {
       Integer var3 = RICH$STATE_ENTITY_ID.get(var2);
       HitEffect var4 = HitEffect.getInstance();
       if (var3 != null && var4 != null && var4.shouldTintEntity(var3)) {

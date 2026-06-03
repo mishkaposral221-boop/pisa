@@ -20,14 +20,14 @@ public class FireworkRocketEntityMixin implements IMinecraft {
    @Nullable
    private LivingEntity shooter;
 
-   @WrapOperation(method = "tick", at = @At(value = "INVOKE", target = "Lnet/minecraft/LivingEntity;getRotationVector()Lnet/minecraft/Vec3d;"))
+   @WrapOperation(method = "tick", at = @At(value = "INVOKE", target = "Lnet/minecraft/entity/LivingEntity;getRotationVector()Lnet/minecraft/util/math/Vec3d;"))
    public Vec3d getRotationVectorHook(LivingEntity var1, Operation<Vec3d> var2) {
       return this.shooter == mc.player && this.shooter.isGliding()
          ? AngleConnection.INSTANCE.getMoveRotation().toVector()
          : (Vec3d)var2.call(new Object[]{var1});
    }
 
-   @WrapOperation(method = "tick", at = @At(value = "INVOKE", target = "Lnet/minecraft/LivingEntity;setVelocity(Lnet/minecraft/Vec3d;)V"))
+   @WrapOperation(method = "tick", at = @At(value = "INVOKE", target = "Lnet/minecraft/entity/LivingEntity;setVelocity(Lnet/minecraft/util/math/Vec3d;)V"))
    public void setVelocityHook(LivingEntity var1, Vec3d var2, Operation<Void> var3) {
       if (this.shooter == mc.player && this.shooter.isGliding()) {
          FireworkEvent var4 = new FireworkEvent(var2);

@@ -246,7 +246,7 @@ public class SelectComponent extends AbstractSettingComponent {
          float var13 = var5;
 
          for (int var14 = 0; var14 < var7.size(); var14++) {
-            String var15 = (String)var7.get(var14);
+            String var15 = (String)var7.getName(var14);
             boolean var16 = var2 >= var4 && var2 <= var4 + 65.0F && var3 >= var13 && var3 <= var13 + 14.0F && this.expandAnimation > 0.8F;
             float var17 = this.optionHoverAnimations.getOrDefault(var15, 0.0F);
             var17 = this.lerp(var17, var16 ? 1.0F : 0.0F, var6 * 8.0F);

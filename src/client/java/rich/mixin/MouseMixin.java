@@ -65,7 +65,7 @@ public abstract class MouseMixin {
 
    @Inject(
       method = "onMouseScroll",
-      at = @At(value = "INVOKE", target = "Lnet/minecraft/ClientPlayerEntity;getInventory()Lnet/minecraft/PlayerInventory;"),
+      at = @At(value = "INVOKE", target = "Lnet/minecraft/client/network/ClientPlayerEntity;getInventory()Lnet/minecraft/entity/player/PlayerInventory;"),
       cancellable = true
    )
    public void onMouseScrollHook(long var1, double var3, double var5, CallbackInfo var7) {
@@ -100,7 +100,7 @@ public abstract class MouseMixin {
       }
    }
 
-   @WrapWithCondition(method = "updateMouse", at = @At(value = "INVOKE", target = "Lnet/minecraft/ClientPlayerEntity;changeLookDirection(DD)V"), require = 1, allow = 1)
+   @WrapWithCondition(method = "updateMouse", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/network/ClientPlayerEntity;changeLookDirection(DD)V"), require = 1, allow = 1)
    private boolean modifyMouseRotationInput(ClientPlayerEntity var1, double var2, double var4) {
       MouseRotationEvent var6 = new MouseRotationEvent((float)var2, (float)var4);
       EventManager.callEvent(var6);
