@@ -70,10 +70,12 @@ public class GlowESP extends ModuleStructure {
             GL14.glBlendFuncSeparate(770, 771, 1, 0);
             GL11.glDisable(2929);
             GL11.glDepthMask(false);
-            GL11.glLineWidth(1.5f);
+            GL11.glLineWidth(2.0f);
             MeshBuilder outlineBuilder = Mesh.builder((DrawMode)CustomDrawMode.CUBE_OUTLINE, (VertexFormat)CustomVertexFormats.POSITION_COLOR);
             MeshBuilder fillBuilder = Mesh.builder((DrawMode)CustomDrawMode.CUBE, (VertexFormat)CustomVertexFormats.POSITION_COLOR);
             boolean hasGeometry = false;
+            float partialTick = mc.getRenderTickCounter().getTickProgress(false);
+            float pulse = (float)(0.85 + 0.15 * Math.sin((double)System.currentTimeMillis() / 400.0));
             for (Entity entity : mc.world.getEntities()) {
                 LivingEntity living;
                 if (entity == mc.player || entity.isSpectator() || !(entity instanceof LivingEntity)) continue;
@@ -82,7 +84,6 @@ public class GlowESP extends ModuleStructure {
                 if (entity instanceof PlayerEntity ? !this.showPlayers.isValue() : !this.showMobs.isValue()) continue;
                 double dist = mc.player.squaredDistanceTo(entity);
                 if (dist > 4096.0) continue;
-                float partialTick = mc.getRenderTickCounter().getTickProgress(false);
                 Box box = entity.getBoundingBox();
                 Vec3d entityPos = entity.getLerpedPos(partialTick);
                 float minX = (float)(entityPos.x + (box.minX - entity.getX()) - camPos.x);
@@ -91,7 +92,6 @@ public class GlowESP extends ModuleStructure {
                 float maxX = (float)(entityPos.x + (box.maxX - entity.getX()) - camPos.x);
                 float maxY = (float)(entityPos.y + (box.maxY - entity.getY()) - camPos.y);
                 float maxZ = (float)(entityPos.z + (box.maxZ - entity.getZ()) - camPos.z);
-                float pulse = (float)(0.85 + 0.15 * Math.sin((double)System.currentTimeMillis() / 400.0));
                 float distFade = Math.max(0.3f, 1.0f - (float)(Math.sqrt(dist) / 64.0));
                 float alphaM = pulse * distFade;
                 RenderColor fillBot;
@@ -104,10 +104,14 @@ public class GlowESP extends ModuleStructure {
                     fillTop = RenderColor.of(255, 40, 40, (int)(22.0f * alphaM));
                     fillBot = RenderColor.of(200, 20, 20, (int)(14.0f * alphaM));
                 } else if (entity instanceof PlayerEntity) {
-                    outlineTop = RenderColor.of(200, 180, 255, (int)(200.0f * alphaM));
-                    outlineBot = RenderColor.of(120, 60, 255, (int)(170.0f * alphaM));
-                    fillTop = RenderColor.of(120, 40, 255, (int)(18.0f * alphaM));
-                    fillBot = RenderColor.of(60, 15, 150, (int)(12.0f * alphaM));
+                    float hpPct = Math.min(1.0f, living.getHealth() / Math.max(1.0f, living.getMaxHealth()));
+                    int r = (int)(255 * (1.0f - hpPct) + 90 * hpPct);
+                    int g = (int)(70 * (1.0f - hpPct) + 230 * hpPct);
+                    int b = (int)(120 * (1.0f - hpPct) + 160 * hpPct);
+                    outlineTop = RenderColor.of(Math.min(255, r + 50), Math.min(255, g + 40), Math.min(255, b + 60), (int)(220.0f * alphaM));
+                    outlineBot = RenderColor.of(r, g, b, (int)(190.0f * alphaM));
+                    fillTop = RenderColor.of(r, g, b, (int)(26.0f * alphaM));
+                    fillBot = RenderColor.of(r / 2, g / 2, b / 2, (int)(16.0f * alphaM));
                 } else {
                     outlineTop = RenderColor.of(100, 255, 200, (int)(180.0f * alphaM));
                     outlineBot = RenderColor.of(40, 200, 150, (int)(150.0f * alphaM));
