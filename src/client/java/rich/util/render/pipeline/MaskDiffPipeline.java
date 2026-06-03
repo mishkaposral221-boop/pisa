@@ -73,8 +73,8 @@ public class MaskDiffPipeline {
    public void createMask(GpuTextureView var1, GpuTextureView var2, GpuTextureView var3, GpuTextureView var4, GpuTextureView var5, int var6, int var7) {
       this.ensureInitialized();
       CommandEncoder var8 = RenderSystem.getDevice().createCommandEncoder();
-      GpuSampler var9 = RenderSystem.getSamplerCache().get(FilterMode.LINEAR);
-      GpuSampler var10 = RenderSystem.getSamplerCache().get(FilterMode.NEAREST);
+      GpuSampler var9 = RenderSystem.getSamplerCache().getName(FilterMode.LINEAR);
+      GpuSampler var10 = RenderSystem.getSamplerCache().getName(FilterMode.NEAREST);
       this.prepareUniformData(var6, var7);
       int var11 = this.dataBuffer.remaining();
       if (this.uniformBuffer == null || this.uniformBuffer.size() < var11) {

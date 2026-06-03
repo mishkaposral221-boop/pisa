@@ -51,39 +51,39 @@ public class FontRenderer {
    }
 
    public FontAtlas getFont(String var1) {
-      return this.fonts.get(var1);
+      return this.fonts.getName(var1);
    }
 
    public void drawText(String var1, String var2, float var3, float var4, float var5, int var6) {
-      FontAtlas var7 = this.fonts.get(var1);
+      FontAtlas var7 = this.fonts.getName(var1);
       if (var7 != null) {
          this.pipeline.drawText(var7, var2, var3, var4, var5, var6, 0.0F, 0, 0.0F);
       }
    }
 
    public void drawText(String var1, String var2, float var3, float var4, float var5, int var6, float var7) {
-      FontAtlas var8 = this.fonts.get(var1);
+      FontAtlas var8 = this.fonts.getName(var1);
       if (var8 != null) {
          this.pipeline.drawText(var8, var2, var3, var4, var5, var6, 0.0F, 0, var7);
       }
    }
 
    public void drawTextWithOutline(String var1, String var2, float var3, float var4, float var5, int var6, float var7, int var8) {
-      FontAtlas var9 = this.fonts.get(var1);
+      FontAtlas var9 = this.fonts.getName(var1);
       if (var9 != null) {
          this.pipeline.drawText(var9, var2, var3, var4, var5, var6, var7, var8, 0.0F);
       }
    }
 
    public void drawTextWithOutline(String var1, String var2, float var3, float var4, float var5, int var6, float var7, int var8, float var9) {
-      FontAtlas var10 = this.fonts.get(var1);
+      FontAtlas var10 = this.fonts.getName(var1);
       if (var10 != null) {
          this.pipeline.drawText(var10, var2, var3, var4, var5, var6, var7, var8, var9);
       }
    }
 
    public void drawCenteredText(String var1, String var2, float var3, float var4, float var5, int var6) {
-      FontAtlas var7 = this.fonts.get(var1);
+      FontAtlas var7 = this.fonts.getName(var1);
       if (var7 != null) {
          float var8 = this.pipeline.getTextWidth(var7, var2, var5);
          this.pipeline.drawText(var7, var2, var3 - var8 / 2.0F, var4, var5, var6, 0.0F, 0, 0.0F);
@@ -91,7 +91,7 @@ public class FontRenderer {
    }
 
    public void drawCenteredText(String var1, String var2, float var3, float var4, float var5, int var6, float var7) {
-      FontAtlas var8 = this.fonts.get(var1);
+      FontAtlas var8 = this.fonts.getName(var1);
       if (var8 != null) {
          float var9 = this.pipeline.getTextWidth(var8, var2, var5);
          float var10 = this.pipeline.getTextHeight(var8, var2, var5);
@@ -102,12 +102,12 @@ public class FontRenderer {
    }
 
    public float getTextWidth(String var1, String var2, float var3) {
-      FontAtlas var4 = this.fonts.get(var1);
+      FontAtlas var4 = this.fonts.getName(var1);
       return var4 == null ? 0.0F : this.pipeline.getTextWidth(var4, var2, var3);
    }
 
    public float getLineHeight(String var1, float var2) {
-      FontAtlas var3 = this.fonts.get(var1);
+      FontAtlas var3 = this.fonts.getName(var1);
       return var3 == null ? var2 : var3.getLineHeight() / var3.getFontSize() * var2;
    }
 

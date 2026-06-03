@@ -72,7 +72,7 @@ public final class FriendUtils {
    }
 
    private FriendUtils() {
-      throw new UnsupportedOperationException("This is a utility class and cannot be instantiated");
+      throw new UnsupportedOperationException("This is keyCodec utility class and cannot be instantiated");
    }
 
    public static List<Friend> getFriends() {

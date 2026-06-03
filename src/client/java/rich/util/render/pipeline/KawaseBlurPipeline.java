@@ -179,7 +179,7 @@ public class KawaseBlurPipeline {
          }
 
          CommandEncoder var7 = RenderSystem.getDevice().createCommandEncoder();
-         GpuSampler var8 = RenderSystem.getSamplerCache().get(FilterMode.LINEAR);
+         GpuSampler var8 = RenderSystem.getSamplerCache().getName(FilterMode.LINEAR);
          GpuTextureView var9 = var2;
          int var10 = var3;
          int var11 = var4;
