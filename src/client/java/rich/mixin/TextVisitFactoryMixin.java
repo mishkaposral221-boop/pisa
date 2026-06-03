@@ -12,10 +12,10 @@ public class TextVisitFactoryMixin {
    @ModifyArg(
       at = @At(
          value = "INVOKE",
-         target = "Lnet/minecraft/TextVisitFactory;visitFormatted(Ljava/lang/String;ILnet/minecraft/Style;Lnet/minecraft/Style;Lnet/minecraft/CharacterVisitor;)Z",
+         target = "Lnet/minecraft/text/TextVisitFactory;visitFormatted(Ljava/lang/String;ILnet/minecraft/text/Style;Lnet/minecraft/text/Style;Lnet/minecraft/text/CharacterVisitor;)Z",
          ordinal = 0
       ),
-      method = "visitFormatted(Ljava/lang/String;ILnet/minecraft/Style;Lnet/minecraft/CharacterVisitor;)Z",
+      method = "visitFormatted(Ljava/lang/String;ILnet/minecraft/text/Style;Lnet/minecraft/text/CharacterVisitor;)Z",
       index = 0
    )
    private static String adjustText(String var0) {

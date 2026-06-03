@@ -14,7 +14,7 @@ import rich.util.proxy.ProxyServer;
 
 @Mixin(MultiplayerScreen.class)
 public class MultiplayerScreenOpenMixin {
-   @Inject(method = "init()V", at = @At(value = "INVOKE", target = "Lnet/minecraft/MultiplayerScreen;updateButtonActivationStates()V"))
+   @Inject(method = "init()V", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/gui/screen/multiplayer/MultiplayerScreen;updateButtonActivationStates()V"))
    public void multiplayerGuiOpen(CallbackInfo var1) {
       MultiplayerScreen var2 = (MultiplayerScreen)(Object)this;
       MinecraftClient var3 = MinecraftClient.getInstance();

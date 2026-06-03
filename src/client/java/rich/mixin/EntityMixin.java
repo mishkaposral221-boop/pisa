@@ -59,7 +59,7 @@ public abstract class EntityMixin implements IMinecraft {
       }
    }
 
-   @ModifyVariable(method = "getRotationVector(FF)Lnet/minecraft/Vec3d;", at = @At("HEAD"), ordinal = 0, argsOnly = true)
+   @ModifyVariable(method = "getRotationVector(FF)Lnet/minecraft/util/math/Vec3d;", at = @At("HEAD"), ordinal = 0, argsOnly = true)
    private float modifyPitch(float var1) {
       return (Object)this instanceof ClientPlayerEntity && AngleConnection.INSTANCE.getCurrentAngle() != null ? AngleConnection.INSTANCE.getCurrentAngle().getPitch() : var1;
    }

@@ -41,7 +41,7 @@ public abstract class CameraMixin {
 
    @Inject(
       method = "update",
-      at = @At(value = "INVOKE", target = "Lnet/minecraft/Camera;setPos(DDD)V", shift = Shift.AFTER),
+      at = @At(value = "INVOKE", target = "Lnet/minecraft/client/render/Camera;setPos(DDD)V", shift = Shift.AFTER),
       cancellable = true
    )
    private void updateHook(World var1, Entity var2, boolean var3, boolean var4, float var5, CallbackInfo var6) {
@@ -61,7 +61,7 @@ public abstract class CameraMixin {
       }
    }
 
-   @Inject(method = "setPos(Lnet/minecraft/Vec3d;)V", at = @At("HEAD"), cancellable = true)
+   @Inject(method = "setPos(Lnet/minecraft/util/math/Vec3d;)V", at = @At("HEAD"), cancellable = true)
    private void posHook(Vec3d var1, CallbackInfo var2) {
       CameraPositionEvent var3 = new CameraPositionEvent(var1);
       EventManager.callEvent(var3);

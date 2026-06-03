@@ -17,7 +17,7 @@ import rich.modules.impl.util.PvpHelper;
 
 @Mixin(HandledScreen.class)
 public abstract class HandledScreenMixin {
-   @Inject(method = "drawSlot(Lnet/minecraft/DrawContext;Lnet/minecraft/Slot;II)V", at = @At("HEAD"))
+   @Inject(method = "drawSlot(Lnet/minecraft/client/gui/DrawContext;Lnet/minecraft/screen/slot/Slot;II)V", at = @At("HEAD"))
    private void onDrawSlot(DrawContext var1, Slot var2, int var3, int var4, CallbackInfo var5) {
       ItemHelper var6 = ItemHelper.getInstance();
       PvpHelper var7 = PvpHelper.getInstance();
@@ -77,7 +77,7 @@ public abstract class HandledScreenMixin {
       }
    }
 
-   @Inject(method = "drawSlot(Lnet/minecraft/DrawContext;Lnet/minecraft/Slot;II)V", at = @At("TAIL"))
+   @Inject(method = "drawSlot(Lnet/minecraft/client/gui/DrawContext;Lnet/minecraft/screen/slot/Slot;II)V", at = @At("TAIL"))
    private void onDrawSlotTail(DrawContext var1, Slot var2, int var3, int var4, CallbackInfo var5) {
       ItemCooldowns var6 = ItemCooldowns.getInstance();
       MinecraftClient var7 = MinecraftClient.getInstance();

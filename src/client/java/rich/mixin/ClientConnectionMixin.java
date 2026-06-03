@@ -29,7 +29,7 @@ public class ClientConnectionMixin {
       }
    }
 
-   @Inject(method = "send(Lnet/minecraft/Packet;)V", at = @At("HEAD"), cancellable = true)
+   @Inject(method = "send(Lnet/minecraft/network/packet/Packet;)V", at = @At("HEAD"), cancellable = true)
    private void sendPre(Packet<?> var1, CallbackInfo var2) {
       PacketEvent var3 = new PacketEvent(var1, PacketEvent.Type.SEND);
       EventManager.callEvent(var3);

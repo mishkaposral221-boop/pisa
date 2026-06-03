@@ -26,14 +26,14 @@ public abstract class MixinItemEntityRenderer {
    @Unique
    private ItemEntityRenderState currentState = null;
 
-   @Inject(method = "updateRenderState(Lnet/minecraft/ItemEntity;Lnet/minecraft/ItemEntityRenderState;F)V", at = @At("HEAD"))
+   @Inject(method = "updateRenderState(Lnet/minecraft/entity/ItemEntity;Lnet/minecraft/client/render/entity/state/ItemEntityRenderState;F)V", at = @At("HEAD"))
    private void captureGroundState(ItemEntity var1, ItemEntityRenderState var2, float var3, CallbackInfo var4) {
       groundStateMap.put(var2, var1.isOnGround());
    }
 
    @Redirect(
-      method = "render(Lnet/minecraft/ItemEntityRenderState;Lnet/minecraft/MatrixStack;Lnet/minecraft/OrderedRenderCommandQueue;Lnet/minecraft/CameraRenderState;)V",
-      at = @At(value = "INVOKE", target = "Lnet/minecraft/MatrixStack;translate(FFF)V", ordinal = 0)
+      method = "render(Lnet/minecraft/client/render/entity/state/ItemEntityRenderState;Lnet/minecraft/client/util/math/MatrixStack;Lnet/minecraft/client/render/command/OrderedRenderCommandQueue;Lnet/minecraft/client/render/state/CameraRenderState;)V",
+      at = @At(value = "INVOKE", target = "Lnet/minecraft/client/util/math/MatrixStack;translate(FFF)V", ordinal = 0)
    )
    private void redirectTranslate(MatrixStack var1, float var2, float var3, float var4, ItemEntityRenderState var5, MatrixStack var6, OrderedRenderCommandQueue var7, CameraRenderState var8) {
       this.currentState = var5;
@@ -48,10 +48,10 @@ public abstract class MixinItemEntityRenderer {
    }
 
    @Redirect(
-      method = "render(Lnet/minecraft/ItemEntityRenderState;Lnet/minecraft/MatrixStack;Lnet/minecraft/OrderedRenderCommandQueue;Lnet/minecraft/CameraRenderState;)V",
+      method = "render(Lnet/minecraft/client/render/entity/state/ItemEntityRenderState;Lnet/minecraft/client/util/math/MatrixStack;Lnet/minecraft/client/render/command/OrderedRenderCommandQueue;Lnet/minecraft/client/render/state/CameraRenderState;)V",
       at = @At(
          value = "INVOKE",
-         target = "Lnet/minecraft/ItemEntityRenderer;render(Lnet/minecraft/MatrixStack;Lnet/minecraft/OrderedRenderCommandQueue;ILnet/minecraft/ItemStackEntityRenderState;Lnet/minecraft/Random;Lnet/minecraft/Box;)V"
+         target = "Lnet/minecraft/client/render/entity/ItemEntityRenderer;render(Lnet/minecraft/client/util/math/MatrixStack;Lnet/minecraft/client/render/command/OrderedRenderCommandQueue;ILnet/minecraft/client/render/entity/state/ItemStackEntityRenderState;Lnet/minecraft/util/math/random/Random;Lnet/minecraft/util/math/Box;)V"
       )
    )
    private void redirectRender(MatrixStack var1, OrderedRenderCommandQueue var2, int var3, ItemStackEntityRenderState var4, Random var5, Box var6) {

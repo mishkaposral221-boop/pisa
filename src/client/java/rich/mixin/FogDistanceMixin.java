@@ -9,8 +9,8 @@ import rich.modules.impl.render.CustomFog;
 @Mixin(FogRenderer.class)
 public class FogDistanceMixin {
    @ModifyArg(
-      method = "applyFog(Lnet/minecraft/Camera;ILnet/minecraft/RenderTickCounter;FLnet/minecraft/ClientWorld;)Lorg/joml/Vector4f;",
-      at = @At(value = "INVOKE", target = "Lnet/minecraft/FogRenderer;applyFog(Ljava/nio/ByteBuffer;ILorg/joml/Vector4f;FFFFFF)V"),
+      method = "applyFog(Lnet/minecraft/client/render/Camera;ILnet/minecraft/client/render/RenderTickCounter;FLnet/minecraft/client/world/ClientWorld;)Lorg/joml/Vector4f;",
+      at = @At(value = "INVOKE", target = "Lnet/minecraft/client/render/fog/FogRenderer;applyFog(Ljava/nio/ByteBuffer;ILorg/joml/Vector4f;FFFFFF)V"),
       index = 3
    )
    private static float onFogStart(float var0) {
@@ -19,8 +19,8 @@ public class FogDistanceMixin {
    }
 
    @ModifyArg(
-      method = "applyFog(Lnet/minecraft/Camera;ILnet/minecraft/RenderTickCounter;FLnet/minecraft/ClientWorld;)Lorg/joml/Vector4f;",
-      at = @At(value = "INVOKE", target = "Lnet/minecraft/FogRenderer;applyFog(Ljava/nio/ByteBuffer;ILorg/joml/Vector4f;FFFFFF)V"),
+      method = "applyFog(Lnet/minecraft/client/render/Camera;ILnet/minecraft/client/render/RenderTickCounter;FLnet/minecraft/client/world/ClientWorld;)Lorg/joml/Vector4f;",
+      at = @At(value = "INVOKE", target = "Lnet/minecraft/client/render/fog/FogRenderer;applyFog(Ljava/nio/ByteBuffer;ILorg/joml/Vector4f;FFFFFF)V"),
       index = 4
    )
    private static float onFogEnd(float var0) {

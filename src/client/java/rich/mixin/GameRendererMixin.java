@@ -92,7 +92,7 @@ public abstract class GameRendererMixin {
 
    @Inject(
       method = "renderWorld",
-      at = @At(value = "INVOKE_STRING", target = "Lnet/minecraft/Profiler;swap(Ljava/lang/String;)V", args = "ldc=hand")
+      at = @At(value = "INVOKE_STRING", target = "Lnet/minecraft/util/profiler/Profiler;swap(Ljava/lang/String;)V", args = "ldc=hand")
    )
    public void hookWorldRender(
       RenderTickCounter var1,
@@ -151,7 +151,7 @@ public abstract class GameRendererMixin {
 
    @Inject(
       method = "render",
-      at = @At(value = "INVOKE", target = "Lnet/minecraft/GuiRenderer;render(Lcom/mojang/blaze3d/buffers/GpuBufferSlice;)V", shift = Shift.AFTER)
+      at = @At(value = "INVOKE", target = "Lnet/minecraft/client/gui/render/GuiRenderer;render(Lcom/mojang/blaze3d/buffers/GpuBufferSlice;)V", shift = Shift.AFTER)
    )
    private void afterGuiRender(RenderTickCounter var1, boolean var2, CallbackInfo var3) {
       if (this.client.world != null && this.client.player != null) {

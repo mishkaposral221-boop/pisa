@@ -16,7 +16,7 @@ import rich.modules.impl.combat.aura.AngleConstructor;
 
 @Mixin(KeyboardInput.class)
 public class KeyboardInputMixin {
-   @ModifyExpressionValue(method = "tick", at = @At(value = "NEW", target = "(ZZZZZZZ)Lnet/minecraft/PlayerInput;"))
+   @ModifyExpressionValue(method = "tick", at = @At(value = "NEW", target = "(ZZZZZZZ)Lnet/minecraft/util/PlayerInput;"))
    private PlayerInput tickHook(PlayerInput var1) {
       InputEvent var2 = new InputEvent(var1);
       EventManager.callEvent(var2);

@@ -74,7 +74,7 @@ public abstract class InGameHudMixin implements IMinecraft {
       method = "renderHotbar",
       at = @At(
          value = "INVOKE",
-         target = "Lnet/minecraft/InGameHud;renderHotbarItem(Lnet/minecraft/DrawContext;IILnet/minecraft/RenderTickCounter;Lnet/minecraft/PlayerEntity;Lnet/minecraft/ItemStack;I)V"
+         target = "Lnet/minecraft/client/gui/hud/InGameHud;renderHotbarItem(Lnet/minecraft/client/gui/DrawContext;IILnet/minecraft/client/render/RenderTickCounter;Lnet/minecraft/entity/player/PlayerEntity;Lnet/minecraft/item/ItemStack;I)V"
       )
    )
    private void onRenderHotbarItem(
@@ -143,7 +143,7 @@ public abstract class InGameHudMixin implements IMinecraft {
       }
    }
 
-   @WrapOperation(method = "renderHeldItemTooltip", at = @At(value = "INVOKE", target = "Lnet/minecraft/ItemStack;getName()Lnet/minecraft/Text;"))
+   @WrapOperation(method = "renderHeldItemTooltip", at = @At(value = "INVOKE", target = "Lnet/minecraft/item/ItemStack;getName()Lnet/minecraft/text/Text;"))
    private Text onGetHeldItemName(ItemStack var1, Operation<Text> var2) {
       ItemHelper var3 = ItemHelper.getInstance();
       if (var3 != null && var3.isState()) {
@@ -187,7 +187,7 @@ public abstract class InGameHudMixin implements IMinecraft {
       }
    }
 
-   @Inject(method = "renderScoreboardSidebar(Lnet/minecraft/DrawContext;Lnet/minecraft/RenderTickCounter;)V", at = @At("HEAD"), cancellable = true)
+   @Inject(method = "renderScoreboardSidebar(Lnet/minecraft/client/gui/DrawContext;Lnet/minecraft/client/render/RenderTickCounter;)V", at = @At("HEAD"), cancellable = true)
    private void onRenderScoreboard(DrawContext var1, RenderTickCounter var2, CallbackInfo var3) {
       NoRender var4 = NoRender.getInstance();
       if (var4 != null && var4.isState() && var4.modeSetting.isSelected("Scoreboard")) {
