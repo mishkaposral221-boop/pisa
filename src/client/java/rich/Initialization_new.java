@@ -16,7 +16,7 @@ public class Initialization implements ClientModInitializer {
    private static Initialization instance;
    private Manager manager;
    private static final int AUTOSAVE_TICK_INTERVAL = 1200;
-   private static int saveCounter = 0;
+   private static int saveCounter;
 
    public static Initialization getInstance() {
       if (instance == null) {
@@ -38,37 +38,45 @@ public class Initialization implements ClientModInitializer {
 
    private void registerClientTickEvents() {
       ClientTickEvents.END_CLIENT_TICK.register(client -> {
-         if (client.player == null || this.manager == null) {
+         if (client.player == null) {
             return;
          }
 
-         if (this.manager.getModuleRepository() != null) {
+         if (this.manager != null && this.manager.getModuleRepository() != null) {
             for (var module : this.manager.getModuleRepository().modules()) {
                String name = module.getName();
-               if ("AutoSprint".equals(name) && module instanceof rich.modules.impl.movement.AutoSprint) {
-                  ((rich.modules.impl.movement.AutoSprint)module).tick(client);
-               } else if ("Fullbright".equals(name) && module instanceof rich.modules.impl.render.FullBright) {
-                  ((rich.modules.impl.render.FullBright)module).tick(client);
+               if ("AutoSprint".equals(name)) {
+                  if (module instanceof rich.modules.impl.movement.AutoSprint autoSprint) {
+                     autoSprint.tick(client);
+                  }
+               } else if ("Fullbright".equals(name)) {
+                  if (module instanceof rich.modules.impl.render.FullBright fullbright) {
+                     fullbright.tick(client);
+                  }
                }
             }
          }
 
          Entity targetedEntity = client.targetedEntity;
          if (targetedEntity instanceof LivingEntity living && living != client.player) {
-            if (client.player.getAttackCooldownProgress(0.0f) < 0.5f && this.manager.getHudManager() != null) {
-               var hudMgr = this.manager.getHudManager();
-               for (var mod : hudMgr.modules()) {
-                  if ("TargetHud".equals(mod.getName()) && mod instanceof rich.modules.impl.render.hud.TargetHudModule) {
-                     ((rich.modules.impl.render.hud.TargetHudModule)mod).setTarget(living);
-                     break;
-                  }
+            if (client.player.getAttackCooldownProgress(0.0f) < 0.5f) {
+               if (this.manager != null && this.manager.getHudManager() != null) {
+                  var hudMgr = this.manager.getHudManager();
+                  hudMgr.modules().stream()
+                     .filter(mod -> "TargetHud".equals(mod.getName()))
+                     .findFirst()
+                     .ifPresent(mod -> {
+                        if (mod instanceof rich.modules.impl.render.hud.TargetHudModule targetHud) {
+                           targetHud.setTarget(living);
+                        }
+                     });
                }
             }
          }
 
          if (++saveCounter >= AUTOSAVE_TICK_INTERVAL) {
             saveCounter = 0;
-            if (this.manager.getConfigSystem() != null) {
+            if (this.manager != null && this.manager.getConfigSystem() != null) {
                this.manager.getConfigSystem().saveAll();
             }
          }
@@ -77,12 +85,15 @@ public class Initialization implements ClientModInitializer {
 
    private void registerHudRenderCallbacks() {
       HudRenderCallback.EVENT.register((guiGraphics, deltaTracker) -> {
-         if (this.manager == null || this.manager.getClickgui() == null) {
+         MinecraftClient client = MinecraftClient.getInstance();
+         if (client.player == null || this.manager == null) {
             return;
          }
 
-         if (!this.manager.getClickgui().isOpen() && this.manager.getHudManager() != null) {
-            this.manager.getHudManager().renderText(guiGraphics, 1.0f);
+         if (!this.manager.getClickgui().isOpen()) {
+            if (this.manager.getHudManager() != null) {
+               this.manager.getHudManager().renderText(guiGraphics, 1.0f);
+            }
          }
       });
    }
