@@ -7,10 +7,12 @@ cd /d "%~dp0"
 REM ====== НАСТРОЙКИ ======
 set "REPO_URL=https://github.com/mishkaposral221-boop/pisa.git"
 set "BRANCH=main"
-set "COMMIT_MSG=Initial commit"
 set "GIT_NAME=gavnikpauk221-netizen"
 set "GIT_EMAIL=ваш_email@example.com"
 REM =======================
+
+REM Сообщение коммита с датой и временем
+set "COMMIT_MSG=update %date% %time%"
 
 echo.
 echo === Заливка проекта на GitHub ===
@@ -23,16 +25,11 @@ if errorlevel 1 (
     pause & exit /b 1
 )
 
-REM Поддержка длинных путей (от прав может потребовать --global вместо --system)
 git config --global core.longpaths true
-
-REM Личность git (для этого репозитория)
 git config user.name "%GIT_NAME%"
 git config user.email "%GIT_EMAIL%"
 
-REM Создаём .gitignore, чтобы не заливать кэш и сборку
 if not exist ".gitignore" (
-    echo Создаю .gitignore...
     (
         echo .gradle/
         echo build/
@@ -64,12 +61,19 @@ git commit -m "%COMMIT_MSG%"
 
 echo Заливаю на GitHub...
 git push -u origin %BRANCH%
-if errorlevel 1 (
-    echo.
-    echo [ОШИБКА] Пуш не прошёл. Проверьте вход в GitHub и что коммит создан.
-    pause & exit /b 1
-)
+if not errorlevel 1 goto done
 
+echo.
+echo [!] Обычный пуш отклонён, истории разошлись. Делаю принудительный пуш...
+git push --force origin %BRANCH%
+if not errorlevel 1 goto done
+
+echo.
+echo [ОШИБКА] Пуш не прошёл. Проверьте вход в GitHub.
+pause
+exit /b 1
+
+:done
 echo.
 echo === Готово! ===
 pause
