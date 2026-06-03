@@ -26,7 +26,7 @@ public class ThemeRenderer {
    public ThemeRenderer() {
       for (ClientTheme.Theme var4 : THEMES) {
          this.hoverAnims.put(var4, 0.0F);
-         this.selectAnims.put(var4, var4 == ClientTheme.getName() ? 1.0F : 0.0F);
+         this.selectAnims.put(var4, var4 == ClientTheme.get() ? 1.0F : 0.0F);
       }
    }
 
@@ -67,7 +67,7 @@ public class ThemeRenderer {
    private void renderCard(ClientTheme.Theme var1, float var2, float var3, float var4) {
       float var5 = this.hoverAnims.getOrDefault(var1, 0.0F);
       float var6 = this.selectAnims.getOrDefault(var1, 0.0F);
-      boolean var7 = var1 == ClientTheme.getName();
+      boolean var7 = var1 == ClientTheme.get();
       Color var8 = var1.bgPrimary;
       Color var9 = var1.bgSecondary;
       int var10 = (int)((180.0F + 40.0F * var5) * var4);
@@ -133,7 +133,7 @@ public class ThemeRenderer {
          float var16 = var15 ? 1.0F : 0.0F;
          float var17 = this.hoverAnims.getOrDefault(var10, 0.0F);
          this.hoverAnims.put(var10, this.lerp(var17, var16, var5, var8));
-         float var18 = var10 == ClientTheme.getName() ? 1.0F : 0.0F;
+         float var18 = var10 == ClientTheme.get() ? 1.0F : 0.0F;
          float var19 = this.selectAnims.getOrDefault(var10, 0.0F);
          this.selectAnims.put(var10, this.lerp(var19, var18, var5, var8));
       }

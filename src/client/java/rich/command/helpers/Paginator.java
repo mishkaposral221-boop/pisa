@@ -44,8 +44,8 @@ public class Paginator<T> {
          var1.run();
       }
 
-      for (Object var6 : this.getCurrentPageItems()) {
-         MutableText var7 = (MutableText)var2.getTickProgress(var6);
+      for (T var6 : this.getCurrentPageItems()) {
+         MutableText var7 = var2.apply(var6);
          var4.sendRaw(var7);
       }
 
@@ -60,7 +60,7 @@ public class Paginator<T> {
       var1.sendRaw(Text.literal(HelpCommand.getLine()));
       MutableText var3 = Text.literal("");
       if (this.currentPage > 1) {
-         MutableText var4 = Text.literal("§8[§elementCodec◄ Назад§8]");
+         MutableText var4 = Text.literal("§8[§b◄ Назад§8]");
          String var5 = var2 + " " + (this.currentPage - 1);
          var4.setStyle(
             var4.getStyle()
@@ -72,7 +72,7 @@ public class Paginator<T> {
          var3.append(Text.literal("§8[§7◄ Назад§8]"));
       }
 
-      var3.append(Text.literal(" §7Страница §elementCodec" + this.currentPage + "§7/§elementCodec" + this.getTotalPages() + " "));
+      var3.append(Text.literal(" §7Страница §b" + this.currentPage + "§7/§b" + this.getTotalPages() + " "));
       if (this.currentPage < this.getTotalPages()) {
          MutableText var6 = Text.literal("§8[§bВперёд ►§8]");
          String var7 = var2 + " " + (this.currentPage + 1);

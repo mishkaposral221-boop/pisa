@@ -15,7 +15,7 @@ public class ClickGuiSettings extends ModuleStructure {
       .visible(() -> this.blur.isValue());
 
    public static ClickGuiSettings getInstance() {
-      return c.keyCodec(ClickGuiSettings.class);
+      return c.a(ClickGuiSettings.class);
    }
 
    public ClickGuiSettings() {

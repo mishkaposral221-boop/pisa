@@ -23,7 +23,7 @@ import rich.util.string.KeyHelper;
 
 public class BindCommand extends Command {
    public BindCommand() {
-      super("bind", "Управление биндами модулей", "elementCodec");
+      super("bind", "Управление биндами модулей", "b");
    }
 
    @Override
@@ -124,22 +124,22 @@ public class BindCommand extends Command {
                   }
                }
 
-               List var9 = var4.modules().stream().filter(var0 -> var0.getKey() != -1 && var0.getKey() != -1).collect(Collectors.toList());
+               List<ModuleStructure> var9 = var4.modules().stream().filter(var0 -> var0.getKey() != -1 && var0.getKey() != -1).collect(Collectors.toList());
                if (var9.isEmpty()) {
                   this.logDirect("Нет модулей с биндами!", Formatting.RED);
                   return;
                }
 
-               Paginator var10 = new Paginator(var9);
+               Paginator<ModuleStructure> var10 = new Paginator<>(var9);
                var10.setPage(var8);
                var10.display(() -> {
                   this.logDirectRaw(Text.literal(HelpCommand.getLine()));
                   this.logDirect("§f§lСПИСОК БИНДОВ §7(" + var9.size() + ")");
                   this.logDirectRaw(Text.literal(HelpCommand.getLine()));
-               }, var1x -> {
+               }, (ModuleStructure var1x) -> {
                   String var2x = var1x.getName();
                   String var3x = KeyHelper.getKeyName(var1x.getKey()).toLowerCase();
-                  MutableText var4x = Text.literal("  §elementCodec● §f" + var2x).append(Text.literal(" §8[§7" + var3x + "§8]"));
+                  MutableText var4x = Text.literal("  §b● §f" + var2x).append(Text.literal(" §8[§7" + var3x + "§8]"));
                   MutableText var5x = Text.literal("§7Нажмите чтобы удалить бинд для §f" + var2x);
                   String var6 = var3.getPrefix() + "bind remove " + var2x;
                   var4x.setStyle(var4x.getStyle().withHoverEvent(new net.minecraft.text.HoverEvent.ShowText(var5x)).withClickEvent(new net.minecraft.text.ClickEvent.RunCommand(var6)));

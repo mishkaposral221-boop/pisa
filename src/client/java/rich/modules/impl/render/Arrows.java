@@ -37,7 +37,7 @@ public class Arrows extends ModuleStructure {
    private final Map<PlayerEntity, Arrows.Arrow> playerArrows = new ConcurrentHashMap<>();
 
    public static Arrows getInstance() {
-      return c.keyCodec(Arrows.class);
+      return c.a(Arrows.class);
    }
 
    public Arrows() {

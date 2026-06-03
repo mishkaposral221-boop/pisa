@@ -44,7 +44,7 @@ public class AutoSwap extends ModuleStructure {
    private int pickingForSlot = -1;
 
    public static AutoSwap getInstance() {
-      return c.keyCodec(AutoSwap.class);
+      return c.a(AutoSwap.class);
    }
 
    public AutoSwap() {
@@ -69,12 +69,12 @@ public class AutoSwap extends ModuleStructure {
             if (var1.getActionType() == SlotActionType.PICKUP) {
                DefaultedList var2 = mc.player.playerScreenHandler.slots;
                if (var1.getSlotId() >= 0 && var1.getSlotId() < var2.size()) {
-                  ItemStack var3 = ((Slot)var2.getName(var1.getSlotId())).getStack();
+                  ItemStack var3 = ((Slot)var2.get(var1.getSlotId())).getStack();
                   if (!var3.isEmpty()) {
                      Identifier var4 = Registries.ITEM.getId(var3.getItem());
                      List var5 = List.of(this.slot1, this.slot2, this.slot3);
                      if (this.pickingForSlot < var5.size()) {
-                        ((TextSetting)var5.getName(this.pickingForSlot)).setText(var4.toString());
+                        ((TextSetting)var5.get(this.pickingForSlot)).setText(var4.toString());
                      }
 
                      var1.cancel();
@@ -184,14 +184,14 @@ public class AutoSwap extends ModuleStructure {
    private ItemStack getStackForIndex(int var1) {
       List var2 = List.of(this.slot1, this.slot2, this.slot3);
       if (var1 >= 0 && var1 < var2.size()) {
-         String var3 = ((TextSetting)var2.getName(var1)).getText();
+         String var3 = ((TextSetting)var2.get(var1)).getText();
          if (var3 != null && !var3.isBlank()) {
             Identifier var4 = Identifier.tryParse(var3);
             if (var4 == null) {
                return ItemStack.EMPTY;
             }
 
-            Item var5 = (Item)Registries.ITEM.getName(var4);
+            Item var5 = (Item)Registries.ITEM.get(var4);
             return var5 != null && var5 != Items.AIR ? var5.getDefaultStack() : ItemStack.EMPTY;
          } else {
             return ItemStack.EMPTY;

@@ -12,7 +12,7 @@ import rich.modules.impl.render.chinahat.ChinaHatFeatureRenderer;
 public class MixinPlayerEntityRenderer {
    @Inject(method = "<init>", at = @At("TAIL"))
    private void onInit(Context var1, boolean var2, CallbackInfo var3) {
-      PlayerEntityRenderer var4 = (PlayerEntityRenderer)this;
+      PlayerEntityRenderer var4 = (PlayerEntityRenderer)(Object)this;
       var4.addFeature(new ChinaHatFeatureRenderer(var4));
    }
 }

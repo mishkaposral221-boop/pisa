@@ -75,7 +75,7 @@ public class Potions extends AbstractHudElement {
          this.activeEffectIds.clear();
          this.stopAnimation();
       } else {
-         Collection var1 = this.mc.player.getStatusEffects();
+         Collection<StatusEffectInstance> var1 = this.mc.player.getStatusEffects();
          this.effectsList = new ArrayList<>(var1.stream().filter(StatusEffectInstance::shouldShowIcon).toList());
          this.activeEffectIds.clear();
 
@@ -179,11 +179,11 @@ public class Potions extends AbstractHudElement {
          float var6 = (float)(var4 - this.lastUpdateTime) / 1000.0F;
          this.lastUpdateTime = var4;
          var6 = Math.min(var6, 0.1F);
-         ArrayList var7 = new ArrayList();
+         ArrayList<String> var7 = new ArrayList<>();
 
-         for (Entry var9 : this.effectAnimations.entrySet()) {
-            String var10 = (String)var9.getKey();
-            float var11 = (Float)var9.getValue();
+         for (Map.Entry<String, Float> var9 : this.effectAnimations.entrySet()) {
+            String var10 = var9.getKey();
+            float var11 = var9.getValue();
             float var12 = this.activeEffectIds.contains(var10) ? 1.0F : 0.0F;
             float var13 = this.lerp(var11, var12, var6);
             if (Math.abs(var13 - var12) < 0.01F) {

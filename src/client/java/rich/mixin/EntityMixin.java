@@ -35,22 +35,22 @@ public abstract class EntityMixin implements IMinecraft {
 
    @Inject(method = "<init>", at = @At("TAIL"))
    private void onInit(EntityType<?> var1, World var2, CallbackInfo var3) {
-      this.client$local = (Entity)this instanceof ClientPlayerEntity;
+      this.client$local = (Object)this instanceof ClientPlayerEntity;
    }
 
    @Inject(method = "getBoundingBox", at = @At("HEAD"), cancellable = true)
    public final void getBoundingBox(CallbackInfoReturnable<Box> var1) {
-      BoundingBoxControlEvent var2 = new BoundingBoxControlEvent(this.boundingBox, (Entity)this);
+      BoundingBoxControlEvent var2 = new BoundingBoxControlEvent(this.boundingBox, (Entity)(Object)this);
       EventManager.callEvent(var2);
       var1.setReturnValue(var2.getBox());
    }
 
    @Redirect(
       method = "updateVelocity",
-      at = @At(value = "INVOKE", target = "Lnet/minecraft/Entity;movementInputToVelocity(Lnet/minecraft/Vec3d;FF)Lnet/minecraft/Vec3d;")
+      at = @At(value = "INVOKE", target = "Lnet/minecraft/entity/Entity;movementInputToVelocity(Lnet/minecraft/util/math/Vec3d;FF)Lnet/minecraft/util/math/Vec3d;")
    )
    public Vec3d hookVelocity(Vec3d var1, float var2, float var3) {
-      if (this == mc.player) {
+      if ((Object)this == mc.player) {
          PlayerVelocityStrafeEvent var4 = new PlayerVelocityStrafeEvent(var1, var2, var3, Entity.movementInputToVelocity(var1, var2, var3));
          EventManager.callEvent(var4);
          return var4.getVelocity();
@@ -61,6 +61,6 @@ public abstract class EntityMixin implements IMinecraft {
 
    @ModifyVariable(method = "getRotationVector(FF)Lnet/minecraft/Vec3d;", at = @At("HEAD"), ordinal = 0, argsOnly = true)
    private float modifyPitch(float var1) {
-      return this instanceof ClientPlayerEntity && AngleConnection.INSTANCE.getCurrentAngle() != null ? AngleConnection.INSTANCE.getCurrentAngle().getPitch() : var1;
+      return (Object)this instanceof ClientPlayerEntity && AngleConnection.INSTANCE.getCurrentAngle() != null ? AngleConnection.INSTANCE.getCurrentAngle().getPitch() : var1;
    }
 }

@@ -34,7 +34,7 @@ public class HelpCommand extends Command {
          this.logDirectRaw(Text.literal(getLine()));
          this.logDirect("§f§l" + var11.getName().toUpperCase());
          this.logDirectRaw(Text.literal(getLine()));
-         List var12 = var11.getLongDesc();
+         List<String> var12 = var11.getLongDesc();
          boolean var7 = true;
 
          for (String var9 : var12) {
@@ -54,8 +54,8 @@ public class HelpCommand extends Command {
             var4 = Integer.parseInt(var2[0]);
          }
 
-         List var5 = var3.getCommands().stream().filter(var0 -> !var0.hiddenFromHelp()).collect(Collectors.toList());
-         Paginator var6 = new Paginator(var5);
+         List<Command> var5 = var3.getCommands().stream().filter(var0 -> !var0.hiddenFromHelp()).collect(Collectors.toList());
+         Paginator<Command> var6 = new Paginator<>(var5);
          var6.setPage(var4);
          var6.display(() -> {
             this.logDirectRaw(Text.literal(getLine()));

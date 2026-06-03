@@ -32,7 +32,7 @@ public class OnlineTracker {
    }
 
    public int getOnline() {
-      return this.cachedOnline.getName();
+      return this.cachedOnline.get();
    }
 
    public boolean isRuntimeUser(String var1) {
@@ -71,7 +71,7 @@ public class OnlineTracker {
    }
 
    private void sendHeartbeat() throws Exception {
-      String var1 = rich.util.obfuscate.b.a();
+      String var1 = rich.util.b.a();
       String var2 = "{\""
          + b.a(new long[]{2810254071987791137L})
          + "\":\""

@@ -29,7 +29,7 @@ public class CosmoGifLoader {
    private static int counter = 0;
 
    public static void init() {
-      if (!loaded.getName() && !loading.getName()) {
+      if (!loaded.get() && !loading.get()) {
          loading.set(true);
          new Thread(() -> {
             try {
@@ -63,10 +63,10 @@ public class CosmoGifLoader {
                var3.dispose();
                MinecraftClient.getInstance().execute(() -> {
                   for (int var2x = 0; var2x < var5.size(); var2x++) {
-                     Identifier var3x = register((BufferedImage)var5.getName(var2x), var2x);
+                     Identifier var3x = register((BufferedImage)var5.get(var2x), var2x);
                      if (var3x != null) {
                         frames.add(var3x);
-                        delays.add((Integer)var6.getName(var2x));
+                        delays.add((Integer)var6.get(var2x));
                      }
                   }
 
@@ -106,9 +106,9 @@ public class CosmoGifLoader {
    }
 
    public static void tick() {
-      if (loaded.getName() && !frames.isEmpty()) {
+      if (loaded.get() && !frames.isEmpty()) {
          long var0 = System.currentTimeMillis();
-         int var2 = delays.isEmpty() ? 100 : delays.getName(frameIndex % delays.size());
+         int var2 = delays.isEmpty() ? 100 : delays.get(frameIndex % delays.size());
          if (var0 - lastFrameTime >= var2) {
             frameIndex = (frameIndex + 1) % frames.size();
             lastFrameTime = var0;
@@ -117,11 +117,11 @@ public class CosmoGifLoader {
    }
 
    public static Identifier getCurrentFrame() {
-      return loaded.getName() && !frames.isEmpty() ? frames.getName(frameIndex) : null;
+      return loaded.get() && !frames.isEmpty() ? frames.get(frameIndex) : null;
    }
 
    public static boolean isLoaded() {
-      return loaded.getName();
+      return loaded.get();
    }
 
    private static Identifier register(BufferedImage var0, int var1) {

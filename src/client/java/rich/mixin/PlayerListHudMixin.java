@@ -47,7 +47,7 @@ public class PlayerListHudMixin {
          }
 
          ArrayList var16 = new ArrayList();
-         ArrayList var17 = new ArrayList(var4.getTeams());
+         ArrayList<Team> var17 = new ArrayList<>(var4.getTeams());
          var17.sort(Comparator.comparing(Team::getName));
 
          for (Team var9 : var17) {

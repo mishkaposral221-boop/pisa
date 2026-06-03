@@ -514,7 +514,7 @@ public final class Render3D implements IMinecraft {
    private static void drawSidePlast(BlockPos var0, Vec3d var1, int var2, int var3, int var4, boolean var5) {
       Vec3d var6 = Vec3d.of(var0).add(var1);
       int var7 = ColorUtil.d(var2, 0.6F);
-      ArrayList var8 = new ArrayList();
+      ArrayList<Vec3d> var8 = new ArrayList<>();
       float var9 = var5 ? var4 : -var4;
       Vec3d var10 = var6;
       var8.add(var10);
@@ -651,12 +651,12 @@ public final class Render3D implements IMinecraft {
    public static void drawShapeAlternative(BlockPos var0, VoxelShape var1, int var2, float var3, boolean var4, boolean var5) {
       Vec3d var6 = Vec3d.of(var0);
       if (SHAPE_OUTLINES.containsKey(var1)) {
-         Pair var8 = SHAPE_OUTLINES.get(var1);
+         Pair<List<Box>, List<Render3D.Line>> var8 = SHAPE_OUTLINES.get(var1);
          if (var4) {
-            ((List)var8.getLeft()).forEach(var4x -> drawBox(var4x.offset(var6), var2, var3, false, true, var5));
+            var8.getLeft().forEach(var4x -> drawBox(var4x.offset(var6), var2, var3, false, true, var5));
          }
 
-         ((List)var8.getRight()).forEach(var4x -> drawLine(var4x.start.add(var6), var4x.end.add(var6), var2, var3, var5));
+         var8.getRight().forEach(var4x -> drawLine(var4x.start.add(var6), var4x.end.add(var6), var2, var3, var5));
       } else {
          ArrayList var7 = new ArrayList();
          var1.forEachEdge(

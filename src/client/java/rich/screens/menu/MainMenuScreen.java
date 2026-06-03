@@ -782,7 +782,7 @@ public class MainMenuScreen extends Screen {
       String var5 = null;
       int var6 = 0;
       byte var7 = 10;
-      List var8 = this.accountConfig.getAccounts();
+      List<AccountEntry> var8 = this.accountConfig.getAccounts();
 
       do {
          var2.setLength(0);

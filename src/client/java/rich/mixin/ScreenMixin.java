@@ -16,7 +16,7 @@ import rich.screens.clickgui.ClickGui;
 public class ScreenMixin {
    @Inject(method = "renderBackground", at = @At("HEAD"), cancellable = true)
    private void disableBackgroundBlurAndDimming(DrawContext var1, int var2, int var3, float var4, CallbackInfo var5) {
-      if (this instanceof ClickGui) {
+      if ((Object)this instanceof ClickGui) {
          var5.cancel();
       }
    }

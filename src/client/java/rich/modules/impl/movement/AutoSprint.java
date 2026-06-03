@@ -16,7 +16,7 @@ public class AutoSprint extends ModuleStructure {
    private final BooleanSetting noReset = new BooleanSetting("Не сбрасывать спринт", "Don't reset sprint for crits").setValue(false);
 
    public static AutoSprint getInstance() {
-      return c.keyCodec(AutoSprint.class);
+      return c.a(AutoSprint.class);
    }
 
    public AutoSprint() {

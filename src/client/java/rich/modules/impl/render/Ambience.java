@@ -14,7 +14,7 @@ public class Ambience extends ModuleStructure {
    private double animatedTime = 1000.0;
 
    public static Ambience getInstance() {
-      return c.keyCodec(Ambience.class);
+      return c.a(Ambience.class);
    }
 
    public Ambience() {

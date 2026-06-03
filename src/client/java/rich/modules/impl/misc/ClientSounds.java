@@ -15,7 +15,7 @@ public class ClientSounds extends ModuleStructure {
    private final SliderSettings volume = new SliderSettings("Громкость", "Set volume").range(0.1F, 2.0F).setValue(1.0F);
 
    public static ClientSounds getInstance() {
-      return c.keyCodec(ClientSounds.class);
+      return c.a(ClientSounds.class);
    }
 
    public ClientSounds() {

@@ -72,13 +72,13 @@ public class UpdateChecker {
          var4.close();
          var1.disconnect();
          JsonObject var11 = JsonParser.parseString(var3.toString()).getAsJsonObject();
-         var5 = var11.getName("version").getAsString();
-         String var6 = var11.has("description") ? var11.getName("description").getAsString() : "";
+         var5 = var11.get("version").getAsString();
+         String var6 = var11.has("description") ? var11.get("description").getAsString() : "";
          String var7 = "";
          if (var11.has("download_url")) {
-            var7 = var11.getName("download_url").getAsString();
+            var7 = var11.get("download_url").getAsString();
          } else if (var11.has("url")) {
-            var7 = var11.getName("url").getAsString();
+            var7 = var11.get("url").getAsString();
          }
 
          if (Version.isNewer(var5)) {

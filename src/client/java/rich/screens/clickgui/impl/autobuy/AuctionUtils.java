@@ -94,7 +94,7 @@ public class AuctionUtils {
    }
 
    private static boolean loreContains(ItemStack var0, String var1) {
-      List var2 = getLoreStrings(var0);
+      List<String> var2 = getLoreStrings(var0);
       String var3 = var1.toLowerCase();
 
       for (String var5 : var2) {
@@ -107,7 +107,7 @@ public class AuctionUtils {
    }
 
    private static boolean loreContainsAny(ItemStack var0, String... var1) {
-      List var2 = getLoreStrings(var0);
+      List<String> var2 = getLoreStrings(var0);
 
       for (String var6 : var1) {
          String var7 = var6.toLowerCase();
@@ -504,18 +504,18 @@ public class AuctionUtils {
                   return false;
                }
             } else {
-               List var9 = var7.lines();
+               List<Text> var9 = var7.lines();
                if (var6 == null || var6.lines().isEmpty()) {
                   return false;
                }
 
-               List var10 = var6.lines()
+               List<String> var10 = var6.lines()
                   .stream()
                   .map(var0x -> cleanString(var0x.getString()))
                   .filter(var0x -> !var0x.isEmpty())
                   .collect(Collectors.toList());
                String var11 = String.join(" ", var10);
-               List var12 = List.of(
+               List<String> var12 = List.of(
                   "с сферами",
                   "сферами",
                   "драконий скин",
@@ -629,7 +629,7 @@ public class AuctionUtils {
                         return false;
                      }
 
-                     HashMap var58 = new HashMap();
+                     HashMap<String, Integer> var58 = new HashMap<>();
 
                      for (RegistryEntry var61 : var55.getEnchantments()) {
                         String var64 = var61.getIdAsString();
@@ -640,7 +640,7 @@ public class AuctionUtils {
                         }
                      }
 
-                     HashMap var60 = new HashMap();
+                     HashMap<String, Integer> var60 = new HashMap<>();
 
                      for (RegistryEntry var65 : var57.getEnchantments()) {
                         String var68 = var65.getIdAsString();
@@ -657,9 +657,9 @@ public class AuctionUtils {
 
                      int var63 = 0;
 
-                     for (Entry var69 : var60.entrySet()) {
-                        String var71 = (String)var69.getKey();
-                        Integer var72 = (Integer)var58.get(var71);
+                     for (Map.Entry<String, Integer> var69 : var60.entrySet()) {
+                        String var71 = var69.getKey();
+                        Integer var72 = var58.get(var71);
                         if (var72 != null && var72 >= 1) {
                            var63++;
                         }
@@ -699,8 +699,8 @@ public class AuctionUtils {
    }
 
    private static boolean comparePotionsByEffects(ItemStack var0, ItemStack var1) {
-      Map var2 = getPotionEffects(var0);
-      Map var3 = getPotionEffects(var1);
+      Map<RegistryEntry<StatusEffect>, AuctionUtils.EffectData> var2 = getPotionEffects(var0);
+      Map<RegistryEntry<StatusEffect>, AuctionUtils.EffectData> var3 = getPotionEffects(var1);
       if (var3.isEmpty()) {
          return false;
       }
@@ -709,10 +709,10 @@ public class AuctionUtils {
          return false;
       }
 
-      for (Entry var5 : var3.entrySet()) {
-         RegistryEntry var6 = (RegistryEntry)var5.getKey();
-         int var7 = ((AuctionUtils.EffectData)var5.getValue()).amplifier;
-         AuctionUtils.EffectData var8 = (AuctionUtils.EffectData)var2.get(var6);
+      for (Map.Entry<RegistryEntry<StatusEffect>, AuctionUtils.EffectData> var5 : var3.entrySet()) {
+         RegistryEntry<StatusEffect> var6 = var5.getKey();
+         int var7 = var5.getValue().amplifier;
+         AuctionUtils.EffectData var8 = var2.get(var6);
          if (var8 == null) {
             return false;
          }

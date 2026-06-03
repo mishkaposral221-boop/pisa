@@ -25,6 +25,6 @@ public class FogDistanceMixin {
    )
    private static float onFogEnd(float var0) {
       CustomFog var1 = CustomFog.getInstance();
-      return var1 != null && var1.isState() ? var1.distance.getValue() : var0;
+      return var1 != null && var1.isState() ? var1.getDistance.getValue() : var0;
    }
 }

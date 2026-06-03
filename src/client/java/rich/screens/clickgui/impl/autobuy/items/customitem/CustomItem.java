@@ -159,7 +159,7 @@ public class CustomItem implements AutoBuyableItem {
                int[] var6 = (int[])var4.get();
                var5 = uuidFromIntArray(var6);
             } else {
-               Optional var14 = var3.getString("Id");
+               Optional<String> var14 = var3.getString("Id");
                var5 = var14.map(UUID::fromString).orElse(UUID.randomUUID());
             }
 

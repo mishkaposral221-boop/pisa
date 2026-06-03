@@ -176,7 +176,7 @@ public class ChinaHatFeatureRenderer extends FeatureRenderer<PlayerEntityRenderS
       if (var10.equals("2 Colors")) {
          int var16 = var3.color1.getColor();
          int var18 = var3.color2.getColor();
-         return var9 < 0.5F ? ColorUtil.a(var16, var18, var9 * 2.0F) : ColorUtil.a(var18, var16, (var9 - 0.5F) * 2.0F);
+         return var9 < 0.5F ? ColorUtil.b(var16, var18, var9 * 2.0F) : ColorUtil.b(var18, var16, (var9 - 0.5F) * 2.0F);
       }
 
       if (var10.equals("3 Colors")) {
@@ -184,9 +184,9 @@ public class ChinaHatFeatureRenderer extends FeatureRenderer<PlayerEntityRenderS
          int var17 = var3.color2.getColor();
          int var19 = var3.color3.getColor();
          if (var9 < 0.333F) {
-            return ColorUtil.a(var15, var17, var9 * 3.0F);
+            return ColorUtil.b(var15, var17, var9 * 3.0F);
          } else {
-            return var9 < 0.666F ? ColorUtil.a(var17, var19, (var9 - 0.333F) * 3.0F) : ColorUtil.a(var19, var15, (var9 - 0.666F) * 3.0F);
+            return var9 < 0.666F ? ColorUtil.b(var17, var19, (var9 - 0.333F) * 3.0F) : ColorUtil.b(var19, var15, (var9 - 0.666F) * 3.0F);
          }
       } else if (var10.equals("4 Colors")) {
          int var11 = var3.color1.getColor();
@@ -194,11 +194,11 @@ public class ChinaHatFeatureRenderer extends FeatureRenderer<PlayerEntityRenderS
          int var13 = var3.color3.getColor();
          int var14 = var3.color4.getColor();
          if (var9 < 0.25F) {
-            return ColorUtil.a(var11, var12, var9 * 4.0F);
+            return ColorUtil.b(var11, var12, var9 * 4.0F);
          } else if (var9 < 0.5F) {
-            return ColorUtil.a(var12, var13, (var9 - 0.25F) * 4.0F);
+            return ColorUtil.b(var12, var13, (var9 - 0.25F) * 4.0F);
          } else {
-            return var9 < 0.75F ? ColorUtil.a(var13, var14, (var9 - 0.5F) * 4.0F) : ColorUtil.a(var14, var11, (var9 - 0.75F) * 4.0F);
+            return var9 < 0.75F ? ColorUtil.b(var13, var14, (var9 - 0.5F) * 4.0F) : ColorUtil.b(var14, var11, (var9 - 0.75F) * 4.0F);
          }
       } else {
          return var3.color1.getColor();

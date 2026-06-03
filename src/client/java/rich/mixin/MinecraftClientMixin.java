@@ -111,12 +111,12 @@ public abstract class MinecraftClientMixin {
    private void redirectTitleScreen(Screen var1, CallbackInfo var2) {
       if (var1 instanceof TitleScreen && !(var1 instanceof MainMenuScreen)) {
          var2.cancel();
-         ((MinecraftClient)this).setScreen(new MainMenuScreen());
+         ((MinecraftClient)(Object)this).setScreen(new MainMenuScreen());
       }
    }
 
-   @Inject(method = "disconnect(Lnet/minecraft/Screen;Z)V", at = @At("HEAD"))
-   private void onDisconnect(Screen var1, boolean var2, CallbackInfo var3) {
+   @Inject(method = "disconnect(Lnet/minecraft/text/Text;)V", at = @At("HEAD"))
+   private void onDisconnect(net.minecraft.text.Text var1, CallbackInfo var3) {
       if (this.world != null) {
          EventManager.callEvent(GameLeftEvent.get());
       }
@@ -142,7 +142,7 @@ public abstract class MinecraftClientMixin {
 
    @Inject(method = "setScreen", at = @At("HEAD"), cancellable = true)
    public void setScreenHook(Screen var1, CallbackInfo var2) {
-      MinecraftClient var3 = (MinecraftClient)this;
+      MinecraftClient var3 = (MinecraftClient)(Object)this;
       if (var3.currentScreen instanceof ClickGui var4 && var4.isClosing() && var1 == null) {
          var2.cancel();
       } else {
@@ -166,7 +166,7 @@ public abstract class MinecraftClientMixin {
 
    @Inject(
       method = "handleInputEvents",
-      at = @At(value = "INVOKE", target = "Lnet/minecraft/ClientPlayerEntity;getInventory()Lnet/minecraft/PlayerInventory;"),
+      at = @At(value = "INVOKE", target = "Lnet/minecraft/client/network/ClientPlayerEntity;getInventory()Lnet/minecraft/entity/player/PlayerInventory;"),
       cancellable = true
    )
    public void handleInputEventsHook(CallbackInfo var1) {
@@ -177,7 +177,7 @@ public abstract class MinecraftClientMixin {
       }
    }
 
-   @Inject(method = "doItemUse", at = @At(value = "INVOKE", target = "Lnet/minecraft/Hand;values()[Lnet/minecraft/Hand;"), cancellable = true)
+   @Inject(method = "doItemUse", at = @At(value = "INVOKE", target = "Lnet/minecraft/util/Hand;values()[Lnet/minecraft/util/Hand;"), cancellable = true)
    public void doItemUseHook(CallbackInfo var1) {
    }
 

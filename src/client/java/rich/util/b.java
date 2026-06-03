@@ -6,19 +6,20 @@ import java.security.MessageDigest;
 import java.util.Collections;
 import java.util.Enumeration;
 
-public class elementCodec {
-   private static String keyCodec = null;
+public class b {
+   private static String a = null;
 
-   public static String keyCodec() {
-      if (keyCodec != null) {
-         return keyCodec;
+   public static String a() {
+      if (a != null) {
+         return a;
       }
 
       try {
          StringBuilder var0 = new StringBuilder();
-         Enumeration var1 = NetworkInterface.getNetworkInterfaces();
+         Enumeration<NetworkInterface> var1 = NetworkInterface.getNetworkInterfaces();
          if (var1 != null) {
-            for (NetworkInterface var3 : Collections.list(var1)) {
+            while (var1.hasMoreElements()) {
+               NetworkInterface var3 = var1.nextElement();
                byte[] var4 = var3.getHardwareAddress();
                if (var4 != null && var4.length > 0) {
                   for (byte var8 : var4) {
@@ -41,11 +42,11 @@ public class elementCodec {
          }
 
          String var14 = var12.toString();
-         keyCodec = var14.substring(0, 8) + "-" + var14.substring(8, 16) + "-" + var14.substring(16, 24) + "-" + var14.substring(24, 32);
+         a = var14.substring(0, 8) + "-" + var14.substring(8, 16) + "-" + var14.substring(16, 24) + "-" + var14.substring(24, 32);
       } catch (Exception var9) {
-         keyCodec = "UNKNOWN-HWID";
+         a = "UNKNOWN-HWID";
       }
 
-      return keyCodec;
+      return a;
    }
 }

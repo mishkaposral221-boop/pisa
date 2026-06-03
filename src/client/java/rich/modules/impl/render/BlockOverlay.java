@@ -32,7 +32,7 @@ public class BlockOverlay extends ModuleStructure {
    }
 
    public static BlockOverlay getInstance() {
-      return c.keyCodec(BlockOverlay.class);
+      return c.a(BlockOverlay.class);
    }
 
    public BlockOverlay() {

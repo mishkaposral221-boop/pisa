@@ -4,7 +4,8 @@ import com.mojang.blaze3d.pipeline.BlendFunction;
 import com.mojang.blaze3d.pipeline.RenderPipeline;
 import com.mojang.blaze3d.pipeline.RenderPipeline.Snippet;
 import com.mojang.blaze3d.platform.DepthTestFunction;
-import com.mojang.blaze3d.vertex.VertexFormat.DrawMode;
+import com.mojang.blaze3d.vertex.VertexFormat;
+
 import java.util.function.Function;
 import net.minecraft.client.gl.RenderPipelines;
 import net.minecraft.client.render.RenderSetup;

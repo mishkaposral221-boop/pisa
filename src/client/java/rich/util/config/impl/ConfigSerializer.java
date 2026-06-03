@@ -55,9 +55,9 @@ public class ConfigSerializer {
       AutoBuyConfig var2 = AutoBuyConfig.getInstance();
       var1.addProperty("globalEnabled", var2.isGlobalEnabled());
       JsonObject var3 = new JsonObject();
-      Map var4 = var2.getAllItemConfigs();
+      Map<String, AutoBuyConfig.ItemConfig> var4 = var2.getAllItemConfigs();
 
-      for (Entry var6 : var4.entrySet()) {
+      for (Map.Entry<String, AutoBuyConfig.ItemConfig> var6 : var4.entrySet()) {
          JsonObject var7 = new JsonObject();
          AutoBuyConfig.ItemConfig var8 = (AutoBuyConfig.ItemConfig)var6.getValue();
          var7.addProperty("enabled", var8.isEnabled());

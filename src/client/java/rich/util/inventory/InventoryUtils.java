@@ -181,12 +181,12 @@ public final class InventoryUtils {
          return null;
       }
 
-      Stream var2 = mc.player.currentScreenHandler.slots.stream().filter(var0);
-      return var1 != null ? (Slot)var2.max(var1).orElse(null) : (Slot)var2.findFirst().orElse(null);
+      Stream<Slot> var2 = mc.player.currentScreenHandler.slots.stream().filter(var0);
+      return var1 != null ? var2.max(var1).orElse(null) : var2.findFirst().orElse(null);
    }
 
    public static Slot findSlot(Item var0, Predicate<Slot> var1, Comparator<Slot> var2) {
-      Predicate var3 = var2x -> var2x.getStack().getItem() == var0 && var1.test(var2x);
+      Predicate<Slot> var3 = var2x -> var2x.getStack().getItem() == var0 && var1.test(var2x);
       return findSlot(var3, var2);
    }
 

@@ -83,7 +83,7 @@ public class MultiSelectComponent extends AbstractSettingComponent {
    }
 
    private void updateItemAnimations(float var1) {
-      HashSet var2 = new HashSet<>(this.multiSelectSetting.getSelected());
+      HashSet<String> var2 = new HashSet<>(this.multiSelectSetting.getSelected());
 
       for (String var4 : var2) {
          if (!this.itemAlphaAnimations.containsKey(var4)) {
@@ -114,8 +114,8 @@ public class MultiSelectComponent extends AbstractSettingComponent {
          this.itemAlphaAnimations.put(var13, var29);
       }
 
-      List var12 = this.multiSelectSetting.getList();
-      ArrayList var14 = new ArrayList();
+      List<String> var12 = this.multiSelectSetting.getList();
+      ArrayList<String> var14 = new ArrayList<>();
 
       for (String var19 : var12) {
          if (this.itemAlphaAnimations.containsKey(var19) && this.itemAlphaAnimations.get(var19) > 0.01F) {
@@ -145,7 +145,7 @@ public class MultiSelectComponent extends AbstractSettingComponent {
          this.itemXPositions.put(var25, var37);
       }
 
-      ArrayList var22 = new ArrayList();
+      ArrayList<String> var22 = new ArrayList<>();
 
       for (String var32 : this.itemAlphaAnimations.keySet()) {
          boolean var39 = var2.contains(var32);
@@ -284,8 +284,8 @@ public class MultiSelectComponent extends AbstractSettingComponent {
          Fonts.BOLD.draw("None", var8, var6, 5.0F, new Color(160, 160, 165, var9).getRGB());
       }
 
-      List var21 = this.multiSelectSetting.getList();
-      ArrayList var10 = new ArrayList();
+      List<String> var21 = this.multiSelectSetting.getList();
+      ArrayList<String> var10 = new ArrayList<>();
 
       for (String var12 : var21) {
          if (this.itemAlphaAnimations.containsKey(var12) && this.itemAlphaAnimations.get(var12) > 0.01F) {

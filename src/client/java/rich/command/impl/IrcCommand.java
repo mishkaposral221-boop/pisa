@@ -6,7 +6,7 @@ import java.util.stream.Stream;
 import net.minecraft.text.Text;
 import rich.command.Command;
 import rich.irc.IrcManager;
-import rich.util.elementCodec;
+import rich.util.b;
 
 public class IrcCommand extends Command {
    public IrcCommand() {
@@ -20,7 +20,7 @@ public class IrcCommand extends Command {
          this.logDirect("§f§lIRC ЧАТ");
          this.logDirectRaw(Text.literal(HelpCommand.getLine()));
          this.logDirect("§7> irc <сообщение> §8- §fОтправить сообщение в IRC");
-         this.logDirect("§7HWID: §f" + elementCodec.keyCodec());
+         this.logDirect("§7HWID: §f" + b.a());
          this.logDirectRaw(Text.literal(HelpCommand.getLine()));
       } else {
          if (!IrcManager.getInstance().isRunning()) {

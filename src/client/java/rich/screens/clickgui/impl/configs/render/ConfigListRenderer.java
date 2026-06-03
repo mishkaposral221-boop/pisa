@@ -36,7 +36,7 @@ public class ConfigListRenderer {
 
       this.dataHandler.updateScroll(0.016F);
       Scissor.enable(var8, var9, var10, var11, var6);
-      List var12 = this.dataHandler.getFilteredConfigs();
+      List<ConfigDataHandler.ConfigEntry> var12 = this.dataHandler.getFilteredConfigs();
       float var13 = var9 + (float)this.dataHandler.getScrollOffset();
 
       for (ConfigDataHandler.ConfigEntry var15 : var12) {

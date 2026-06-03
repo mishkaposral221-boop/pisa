@@ -67,7 +67,7 @@ public class AutoPotion extends ModuleStructure {
       for (int var2 = 0; var2 < 9; var2++) {
          ItemStack var3 = mc.player.getInventory().getStack(var2);
          if (var3.isOf(Items.SPLASH_POTION)) {
-            PotionContentsComponent var4 = (PotionContentsComponent)var3.getName(DataComponentTypes.POTION_CONTENTS);
+            PotionContentsComponent var4 = (PotionContentsComponent)var3.get(DataComponentTypes.POTION_CONTENTS);
             if (var4 != null) {
                for (StatusEffectInstance var6 : var4.getEffects()) {
                   if (var6.getEffectType() == var1.effect) {

@@ -18,7 +18,7 @@ public class ItemCooldowns extends ModuleStructure {
    private final Map<Item, float[]> tracker = new HashMap<>();
 
    public static ItemCooldowns getInstance() {
-      return c.keyCodec(ItemCooldowns.class);
+      return c.a(ItemCooldowns.class);
    }
 
    public ItemCooldowns() {
@@ -39,7 +39,7 @@ public class ItemCooldowns extends ModuleStructure {
                Item var5 = var4.getItem();
                if (var2.isCoolingDown(var4)) {
                   float var6 = var2.getCooldownProgress(var4, 0.0F);
-                  float[] var7 = this.tracker.getName(var5);
+                  float[] var7 = this.tracker.get(var5);
                   if (var7 == null) {
                      this.tracker.put(var5, new float[]{var6, (float)System.currentTimeMillis(), 0.0F});
                   } else if (var7[2] == 0.0F && var7[0] > var6) {
@@ -68,7 +68,7 @@ public class ItemCooldowns extends ModuleStructure {
       }
 
       float var3 = var2.getCooldownProgress(var1, 0.0F);
-      float[] var4 = this.tracker.getName(var1.getItem());
+      float[] var4 = this.tracker.get(var1.getItem());
       return var4 != null && var4[2] != 0.0F ? var3 * var4[2] / 1000.0F : var3 * 20.0F;
    }
 }

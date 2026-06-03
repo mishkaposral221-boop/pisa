@@ -119,13 +119,13 @@ public class WayCommand extends Command implements IMinecraft {
                }
 
                String var9 = var4.getCurrentServer();
-               List var10 = var4.getWayList().stream().filter(var1x -> var1x.server().equalsIgnoreCase(var9)).toList();
+               List<Way> var10 = var4.getWayList().stream().filter(var1x -> var1x.server().equalsIgnoreCase(var9)).toList();
                if (var10.isEmpty()) {
                   this.logDirect("Нет точек для этого сервера!", Formatting.RED);
                   return;
                }
 
-               Paginator var11 = new Paginator(var10);
+               Paginator<Way> var11 = new Paginator<>(var10);
                var11.setPage(var8);
                var11.display(
                   () -> {

@@ -99,7 +99,7 @@ public class CommandManager {
       String var2 = var1.prefix;
       if (var2.startsWith(this.prefix)) {
          String var3 = var2.substring(this.prefix.length());
-         Stream var4 = this.tabComplete(var3);
+         Stream<String> var4 = this.tabComplete(var3);
          String[] var5 = var3.split(" ", -1);
          if (var5.length <= 1) {
             var4 = var4.map(var1x -> this.prefix + var1x);

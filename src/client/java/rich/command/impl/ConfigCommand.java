@@ -92,7 +92,7 @@ public class ConfigCommand extends Command {
                this.logDirect("§f§lСПИСОК КОНФИГОВ");
                this.logDirectRaw(Text.literal(HelpCommand.getLine()));
             }, var1x -> {
-               MutableText var2x = Text.literal("  §elementCodec● §f" + var1x);
+               MutableText var2x = Text.literal("  §b● §f" + var1x);
                MutableText var3x = Text.literal("§7Нажмите чтобы загрузить конфиг §f" + var1x);
                String var4x = var3.getPrefix() + "config load " + var1x;
                var2x.setStyle(var2x.getStyle().withHoverEvent(new net.minecraft.text.HoverEvent.ShowText(var3x)).withClickEvent(new net.minecraft.text.ClickEvent.RunCommand(var4x)));

@@ -27,7 +27,7 @@ public class AspectRatio extends ModuleStructure {
    private float lastCustomHeight;
 
    public static AspectRatio getInstance() {
-      return c.keyCodec(AspectRatio.class);
+      return c.a(AspectRatio.class);
    }
 
    public AspectRatio() {

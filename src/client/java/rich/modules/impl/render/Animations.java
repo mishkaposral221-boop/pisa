@@ -16,7 +16,7 @@ public class Animations extends ModuleStructure {
    public final SelectSetting easing = new SelectSetting("Тип", "Тип анимации").value("Ease Out", "Ease Out", "Ease In Out", "Linear");
 
    public static Animations getInstance() {
-      return c.keyCodec(Animations.class);
+      return c.a(Animations.class);
    }
 
    public Animations() {

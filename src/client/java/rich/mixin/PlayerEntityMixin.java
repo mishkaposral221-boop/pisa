@@ -28,12 +28,12 @@ public abstract class PlayerEntityMixin implements IMinecraft {
 
    @ModifyExpressionValue(method = "knockbackTarget", at = @At(value = "INVOKE", target = "Lnet/minecraft/PlayerEntity;getYaw()F"))
    private float hookKnockbackRotation(float var1) {
-      return this == mc.player && AngleConnection.INSTANCE.getMoveRotation() != null ? AngleConnection.INSTANCE.getMoveRotation().getYaw() : var1;
+      return (Object)this == mc.player && AngleConnection.INSTANCE.getMoveRotation() != null ? AngleConnection.INSTANCE.getMoveRotation().getYaw() : var1;
    }
 
    @ModifyExpressionValue(method = "doSweepingAttack", at = @At(value = "INVOKE", target = "Lnet/minecraft/PlayerEntity;getYaw()F"))
    private float hookSweepRotation(float var1) {
-      return this == mc.player && AngleConnection.INSTANCE.getMoveRotation() != null ? AngleConnection.INSTANCE.getMoveRotation().getYaw() : var1;
+      return (Object)this == mc.player && AngleConnection.INSTANCE.getMoveRotation() != null ? AngleConnection.INSTANCE.getMoveRotation().getYaw() : var1;
    }
 
    @Inject(method = "travel", at = @At("HEAD"), cancellable = true)

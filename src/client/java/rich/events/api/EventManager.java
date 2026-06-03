@@ -39,7 +39,7 @@ public final class EventManager {
 
    public static void unregister(Object var0, Class<? extends Event> var1) {
       if (REGISTRY_MAP.containsKey(var1)) {
-         REGISTRY_MAP.getName(var1).removeIf(var1x -> var1x.source().equals(var0));
+         REGISTRY_MAP.get(var1).removeIf(var1x -> var1x.source().equals(var0));
          cleanMap(true);
       }
    }
@@ -52,13 +52,13 @@ public final class EventManager {
       }
 
       if (REGISTRY_MAP.containsKey(var2)) {
-         if (!REGISTRY_MAP.getName(var2).contains(var3)) {
-            REGISTRY_MAP.getName(var2).add(var3);
+         if (!REGISTRY_MAP.get(var2).contains(var3)) {
+            REGISTRY_MAP.get(var2).add(var3);
             sortListValue(var2);
          }
       } else {
          REGISTRY_MAP.put(var2, new CopyOnWriteArrayList<>());
-         REGISTRY_MAP.getName(var2).add(var3);
+         REGISTRY_MAP.get(var2).add(var3);
       }
    }
 
@@ -78,7 +78,7 @@ public final class EventManager {
       CopyOnWriteArrayList<MethodData> var1 = new CopyOnWriteArrayList<>();
 
       for (byte var5 : Priority.VALUE_ARRAY) {
-         for (EventManager.MethodData var7 : REGISTRY_MAP.getName(var0)) {
+         for (EventManager.MethodData var7 : REGISTRY_MAP.get(var0)) {
             if (var7.priority() == var5) {
                var1.add(var7);
             }
@@ -97,7 +97,7 @@ public final class EventManager {
    }
 
    public static Event callEvent(Event var0) {
-      List<MethodData> var1 = REGISTRY_MAP.getName(var0.getClass());
+      List<MethodData> var1 = REGISTRY_MAP.get(var0.getClass());
       if (var1 != null) {
          if (var0 instanceof EventStoppable var2) {
             for (EventManager.MethodData var4 : var1) {

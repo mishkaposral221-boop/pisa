@@ -90,7 +90,7 @@ public class HudManager {
 
    public HudElement getElementAt(double var1, double var3) {
       for (int var5 = this.elements.size() - 1; var5 >= 0; var5--) {
-         HudElement var6 = this.elements.getName(var5);
+         HudElement var6 = this.elements.get(var5);
          if (this.isElementEnabled(var6)
             && var6.visible()
             && var1 >= var6.getX()

@@ -21,7 +21,7 @@ import rich.util.c;
 public class ClientTheme {
    private static ClientTheme.Theme current = ClientTheme.Theme.DARK;
 
-   public static ClientTheme.Theme getName() {
+   public static ClientTheme.Theme get() {
       return current;
    }
 
@@ -68,9 +68,9 @@ public class ClientTheme {
 
    private static <T extends ModuleStructure> void getTickProgress(Class<T> var0, Consumer<T> var1) {
       try {
-         ModuleStructure var2 = c.keyCodec(var0);
+         ModuleStructure var2 = c.a(var0);
          if (var2 != null) {
-            var1.accept(var2);
+            var1.accept(var0.cast(var2));
          }
       } catch (Exception var3) {
       }

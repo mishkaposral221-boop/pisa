@@ -77,7 +77,7 @@ public class AutoDuel extends ModuleStructure {
 
    @Native(type = Native.Type.VMProtectBeginUltra)
    private void handleDuelLogic() {
-      List var1 = this.getOnlinePlayers();
+      List<String> var1 = this.getOnlinePlayers();
       double var2 = Math.sqrt(
          Math.pow(this.lastPosX - mc.player.getX(), 2.0)
             + Math.pow(this.lastPosY - mc.player.getY(), 2.0)

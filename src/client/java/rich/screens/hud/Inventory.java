@@ -84,7 +84,7 @@ public class Inventory extends AbstractHudElement {
             Render2D.outline(var4 + 2.0F, var12 + 2.0F, var10 - 4.0F, var11 - 4.0F, 0.35F, new Color(90, 90, 90, var13).getRGB(), 5.0F);
             float var14 = var4 + var6;
             float var15 = var12 + var6;
-            ArrayList var16 = new ArrayList();
+            ArrayList<Inventory.CountLabel> var16 = new ArrayList<>();
 
             for (int var17 = 0; var17 < 3; var17++) {
                for (int var18 = 0; var18 < 9; var18++) {

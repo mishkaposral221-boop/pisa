@@ -133,8 +133,8 @@ public class AccountConfig {
    }
 
    public List<AccountEntry> getSortedAccounts() {
-      ArrayList var1 = new ArrayList<>(this.accounts);
-      var1.sort((var0, var1x) -> {
+      ArrayList<AccountEntry> var1 = new ArrayList<>(this.accounts);
+      var1.sort((AccountEntry var0, AccountEntry var1x) -> {
          if (var0.isPinned() && !var1x.isPinned()) {
             return -1;
          } else {

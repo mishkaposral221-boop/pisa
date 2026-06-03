@@ -1,0 +1,69 @@
+﻿
+> Configure project :
+Fabric Loom: 1.16.2
+Project directory 'C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)' is located in OneDrive. This is known to cause issues and slower performance. Consider moving the project to a different location.
+
+> Task :compileJava NO-SOURCE
+> Task :processResources UP-TO-DATE
+> Task :classes UP-TO-DATE
+
+> Task :compileClientJava FAILED
+.\gradlew : C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\modules\impl\render\worldpar
+ticles\Particle.java:222: error: cannot find symbol
+C:\Users\awepu\AppData\Local\Temp\ps-script-bac56345-d074-4272-9cef-ec59bca6df6f.ps1:74 знак:65
++ ... u\OneDrive\Desktop\Новая папка (5)"; .\gradlew runClient 2>&1 | Out-F ...
++                                          ~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (C:\Users\awepu\...not find symbol:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+      RenderLayer var14 = ClientPipelines.WORLD_PARTICLES_GLOW.getTickProgress(this.texture);
+                                                              ^
+  symbol:   method getTickProgress(Identifier)
+  location: variable WORLD_PARTICLES_GLOW of type Function<Identifier,RenderLayer>
+C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\modules\impl\render\worldparticles\Parti
+cleRenderer.java:22: error: cannot find symbol
+      return ClientPipelines.WORLD_PARTICLES_GLOW.getTickProgress(GLOW_TEXTURE);
+                                                 ^
+  symbol:   method getTickProgress(Identifier)
+  location: variable WORLD_PARTICLES_GLOW of type Function<Identifier,RenderLayer>
+C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\modules\impl\render\worldparticles\Parti
+cleRenderer.java:26: error: cannot find symbol
+      return ClientPipelines.WORLD_PARTICLES_GLOW.getTickProgress(GLOW_TEXTURE_SECONDARY);
+                                                 ^
+  symbol:   method getTickProgress(Identifier)
+  location: variable WORLD_PARTICLES_GLOW of type Function<Identifier,RenderLayer>
+3 errors
+
+[Incubating] Problems report is available at: file:///C:/Users/awepu/OneDrive/Desktop/%D0%9D%D0%BE%D0%B2%D0%B0%D1%8F%20%D0%BF%D0%B0%D0%BF%D0%BA%D0%B0%20(5)/build/reports/problems/problems-report.html
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':compileClientJava'.
+> Compilation failed; see the compiler output below.
+  C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\modules\impl\render\worldparticles\Par
+ticle.java:222: error: cannot find symbol
+        RenderLayer var14 = ClientPipelines.WORLD_PARTICLES_GLOW.getTickProgress(this.texture);
+                                                                ^
+    symbol:   method getTickProgress(Identifier)
+    location: variable WORLD_PARTICLES_GLOW of type Function<Identifier,RenderLayer>
+  C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\modules\impl\render\worldparticles\Par
+ticleRenderer.java:22: error: cannot find symbol
+        return ClientPipelines.WORLD_PARTICLES_GLOW.getTickProgress(GLOW_TEXTURE);
+                                                   ^
+    symbol:   method getTickProgress(Identifier)
+    location: variable WORLD_PARTICLES_GLOW of type Function<Identifier,RenderLayer>
+  C:\Users\awepu\OneDrive\Desktop\╨Э╨╛╨▓╨░╤П ╨┐╨░╨┐╨║╨░ (5)\src\client\java\rich\modules\impl\render\worldparticles\Par
+ticleRenderer.java:26: error: cannot find symbol
+        return ClientPipelines.WORLD_PARTICLES_GLOW.getTickProgress(GLOW_TEXTURE_SECONDARY);
+                                                   ^
+    symbol:   method getTickProgress(Identifier)
+    location: variable WORLD_PARTICLES_GLOW of type Function<Identifier,RenderLayer>
+  3 errors
+
+* Try:
+> Check your code and dependencies to fix the compilation error(s)
+> Run with --scan to get full insights from a Build Scan (powered by Develocity).
+
+BUILD FAILED in 4s
+2 actionable tasks: 1 executed, 1 up-to-date

@@ -84,7 +84,7 @@ public class RadiusHelper extends ModuleStructure {
    private int activeTransitionItem = -1;
 
    public static RadiusHelper getInstance() {
-      return c.keyCodec(RadiusHelper.class);
+      return c.a(RadiusHelper.class);
    }
 
    public RadiusHelper() {
@@ -259,7 +259,7 @@ public class RadiusHelper extends ModuleStructure {
       }
 
       if (var6 == null) {
-         var6 = (Vec3d)var3.getName(var3.size() - 1);
+         var6 = (Vec3d)var3.get(var3.size() - 1);
       }
 
       return new RadiusHelper.SnowballPrediction(var3, var6);
@@ -267,7 +267,7 @@ public class RadiusHelper extends ModuleStructure {
 
    private void renderTrajectory(List<Vec3d> var1, int var2) {
       for (int var3 = 1; var3 < var1.size(); var3++) {
-         Render3D.drawLine((Vec3d)var1.getName(var3 - 1), (Vec3d)var1.getName(var3), var2, 2.25F, false);
+         Render3D.drawLine((Vec3d)var1.get(var3 - 1), (Vec3d)var1.get(var3), var2, 2.25F, false);
       }
    }
 

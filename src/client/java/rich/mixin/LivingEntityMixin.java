@@ -124,9 +124,9 @@ public abstract class LivingEntityMixin {
       }
    }
 
-   @ModifyExpressionValue(method = "jump", at = @At(value = "NEW", target = "(DDD)Lnet/minecraft/Vec3d;"))
+   @ModifyExpressionValue(method = "jump", at = @At(value = "NEW", target = "(DDD)Lnet/minecraft/util/math/Vec3d;"))
    private Vec3d hookFixRotation(Vec3d var1) {
-      if (this != this.client.player) {
+      if ((Object)this != this.client.player) {
          return var1;
       }
 
@@ -144,7 +144,7 @@ public abstract class LivingEntityMixin {
 
    @Inject(method = "jump", at = @At("HEAD"), cancellable = true)
    private void jump(CallbackInfo var1) {
-      if (this instanceof ClientPlayerEntity var2) {
+      if ((Object)this instanceof ClientPlayerEntity var2) {
          if (this.isBaritonePathing()) {
             return;
          }
@@ -159,7 +159,7 @@ public abstract class LivingEntityMixin {
 
    @Inject(method = "getHandSwingDuration", at = @At("HEAD"), cancellable = true)
    private void swingProgressHook(CallbackInfoReturnable<Integer> var1) {
-      if (this == this.client.player) {
+      if ((Object)this == this.client.player) {
          SwingDurationEvent var2 = new SwingDurationEvent();
          EventManager.callEvent(var2);
          if (var2.isCancelled()) {
@@ -177,7 +177,7 @@ public abstract class LivingEntityMixin {
 
    @Inject(method = "calcGlidingVelocity", at = @At("HEAD"), cancellable = true)
    private void calcGlidingVelocityFull(Vec3d var1, CallbackInfoReturnable<Vec3d> var2) {
-      if (this == this.client.player) {
+      if ((Object)this == this.client.player) {
          if (!this.isBaritonePathing()) {
             AngleConnection var3 = AngleConnection.INSTANCE;
             Angle var4 = var3.getRotation();

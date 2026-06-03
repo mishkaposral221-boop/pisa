@@ -145,10 +145,10 @@ public class CoolDowns extends AbstractHudElement {
          float var6 = (float)(var4 - this.lastRenderTime) / 1000.0F;
          this.lastRenderTime = var4;
          var6 = Math.min(var6, 0.1F);
-         ArrayList var7 = new ArrayList();
+         ArrayList<Item> var7 = new ArrayList<>();
 
-         for (Entry var9 : this.cooldownAnimations.entrySet()) {
-            Item var10 = (Item)var9.getKey();
+         for (Map.Entry<Item, Float> var9 : this.cooldownAnimations.entrySet()) {
+            Item var10 = var9.getKey();
             float var11 = (Float)var9.getValue();
             float var12 = this.activeCooldowns.contains(var10) ? 1.0F : 0.0F;
             float var13 = var11 + (var12 - var11) * Math.min(1.0F, var6 * 8.0F);

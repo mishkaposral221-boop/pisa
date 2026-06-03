@@ -12,7 +12,7 @@ public class SettingRepository implements Setupable {
       this.settings.addAll(Arrays.asList(var1));
    }
 
-   public Setting get(String var1) {
+   public Setting getName(String var1) {
       return this.settings.stream().filter(var1x -> var1x.getName().equalsIgnoreCase(var1)).findFirst().orElse(null);
    }
 

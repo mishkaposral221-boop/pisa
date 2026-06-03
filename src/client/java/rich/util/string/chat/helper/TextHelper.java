@@ -2,7 +2,7 @@ package rich.util.string.chat.helper;
 
 import net.minecraft.text.Text;
 import net.minecraft.text.MutableText;
-import rich.util.color.ColorUtil;
+import rich.util.color.ColorAssist;
 
 public class TextHelper {
    public static Text applyGradient(String var0, TextHelper.GradientStyle var1, int var2, int var3, boolean var4) {
@@ -37,7 +37,7 @@ public class TextHelper {
 
       for (int var5 = 0; var5 < var0.length(); var5++) {
          float var6 = (float)var5 / (var0.length() - 1);
-         int var7 = ColorUtil.interpolate(var1, var2, var6);
+         int var7 = ColorAssist.interpolate(var1, var2, var6);
          var4.append(Text.literal(String.valueOf(var0.charAt(var5))).styled(var2x -> var2x.withColor(var7).withBold(var3)));
       }
 
@@ -48,7 +48,7 @@ public class TextHelper {
       MutableText var2 = Text.literal("");
 
       for (int var3 = 0; var3 < var0.length(); var3++) {
-         int var4 = ColorUtil.astolfo(10, var3, 0.7F, 0.7F, 1.0F);
+         int var4 = ColorAssist.astolfo(10, var3, 0.7F, 0.7F, 1.0F);
          var2.append(Text.literal(String.valueOf(var0.charAt(var3))).styled(var2x -> var2x.withColor(var4).withBold(var1)));
       }
 
@@ -60,7 +60,7 @@ public class TextHelper {
 
       for (int var5 = 0; var5 < var0.length(); var5++) {
          float var6 = (float)var5 / (var0.length() - 1);
-         int var7 = ColorUtil.interpolateColor(var1, var2, var6);
+         int var7 = ColorAssist.interpolateColor(var1, var2, var6);
          var4.append(Text.literal(String.valueOf(var0.charAt(var5))).styled(var2x -> var2x.withColor(var7).withBold(var3)));
       }
 
@@ -70,47 +70,47 @@ public class TextHelper {
    public static Text applyPredefinedGradient(String var0, String var1, boolean var2) {
       switch (var1.toLowerCase()) {
          case "red_blue":
-            return applyGradient(var0, TextHelper.GradientStyle.HALF_SPLIT, -49088, ColorUtil.toColor("#0000FF"), var2);
+            return applyGradient(var0, TextHelper.GradientStyle.HALF_SPLIT, -49088, ColorAssist.toColor("#0000FF"), var2);
          case "green_purple":
-            return applyGradient(var0, TextHelper.GradientStyle.HALF_SPLIT, -12517568, ColorUtil.toColor("#800080"), var2);
+            return applyGradient(var0, TextHelper.GradientStyle.HALF_SPLIT, -12517568, ColorAssist.toColor("#800080"), var2);
          case "yellow_cyan":
-            return applyGradient(var0, TextHelper.GradientStyle.FULL_GRADIENT, -192, ColorUtil.toColor("#00FFFF"), var2);
+            return applyGradient(var0, TextHelper.GradientStyle.FULL_GRADIENT, -192, ColorAssist.toColor("#00FFFF"), var2);
          case "orange_magenta":
-            return applyGradient(var0, TextHelper.GradientStyle.FULL_GRADIENT, -32736, ColorUtil.toColor("#FF00FF"), var2);
+            return applyGradient(var0, TextHelper.GradientStyle.FULL_GRADIENT, -32736, ColorAssist.toColor("#FF00FF"), var2);
          case "astolfo":
             return applyGradient(var0, TextHelper.GradientStyle.ASTOLFO, 0, 0, var2);
          case "blue_green_fade":
-            return applyGradient(var0, TextHelper.GradientStyle.TWO_COLOR_FADE, ColorUtil.toColor("#0000FF"), -12517568, var2);
+            return applyGradient(var0, TextHelper.GradientStyle.TWO_COLOR_FADE, ColorAssist.toColor("#0000FF"), -12517568, var2);
          case "purple_red_fade":
-            return applyGradient(var0, TextHelper.GradientStyle.TWO_COLOR_FADE, ColorUtil.toColor("#800080"), -49088, var2);
+            return applyGradient(var0, TextHelper.GradientStyle.TWO_COLOR_FADE, ColorAssist.toColor("#800080"), -49088, var2);
          case "cyan_orange_fade":
-            return applyGradient(var0, TextHelper.GradientStyle.TWO_COLOR_FADE, ColorUtil.toColor("#00FFFF"), -32736, var2);
+            return applyGradient(var0, TextHelper.GradientStyle.TWO_COLOR_FADE, ColorAssist.toColor("#00FFFF"), -32736, var2);
          case "white_black":
-            return applyGradient(var0, TextHelper.GradientStyle.FULL_GRADIENT, ColorUtil.colorForTextWhite$(), ColorUtil.colorForRectsBlack$(), var2);
+            return applyGradient(var0, TextHelper.GradientStyle.FULL_GRADIENT, ColorAssist.colorForTextWhite$(), ColorAssist.colorForRectsBlack$(), var2);
          case "custom_purple":
-            return applyGradient(var0, TextHelper.GradientStyle.FULL_GRADIENT, ColorUtil.colorForTextCustom$(), ColorUtil.colorForRectsCustom$(), var2);
+            return applyGradient(var0, TextHelper.GradientStyle.FULL_GRADIENT, ColorAssist.colorForTextCustom$(), ColorAssist.colorForRectsCustom$(), var2);
          case "black_light_purple":
-            return applyGradient(var0, TextHelper.GradientStyle.FULL_GRADIENT, ColorUtil.colorForRectsBlack$(), ColorUtil.toColor("#DA70D6"), var2);
+            return applyGradient(var0, TextHelper.GradientStyle.FULL_GRADIENT, ColorAssist.colorForRectsBlack$(), ColorAssist.toColor("#DA70D6"), var2);
          case "dark_red_bright_red":
-            return applyGradient(var0, TextHelper.GradientStyle.FULL_GRADIENT, ColorUtil.toColor("#8B0000"), -49088, var2);
+            return applyGradient(var0, TextHelper.GradientStyle.FULL_GRADIENT, ColorAssist.toColor("#8B0000"), -49088, var2);
          case "dark_red":
-            return applyGradient(var0, TextHelper.GradientStyle.HALF_SPLIT, ColorUtil.toColor("#8B0000"), ColorUtil.toColor("#8B0000"), var2);
+            return applyGradient(var0, TextHelper.GradientStyle.HALF_SPLIT, ColorAssist.toColor("#8B0000"), ColorAssist.toColor("#8B0000"), var2);
          case "red_white":
-            return applyGradient(var0, TextHelper.GradientStyle.HALF_SPLIT, -49088, ColorUtil.colorForTextWhite$(), var2);
+            return applyGradient(var0, TextHelper.GradientStyle.HALF_SPLIT, -49088, ColorAssist.colorForTextWhite$(), var2);
          case "purple_bright_pink":
-            return applyGradient(var0, TextHelper.GradientStyle.FULL_GRADIENT, ColorUtil.toColor("#800080"), ColorUtil.toColor("#FF69B4"), var2);
+            return applyGradient(var0, TextHelper.GradientStyle.FULL_GRADIENT, ColorAssist.toColor("#800080"), ColorAssist.toColor("#FF69B4"), var2);
          case "pink_dark_pink":
-            return applyGradient(var0, TextHelper.GradientStyle.FULL_GRADIENT, ColorUtil.toColor("#FFC1CC"), ColorUtil.toColor("#C71585"), var2);
+            return applyGradient(var0, TextHelper.GradientStyle.FULL_GRADIENT, ColorAssist.toColor("#FFC1CC"), ColorAssist.toColor("#C71585"), var2);
          case "bright_red":
             return applyGradient(var0, TextHelper.GradientStyle.HALF_SPLIT, -49088, -49088, var2);
          case "dark_green_bright_green":
-            return applyGradient(var0, TextHelper.GradientStyle.FULL_GRADIENT, ColorUtil.toColor("#006400"), -12517568, var2);
+            return applyGradient(var0, TextHelper.GradientStyle.FULL_GRADIENT, ColorAssist.toColor("#006400"), -12517568, var2);
          case "red_orange":
             return applyGradient(var0, TextHelper.GradientStyle.FULL_GRADIENT, -49088, -32736, var2);
          case "turquoise_blue":
-            return applyGradient(var0, TextHelper.GradientStyle.FULL_GRADIENT, ColorUtil.toColor("#40E0D0"), ColorUtil.toColor("#0000FF"), var2);
+            return applyGradient(var0, TextHelper.GradientStyle.FULL_GRADIENT, ColorAssist.toColor("#40E0D0"), ColorAssist.toColor("#0000FF"), var2);
          default:
-            return Text.literal(var0).styled(var1x -> var1x.withColor(ColorUtil.colorForTextWhite$()).withBold(var2));
+            return Text.literal(var0).styled(var1x -> var1x.withColor(ColorAssist.colorForTextWhite$()).withBold(var2));
       }
    }
 

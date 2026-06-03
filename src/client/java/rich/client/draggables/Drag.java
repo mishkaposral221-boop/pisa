@@ -17,7 +17,7 @@ import rich.util.render.Render2D;
 public class Drag {
    private static final float OUTLINE_OFFSET = 0.0F;
    private static final float OUTLINE_THICKNESS = 1.0F;
-   private static final int OUTLINE_COLOR = ColorUtil.elementCodec(255, 255, 255, 255);
+   private static final int OUTLINE_COLOR = ColorUtil.b(255, 255, 255, 255);
    private static final Set<String> EXCLUDED_ELEMENTS = Set.of("Notifications");
    private static HudElement draggingElement;
    private static int startX;
