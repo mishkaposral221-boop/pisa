@@ -7,7 +7,7 @@ import net.minecraft.entity.LivingEntity;
 import net.minecraft.item.Item;
 import net.minecraft.registry.tag.ItemTags;
 import rich.events.api.EventHandler;
-import rich.events.impl.TickEvent;
+import rich.events.impl.ClientTickStartEvent;
 import rich.modules.module.ModuleStructure;
 import rich.modules.module.category.ModuleCategory;
 import rich.modules.module.setting.implement.BooleanSetting;
@@ -27,7 +27,7 @@ public class Triggerbot extends ModuleStructure {
     }
 
     @EventHandler
-    public void onTick(TickEvent event) {
+    public void onTick(ClientTickStartEvent event) {
         if (mc.player == null || mc.world == null) {
             return;
         }
