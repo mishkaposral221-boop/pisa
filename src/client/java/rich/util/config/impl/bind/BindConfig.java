@@ -8,7 +8,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
+import net.fabricmc.loader.api.FabricLoader;
 import rich.util.config.impl.consolelogger.Logger;
 
 public class BindConfig {
@@ -18,7 +18,7 @@ public class BindConfig {
    private int BindKey = 344;
 
    private BindConfig() {
-      Path var1 = Paths.get("RunTime Visuals", "configs");
+      Path var1 = FabricLoader.getInstance().getConfigDir().resolve("RunTime Visuals").resolve("configs");
 
       try {
          Files.createDirectories(var1);
@@ -78,3 +78,4 @@ public class BindConfig {
       return this.BindKey;
    }
 }
+

@@ -1,24 +1,23 @@
 package rich.util.config.impl;
 
 import java.nio.file.Path;
-import java.nio.file.Paths;
+import net.fabricmc.loader.api.FabricLoader;
 
 public class ConfigPath {
    private static final String ROOT_DIR = "RunTime Visuals";
    private static final String CONFIG_DIR = "configs";
    private static final String AUTO_DIR = "autocfg";
    private static final String CONFIG_FILE = "autoconfig.json";
-   private static Path runDirectory;
 
    public static void init() {
-      runDirectory = Paths.get("").toAbsolutePath();
    }
 
    public static Path getConfigDirectory() {
-      return runDirectory.resolve("RunTime Visuals").resolve("configs").resolve("autocfg");
+      return FabricLoader.getInstance().getConfigDir().resolve(ROOT_DIR).resolve(CONFIG_DIR).resolve(AUTO_DIR);
    }
 
    public static Path getConfigFile() {
-      return getConfigDirectory().resolve("autoconfig.json");
+      return getConfigDirectory().resolve(CONFIG_FILE);
    }
 }
+

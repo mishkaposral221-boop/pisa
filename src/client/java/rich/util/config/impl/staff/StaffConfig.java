@@ -19,7 +19,7 @@ public class StaffConfig {
    private final Path configPath;
 
    private StaffConfig() {
-      Path var1 = Paths.get("RunTime Visuals", "configs");
+      Path var1 = net.fabricmc.loader.api.FabricLoader.getInstance().getConfigDir().resolve("RunTime Visuals").resolve("configs");
 
       try {
          Files.createDirectories(var1);
