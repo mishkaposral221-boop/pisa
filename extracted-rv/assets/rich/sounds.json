@@ -1,0 +1,82 @@
+{
+  "kolokolnia_kill": {
+    "sounds": [
+      "rich:kolokolnia_kill"
+    ]
+  },
+  "moan1": {
+    "sounds": [
+      "rich:moan1"
+    ]
+  },
+  "moan2": {
+    "sounds": [
+      "rich:moan2"
+    ]
+  },
+  "moan3": {
+    "sounds": [
+      "rich:moan3"
+    ]
+  },
+  "moan4": {
+    "sounds": [
+      "rich:moan4"
+    ]
+  },
+  "module_disable": {
+    "sounds": [
+      "rich:module_disable"
+    ]
+  },
+  "module_enable": {
+    "sounds": [
+      "rich:module_enable"
+    ]
+  },
+  "off": {
+    "sounds": [
+      "rich:off"
+    ]
+  },
+  "on": {
+    "sounds": [
+      "rich:on"
+    ]
+  },
+  "crime": {
+    "sounds": [
+      "rich:crime"
+    ]
+  },
+  "metallic": {
+    "sounds": [
+      "rich:metallic"
+    ]
+  },
+  "welcome": {
+    "sounds": [
+      "rich:welcome"
+    ]
+  },
+  "hitsound.awp": {
+    "sounds": [
+      { "name": "rich:hitsound/awp", "stream": false }
+    ]
+  },
+  "hitsound.litvin": {
+    "sounds": [
+      { "name": "rich:hitsound/litvin", "stream": false }
+    ]
+  },
+  "hitsound.pay": {
+    "sounds": [
+      { "name": "rich:hitsound/pay", "stream": false }
+    ]
+  },
+  "hitsound.uwu": {
+    "sounds": [
+      { "name": "rich:hitsound/uwu", "stream": false }
+    ]
+  }
+}

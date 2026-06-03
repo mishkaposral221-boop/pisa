@@ -1,0 +1,13 @@
+accessWidener	v2	intermediary
+accessible	field	net/minecraft/client/multiplayer/PlayerControllerMP	gameMode	I
+accessible	field	net/minecraft/client/multiplayer/PlayerControllerMP	connection	Lnet/minecraft/class_2535;
+accessible	field	net/minecraft/client/multiplayer/PlayerControllerMP	localPlayer	Lnet/minecraft/client/player/LocalPlayer;
+accessible	field	net/minecraft/client/player/LocalPlayer	input	Lnet/minecraft/class_744;
+accessible	field	net/minecraft/client/player/LocalPlayer	tickCount	I
+accessible	field	net/minecraft/world/entity/Entity	xOld	D
+accessible	field	net/minecraft/world/entity/Entity	yOld	D
+accessible	field	net/minecraft/world/entity/Entity	zOld	D
+accessible	field	net/minecraft/world/entity/Entity	noCulling	Z
+accessible	field	net/minecraft/client/renderer/GameRenderer	lightTexture	Lnet/minecraft/client/renderer/texture/DynamicTexture;
+accessible	class	net/minecraft/client/multiplayer/PlayerControllerMP
+accessible	class	net/minecraft/client/player/LocalPlayer

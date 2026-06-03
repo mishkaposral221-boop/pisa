@@ -1,0 +1,15 @@
+{
+  "required": true,
+  "package": "rich.mixin.client",
+  "compatibilityLevel": "JAVA_17",
+  "mixins": [
+    "InGameHudMixin",
+    "MinecraftClientMixin"
+  ],
+  "client": [
+
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}
