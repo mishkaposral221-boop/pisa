@@ -1,12 +1,6 @@
 package rich;
 
 import net.fabricmc.api.ClientModInitializer;
-import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
-import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
-import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.LivingEntity;
 import rich.manager.Manager;
 import rich.online.OnlineTracker;
 import rich.update.UpdateChecker;
@@ -15,13 +9,12 @@ import rich.util.d;
 public class Initialization implements ClientModInitializer {
    private static Initialization instance;
    private Manager manager;
-   private static final int AUTOSAVE_TICK_INTERVAL = 1200;
-   private static int saveCounter = 0;
 
    public static Initialization getInstance() {
       if (instance == null) {
          instance = new Initialization();
       }
+
       return instance;
    }
 
@@ -31,68 +24,6 @@ public class Initialization implements ClientModInitializer {
 
    public void onInitializeClient() {
       d.a();
-      this.registerClientTickEvents();
-      this.registerHudRenderCallbacks();
-      this.registerClientLifecycleEvents();
-   }
-
-   private void registerClientTickEvents() {
-      ClientTickEvents.END_CLIENT_TICK.register(client -> {
-         if (client.player == null || this.manager == null) {
-            return;
-         }
-
-         if (this.manager.getModuleRepository() != null) {
-            for (var module : this.manager.getModuleRepository().modules()) {
-               String name = module.getName();
-               if ("AutoSprint".equals(name) && module instanceof rich.modules.impl.movement.AutoSprint) {
-                  ((rich.modules.impl.movement.AutoSprint)module).tick(client);
-               } else if ("Fullbright".equals(name) && module instanceof rich.modules.impl.render.FullBright) {
-                  ((rich.modules.impl.render.FullBright)module).tick(client);
-               }
-            }
-         }
-
-         Entity targetedEntity = client.targetedEntity;
-         if (targetedEntity instanceof LivingEntity living && living != client.player) {
-            if (client.player.getAttackCooldownProgress(0.0f) < 0.5f && this.manager.getHudManager() != null) {
-               var hudMgr = this.manager.getHudManager();
-               for (var mod : hudMgr.modules()) {
-                  if ("TargetHud".equals(mod.getName()) && mod instanceof rich.modules.impl.render.hud.TargetHudModule) {
-                     ((rich.modules.impl.render.hud.TargetHudModule)mod).setTarget(living);
-                     break;
-                  }
-               }
-            }
-         }
-
-         if (++saveCounter >= AUTOSAVE_TICK_INTERVAL) {
-            saveCounter = 0;
-            if (this.manager.getConfigSystem() != null) {
-               this.manager.getConfigSystem().saveAll();
-            }
-         }
-      });
-   }
-
-   private void registerHudRenderCallbacks() {
-      HudRenderCallback.EVENT.register((guiGraphics, deltaTracker) -> {
-         if (this.manager == null || this.manager.getClickgui() == null) {
-            return;
-         }
-
-         if (!this.manager.getClickgui().isOpen() && this.manager.getHudManager() != null) {
-            this.manager.getHudManager().renderText(guiGraphics, 1.0f);
-         }
-      });
-   }
-
-   private void registerClientLifecycleEvents() {
-      ClientLifecycleEvents.CLIENT_STOPPING.register(client -> {
-         if (this.manager != null && this.manager.getConfigSystem() != null) {
-            this.manager.getConfigSystem().saveAll();
-         }
-      });
    }
 
    public void init() {
@@ -102,3 +33,4 @@ public class Initialization implements ClientModInitializer {
       OnlineTracker.getInstance().start();
    }
 }
+
