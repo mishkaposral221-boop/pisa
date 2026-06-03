@@ -7,7 +7,7 @@ import rich.util.c;
 
 public class NoRender extends ModuleStructure {
    public final MultiSelectSetting modeSetting = new MultiSelectSetting("Элементы", "Выберите элементы для игнорирования")
-      .value("Fire", "Bad Effects", "Block Overlay", "Darkness", "Damage", "Nausea", "Scoreboard", "BossBar")
+      .value("Fire", "Bad Effects", "Block Overlay", "Darkness", "Damage", "Nausea", "Scoreboard", "BossBar", "Nametags")
       .selected("Fire", "Bad Effects", "Block Overlay", "Darkness", "Damage", "Nausea");
 
    public static NoRender getInstance() {
