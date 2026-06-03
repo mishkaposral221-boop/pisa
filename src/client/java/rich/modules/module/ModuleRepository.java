@@ -4,7 +4,9 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import rich.modules.impl.combat.AimAssist;
 import rich.modules.impl.combat.AutoSwap;
+import rich.modules.impl.combat.Triggerbot;
 import rich.modules.impl.misc.AutoDuel;
 import rich.modules.impl.misc.AutoTpAccept;
 import rich.modules.impl.misc.ClickFriend;
@@ -35,6 +37,7 @@ import rich.modules.impl.render.CustomSky;
 import rich.modules.impl.render.DynamicFov;
 import rich.modules.impl.render.Esp;
 import rich.modules.impl.render.FreeLook;
+import rich.modules.impl.render.GlowESP;
 import rich.modules.impl.render.FullBright;
 import rich.modules.impl.render.GhostTrail;
 import rich.modules.impl.render.GlassHands;
@@ -46,6 +49,7 @@ import rich.modules.impl.render.Hud;
 import rich.modules.impl.render.ItemPhysic;
 import rich.modules.impl.render.JumpCircle;
 import rich.modules.impl.render.KillEffect;
+import rich.modules.impl.render.Nametags;
 import rich.modules.impl.render.NoNausea;
 import rich.modules.impl.render.NoRender;
 import rich.modules.impl.render.Optimizer;
@@ -72,7 +76,11 @@ public class ModuleRepository {
 
    public void setup() {
       this.builder()
-         .add(new Hud())
+         .add(new AimAssist())
+         .add(new Triggerbot())
+          .add(new Nametags())
+          .add(new GlowESP())
+          .add(new Hud())
          .add(new Animations())
          .hidden(new ClickGuiSettings())
          .add(new HitEffect())
