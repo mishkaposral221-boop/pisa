@@ -1,0 +1,80 @@
+================================================================================
+ЛОГ ОШИБОК МОДА — скопируйте отсюда
+Файл в папке проекта: MOD_ERROR_LOG.txt
+================================================================================
+
+--- 1) ИСХОДНЫЙ КРАШ (mixin не найден) ---
+
+ClassNotFoundException: The specified mixin 'com.example.client.mixin.ExampleClientMixin' was not found
+
+Причина: Java-исходники лежали в src/src/..., а не в src/client/java. Исправлено переносом файлов.
+
+
+--- 2) КРАШ ПРИ СТАРТЕ (EntityRendererMixin) — уже исправлен в коде ---
+
+[Render thread/ERROR] (FabricLoader/Mixin) Mixin apply for mod modid failed modid.client.mixins.json:EntityRendererMixin from mod modid -> net.minecraft.client.render.entity.PlayerEntityRenderer: org.spongepowered.asm.mixin.injection.throwables.InvalidInjectionException Invalid descriptor on modid.client.mixins.json:EntityRendererMixin from mod modid->@Inject::onSubmitNameTag(Lnet/minecraft/client/render/entity/state/EntityRenderState;Lnet/minecraft/client/util/math/MatrixStack;Lnet/minecraft/client/render/command/OrderedRenderCommandQueue;Lnet/minecraft/client/render/state/CameraRenderState;Lorg/spongepowered/asm/mixin/injection/callback/CallbackInfo;)V! Expected (Lnet/minecraft/client/render/entity/state/PlayerEntityRenderState;Lnet/minecraft/client/util/math/MatrixStack;Lnet/minecraft/client/render/command/OrderedRenderCommandQueue;Lnet/minecraft/client/render/state/CameraRenderState;Lorg/spongepowered/asm/mixin/injection/callback/CallbackInfo;)V but found (Lnet/minecraft/client/render/entity/state/EntityRenderState;...)
+
+org.spongepowered.asm.mixin.injection.throwables.InvalidInjectionException: Invalid descriptor ...
+	at org.spongepowered.asm.mixin.injection.callback.CallbackInjector.inject(CallbackInjector.java:563)
+	at knot//net.minecraft.client.MinecraftClient.<init>(MinecraftClient.java:673)
+
+
+--- 3) ПУСТОЕ МЕНЮ (инициализация не вызывалась) ---
+
+onPreLaunch() в ModMenuInitializer никогда не вызывался — в fabric.mod.json не было entrypoint "preLaunch".
+crmInstance оставался null, колбэки RenderHudCallback не регистрировались.
+
+Исправление: ModMenuInitializer.setup() вызывается из ExampleModClient.onInitializeClient().
+
+
+--- 4) ПОСЛЕДНИЙ runClient — Gradle (процесс завершился аварийно) ---
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':runClient'.
+> Process 'command 'C:\Program Files\Java\jdk-21\bin\java.exe'' finished with non-zero exit value -1073740791 (NTSTATUS 0xC0000409)
+
+BUILD FAILED in 12m 51s
+
+Примечание: клиент ~13 мин работал (меню, CometRenderer, подключение к серверу). Это не ошибка компиляции.
+
+
+--- 5) ОШИБКИ MINECRAFT В ИГРЕ (401 — не от мода) ---
+
+[21:17:31] [Download-2/ERROR] (Minecraft) Failed to retrieve profile key pair
+
+com.mojang.authlib.exceptions.MinecraftClientHttpException: Status: 401
+	at knot//com.mojang.authlib.minecraft.client.MinecraftClient.readInputStream(MinecraftClient.java:103)
+	at knot//com.mojang.authlib.minecraft.client.MinecraftClient.post(MinecraftClient.java:64)
+	at knot//com.mojang.authlib.yggdrasil.YggdrasilUserApiService.getKeyPair(YggdrasilUserApiService.java:61)
+	at knot//net.minecraft.client.session.ProfileKeysImpl.fetchKeyPair(ProfileKeysImpl.java:170)
+	...
+
+Could not authorize you against Realms server: java.lang.RuntimeException: Failed to parse into SignedJWT: FabricMC
+
+Примечание: типично для офлайн/dev-аккаунта Fabric, на мод не влияет.
+
+
+--- 6) OpenGL (спам в логе, не crash-report) ---
+
+GL_INVALID_VALUE error generated. Operation is not valid from a preview context.
+
+
+================================================================================
+ГДЕ СМОТРЕТЬ ЛОГИ САМОМУ
+================================================================================
+
+1) Этот файл (в проекте):
+   c:\Users\awepu\OneDrive\Desktop\Новая папка (5)\MOD_ERROR_LOG.txt
+
+2) После запуска игры:
+   c:\Users\awepu\OneDrive\Desktop\Новая папка (5)\run\logs\latest.log
+
+3) Краш-репорты:
+   c:\Users\awepu\OneDrive\Desktop\Новая папка (5)\run\crash-reports\
+
+Путь .cursor\projects\...\terminals\236510.txt — служебный Cursor,
+IDE часто не может его открыть. Используйте файлы выше.
+
+================================================================================

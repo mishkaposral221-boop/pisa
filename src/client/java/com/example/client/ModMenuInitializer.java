@@ -27,6 +27,7 @@ import com.ferra13671.cometrenderer.minecraft.CRM;
 import com.ferra13671.cometrenderer.minecraft.CRMInstance;
 import com.ferra13671.cometrenderer.minecraft.event.RenderHudCallback;
 import com.ferra13671.cometrenderer.minecraft.event.RenderWorldCallback;
+import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
 import net.minecraft.client.util.Window;
@@ -51,6 +52,8 @@ public class ModMenuInitializer {
     public static final AutoSwap AUTO_SWAP;
     public static final HudManager HUD;
     public static final TargetHudWidget TARGET_HUD;
+    /** Autosave interval: 1200 ticks ≈ 60 s at 20 TPS. */
+    private static final int AUTOSAVE_TICK_INTERVAL = 1200;
     private static int saveCounter;
     private static boolean setupDone;
 
@@ -64,6 +67,9 @@ public class ModMenuInitializer {
         crmInstance = new CRMInstance(() -> client.getWindow().getScaleFactor());
 
         RenderHudCallback.EVENT.register(() -> {
+            if (!MENU.isOpen()) {
+                return;
+            }
             if (crmInstance == null) {
                 ExampleMod.LOGGER.warn("RenderHudCallback: crmInstance is null, skipping menu shapes");
                 return;
@@ -74,18 +80,18 @@ public class ModMenuInitializer {
             }
             try {
                 crmInstance.setupUIMatrix();
-                if (MENU.isOpen()) {
-                    MENU.renderShapes();
+                MENU.renderShapes();
+            } catch (Exception e) {
+                ExampleMod.LOGGER.error("CometRenderer HUD shape render failed (check GL / preview context)", e);
+            } finally {
+                try {
+                    crmInstance.restoreUIMatrix();
+                } catch (Exception e) {
+                    ExampleMod.LOGGER.error("Failed to restore UI matrix after menu shapes", e);
                 }
-            } catch (Exception e) {
-                ExampleMod.LOGGER.error("Failed to render menu shapes", e);
-            }
-            try {
-                crmInstance.restoreUIMatrix();
-            } catch (Exception e) {
-                ExampleMod.LOGGER.error("Failed to restore UI matrix after menu shapes", e);
             }
         });
+        ClientLifecycleEvents.CLIENT_STOPPING.register(mc -> ConfigManager.save());
         HudRenderCallback.EVENT.register((guiGraphics, deltaTracker) -> {
             if (MENU.isOpen()) {
                 MENU.renderText(guiGraphics);
@@ -120,7 +126,7 @@ public class ModMenuInitializer {
             }
             ModMenuInitializer.processKeybinds(c);
             HUD.tick();
-            if (++saveCounter >= 100) {
+            if (++saveCounter >= AUTOSAVE_TICK_INTERVAL) {
                 saveCounter = 0;
                 ConfigManager.save();
             }
