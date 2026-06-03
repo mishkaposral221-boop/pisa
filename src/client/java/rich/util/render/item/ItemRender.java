@@ -119,7 +119,7 @@ public class ItemRender {
 
    private static Sprite getSpriteForStack(ItemStack var0) {
       String var1 = getCacheKey(var0);
-      ItemRender.CachedSprite var2 = SPRITE_CACHE.getName(var1);
+      ItemRender.CachedSprite var2 = SPRITE_CACHE.get(var1);
       if (var2 != null) {
          return var2.sprite;
       }

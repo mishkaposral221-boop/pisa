@@ -96,7 +96,7 @@ public class GlassCompositePipeline {
       CommandEncoder var13 = RenderSystem.getDevice().createCommandEncoder();
       var13.writeToBuffer(this.uniformBuffer.slice(), this.dataBuffer);
       GpuBufferSlice var14 = RenderSystem.getDynamicUniforms().write(RenderSystem.getModelViewMatrix(), COLOR_MODULATOR, MODEL_OFFSET, TEXTURE_MATRIX);
-      GpuSampler var15 = RenderSystem.getSamplerCache().getName(FilterMode.LINEAR);
+      GpuSampler var15 = RenderSystem.getSamplerCache().get(FilterMode.LINEAR);
       RenderPass var16 = var13.createRenderPass(() -> "minecraft:glass_composite_pass", var1, OptionalInt.empty());
 
       try {

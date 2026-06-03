@@ -60,7 +60,7 @@ public class GifRender {
       }
 
       if (!avatarFrames.isEmpty()) {
-         Render2D.texture(avatarFrames.getName(avatarFrameIndex), var0, var1, var2, var3, 1.0F, 15.0F, var4);
+         Render2D.texture(avatarFrames.get(avatarFrameIndex), var0, var1, var2, var3, 1.0F, 15.0F, var4);
       }
    }
 
@@ -70,7 +70,7 @@ public class GifRender {
       }
 
       if (!avatarFrames.isEmpty()) {
-         Render2D.texture(avatarFrames.getName(avatarFrameIndex), var0, var1, var2, var3, 1.0F, var4, var5);
+         Render2D.texture(avatarFrames.get(avatarFrameIndex), var0, var1, var2, var3, 1.0F, var4, var5);
       }
    }
 
@@ -80,7 +80,7 @@ public class GifRender {
       }
 
       if (!backgroundFrames.isEmpty()) {
-         Render2D.texture(backgroundFrames.getName(backgroundFrameIndex), var0, var1, var2, var3, var4);
+         Render2D.texture(backgroundFrames.get(backgroundFrameIndex), var0, var1, var2, var3, var4);
       }
    }
 
@@ -90,7 +90,7 @@ public class GifRender {
       }
 
       if (!backgroundFrames.isEmpty()) {
-         Render2D.texture(backgroundFrames.getName(backgroundFrameIndex), var0, var1, var2, var3, 1.0F, var4, var5);
+         Render2D.texture(backgroundFrames.get(backgroundFrameIndex), var0, var1, var2, var3, 1.0F, var4, var5);
       }
    }
 

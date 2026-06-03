@@ -72,16 +72,16 @@ public class ProfileMediaLoader {
    }
 
    public static Identifier getCurrentAvatarFrame() {
-      return customAvatarFrames.isEmpty() ? null : customAvatarFrames.getName(avatarFrameIndex % customAvatarFrames.size());
+      return customAvatarFrames.isEmpty() ? null : customAvatarFrames.get(avatarFrameIndex % customAvatarFrames.size());
    }
 
    public static Identifier getCurrentBannerFrame() {
-      return customBannerFrames.isEmpty() ? null : customBannerFrames.getName(bannerFrameIndex % customBannerFrames.size());
+      return customBannerFrames.isEmpty() ? null : customBannerFrames.get(bannerFrameIndex % customBannerFrames.size());
    }
 
    private static void loadMedia(String var0, List<Identifier> var1, boolean var2) {
       try {
-         File var3 = Paths.getName(var0).toFile();
+         File var3 = Paths.get(var0).toFile();
          if (!var3.exists()) {
             return;
          }

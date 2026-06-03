@@ -118,7 +118,7 @@ public class BlurPipeline {
             var13.writeToBuffer(this.uniformBuffer.slice(), this.dataBuffer);
             GpuBufferSlice var14 = RenderSystem.getDynamicUniforms()
                .write(RenderSystem.getModelViewMatrix(), COLOR_MODULATOR, MODEL_OFFSET, TEXTURE_MATRIX);
-            GpuSampler var15 = RenderSystem.getSamplerCache().getName(FilterMode.LINEAR);
+            GpuSampler var15 = RenderSystem.getSamplerCache().get(FilterMode.LINEAR);
             RenderPass var16 = var13.createRenderPass(
                () -> "minecraft:blur_pass", var8.getFramebuffer().getColorAttachmentView(), OptionalInt.empty(), var8.getFramebuffer().getDepthAttachmentView(), OptionalDouble.empty()
             );

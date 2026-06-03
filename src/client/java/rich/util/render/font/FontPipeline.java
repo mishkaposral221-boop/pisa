@@ -334,7 +334,7 @@ public class FontPipeline {
                var5.writeToBuffer(this.uniformBuffer.slice(), this.dataBuffer);
                GpuBufferSlice var6 = RenderSystem.getDynamicUniforms()
                   .write(RenderSystem.getModelViewMatrix(), COLOR_MODULATOR, MODEL_OFFSET, TEXTURE_MATRIX);
-               GpuSampler var7 = RenderSystem.getSamplerCache().getName(FilterMode.LINEAR);
+               GpuSampler var7 = RenderSystem.getSamplerCache().get(FilterMode.LINEAR);
                RenderPass var8 = var5.createRenderPass(
                   () -> "rich:font_pass", var1.getFramebuffer().getColorAttachmentView(), OptionalInt.empty(), var1.getFramebuffer().getDepthAttachmentView(), OptionalDouble.empty()
                );
