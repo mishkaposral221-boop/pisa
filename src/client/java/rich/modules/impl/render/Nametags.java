@@ -91,76 +91,72 @@ public class Nametags extends ModuleStructure {
             float screenY = Math.round(screen[1]);
             float distance = (float)Math.sqrt(dist);
             float scale = Math.max(0.5f, Math.min(1.0f, 1.0f - distance / 20.0f));
-            float distAlpha = Math.max(0.25f, Math.min(1.0f, 1.0f - distance / 28.0f));
-            this.renderNametag(guiGraphics, font, target, screenX, screenY, scale, distance, distAlpha);
+            this.renderNametag(guiGraphics, font, target, screenX, screenY, scale, distance);
         }
     }
 
-    private static int mulAlpha(int argb, float m) {
-        int a = (argb >>> 24) & 0xFF;
-        a = (int)((float)a * Math.max(0.0f, Math.min(1.0f, m)));
-        return (a << 24) | (argb & 0xFFFFFF);
-    }
-
-    private void renderNametag(DrawContext guiGraphics, TextRenderer font, PlayerEntity player, float cx, float cy, float scale, float distance, float alpha) {
+    private void renderNametag(DrawContext guiGraphics, TextRenderer font, PlayerEntity player, float cx, float cy, float scale, float distance) {
         float health = player.getHealth();
         float absorption = player.getAbsorptionAmount();
         float maxHp = Math.max(1.0f, player.getMaxHealth());
         float totalHealth = health + absorption;
         String name = player.getName().getString();
         String hpStr = String.format("%.0f", Float.valueOf(totalHealth));
+
+        // PING игрока (мс)
+        int ping = 0;
+        try {
+            net.minecraft.client.network.PlayerListEntry entry = mc.getNetworkHandler() != null
+                    ? mc.getNetworkHandler().getPlayerListEntry(player.getUuid())
+                    : null;
+            if (entry != null) {
+                ping = entry.getLatency();
+            }
+        } catch (Exception e) {
+            ping = 0;
+        }
+        String pingStr = " " + ping + "ms";
+
         MutableText nameComp = Text.literal((String)name);
         MutableText hpComp = Text.literal((String)(" " + hpStr));
+        MutableText pingComp = Text.literal((String)pingStr);
         int nameW = font.getWidth((StringVisitable)nameComp);
         int hpW = font.getWidth((StringVisitable)hpComp);
-        int totalW = nameW + hpW;
-        float bgPad = 6.0f;
-        float bgW = Math.max((float)totalW + bgPad * 2.0f, 64.0f);
-        float bgH = 9 + 11;
+        int pingW = font.getWidth((StringVisitable)pingComp);
+        int totalW = nameW + hpW + pingW;
+        float bgPad = 5.0f;
+        float bgW = Math.max((float)totalW + bgPad * 2.0f, 60.0f);
+        float bgH = 9 + 10;
         float bgX = -bgW / 2.0f;
         float bgY = 0.0f;
-
         guiGraphics.getMatrices().pushMatrix();
         guiGraphics.getMatrices().translate(cx, cy);
         guiGraphics.getMatrices().scale(scale, scale);
-
-        // shadow
-        guiGraphics.fill((int)(bgX + 1.0f), (int)(bgY + 1.0f), (int)(bgX + bgW + 1.0f), (int)(bgY + bgH + 1.0f), mulAlpha(0x66000000, alpha));
-        // background: top and bottom halves (gradient imitation)
-        int half = (int)(bgY + bgH / 2.0f);
-        guiGraphics.fill((int)bgX, (int)bgY, (int)(bgX + bgW), half, mulAlpha(0xE6121218, alpha));
-        guiGraphics.fill((int)bgX, half, (int)(bgX + bgW), (int)(bgY + bgH), mulAlpha(0xE61C1C26, alpha));
-        // top accent
-        guiGraphics.fill((int)bgX, (int)bgY, (int)(bgX + bgW), (int)(bgY + 1.0f), mulAlpha(0x804AA0FF, alpha));
-        // border
-        int border = mulAlpha(0x40FFFFFF, alpha);
-        guiGraphics.fill((int)bgX, (int)bgY, (int)(bgX + bgW), (int)(bgY + 1.0f), border);
-        guiGraphics.fill((int)bgX, (int)(bgY + bgH - 1.0f), (int)(bgX + bgW), (int)(bgY + bgH), border);
-        guiGraphics.fill((int)bgX, (int)bgY, (int)(bgX + 1.0f), (int)(bgY + bgH), border);
-        guiGraphics.fill((int)(bgX + bgW - 1.0f), (int)bgY, (int)(bgX + bgW), (int)(bgY + bgH), border);
-
+        guiGraphics.fill((int)bgX, (int)bgY, (int)(bgX + bgW), (int)(bgY + bgH), -1879048192);
+        guiGraphics.fill((int)bgX, (int)bgY, (int)(bgX + bgW), (int)(bgY + 1.0f), 1085564159);
         int textY = (int)(bgY + 3.0f);
-        guiGraphics.drawText(font, (Text)nameComp, -totalW / 2, textY, mulAlpha(0xFFFFFFFF, alpha), true);
+        guiGraphics.drawText(font, (Text)nameComp, -totalW / 2, textY, -1, true);
         float hpPct = Math.min(1.0f, health / maxHp);
         int hpColor = hpPct > 0.6f ? -11141291 : (hpPct > 0.3f ? -171 : -43691);
-        guiGraphics.drawText(font, (Text)hpComp, -totalW / 2 + nameW, textY, mulAlpha(hpColor, alpha), true);
+        guiGraphics.drawText(font, (Text)hpComp, -totalW / 2 + nameW, textY, hpColor, true);
+        // ping: зелёный <80, жёлтый <150, красный выше
+        int pingColor = ping < 80 ? -11141291 : (ping < 150 ? -171 : -43691);
+        guiGraphics.drawText(font, (Text)pingComp, -totalW / 2 + nameW + hpW, textY, pingColor, true);
 
-        // HP bar
         float barX = bgX + 3.0f;
         float barY = bgY + 9.0f + 5.0f;
         float barW = bgW - 6.0f;
-        float barH = 3.0f;
-        guiGraphics.fill((int)(barX - 1.0f), (int)(barY - 1.0f), (int)(barX + barW + 1.0f), (int)(barY + barH + 1.0f), mulAlpha(0x90000000, alpha)); // border/track
-        guiGraphics.fill((int)barX, (int)barY, (int)(barX + barW), (int)(barY + barH), mulAlpha(0x50202020, alpha));
+        float barH = 2.5f;
+        guiGraphics.fill((int)barX, (int)barY, (int)(barX + barW), (int)(barY + barH), 0x50000000);
         float fillW = barW * Math.min(1.0f, health / maxHp);
         if (fillW > 0.0f) {
-            guiGraphics.fill((int)barX, (int)barY, (int)(barX + fillW), (int)(barY + barH), mulAlpha(hpColor, alpha));
+            int barColor = hpPct > 0.6f ? -11141291 : (hpPct > 0.3f ? -171 : -43691);
+            guiGraphics.fill((int)barX, (int)barY, (int)(barX + fillW), (int)(barY + barH), barColor);
         }
         if (absorption > 0.0f) {
             float absW = barW * Math.min(1.0f, absorption / maxHp);
-            guiGraphics.fill((int)(barX + barW - absW), (int)barY, (int)(barX + barW), (int)(barY + barH), mulAlpha(-9166, alpha));
+            guiGraphics.fill((int)(barX + barW - absW), (int)barY, (int)(barX + barW), (int)(barY + barH), -9166);
         }
-
         if (this.showArmor()) {
             ArrayList<ItemStack> items = new ArrayList<ItemStack>();
             ItemStack helmet = player.getEquippedStack(EquipmentSlot.HEAD);
