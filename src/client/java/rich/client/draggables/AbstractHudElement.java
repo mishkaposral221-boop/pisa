@@ -8,6 +8,7 @@ import rich.modules.impl.render.ClickGuiSettings;
 import rich.util.animations.Animation;
 import rich.util.animations.Decelerate;
 import rich.util.animations.Direction;
+import rich.util.render.Render2D;
 
 public abstract class AbstractHudElement implements HudElement {
    protected int x;
@@ -17,6 +18,7 @@ public abstract class AbstractHudElement implements HudElement {
    protected String name;
    protected boolean enabled = true;
    protected boolean draggable = true;
+   protected float scale = 1.0F;
    protected final MinecraftClient mc = MinecraftClient.getInstance();
    protected final Animation scaleAnimation = new Decelerate().setMs(300).setValue(1.0);
    protected float lastTickDelta = 0.0F;
@@ -42,7 +44,23 @@ public abstract class AbstractHudElement implements HudElement {
          }
 
          if (var3 > 0) {
-            this.drawDraggable(var1, var3);
+            boolean var5 = this.scale != 1.0F;
+            if (var5) {
+               Render2D.pushScale((float)this.x, (float)this.y, this.scale);
+               var1.getMatrices().pushMatrix();
+               var1.getMatrices().translate((float)this.x, (float)this.y);
+               var1.getMatrices().scale(this.scale, this.scale);
+               var1.getMatrices().translate((float)(-this.x), (float)(-this.y));
+            }
+
+            try {
+               this.drawDraggable(var1, var3);
+            } finally {
+               if (var5) {
+                  var1.getMatrices().popMatrix();
+                  Render2D.popScale();
+               }
+            }
          }
       }
    }
@@ -76,6 +94,15 @@ public abstract class AbstractHudElement implements HudElement {
 
    public float getLastTickDelta() {
       return this.lastTickDelta;
+   }
+
+   @Override
+   public float getScale() {
+      return this.scale;
+   }
+
+   public void setScale(float var1) {
+      this.scale = Math.max(0.5F, Math.min(3.0F, var1));
    }
 
    @Override
