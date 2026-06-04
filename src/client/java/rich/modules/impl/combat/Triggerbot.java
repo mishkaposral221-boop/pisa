@@ -3,7 +3,6 @@ package rich.modules.impl.combat;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.item.Item;
-import net.minecraft.network.packet.c2s.play.ClientCommandC2SPacket;
 import net.minecraft.registry.tag.ItemTags;
 import net.minecraft.util.Hand;
 import rich.events.api.EventHandler;
@@ -12,7 +11,6 @@ import rich.modules.module.ModuleStructure;
 import rich.modules.module.category.ModuleCategory;
 import rich.modules.module.setting.implement.BooleanSetting;
 import rich.util.c;
-import rich.util.network.NetworkUtility;
 
 public class Triggerbot extends ModuleStructure {
     public BooleanSetting smartCrits = new BooleanSetting("SmartCrits", "Only attack when at low fall damage").setValue(true);
@@ -57,20 +55,16 @@ public class Triggerbot extends ModuleStructure {
         if (!this.autoCrit()) {
             return;
         }
+        // \u0421\u0431\u0440\u043e\u0441 \u0441\u043f\u0440\u0438\u043d\u0442\u0430 \u0440\u043e\u0432\u043d\u043e \u043a\u0430\u043a \u0432 KillAura (StrikeManager):
+        // \u0442\u043e\u043b\u044c\u043a\u043e \u043a\u043b\u0438\u0435\u043d\u0442\u0441\u043a\u0438\u0439 \u0444\u043b\u0430\u0433, \u0431\u0435\u0437 \u0441\u044b\u0440\u044b\u0445 \u043f\u0430\u043a\u0435\u0442\u043e\u0432.
+        // \u0412\u0430\u043d\u0438\u043b\u044c \u0441\u0430\u043c\u0430 \u0441\u0438\u043d\u0445\u0440\u043e\u043d\u0438\u0437\u0438\u0440\u0443\u0435\u0442 \u043e\u0434\u0438\u043d \u043a\u043e\u0440\u0440\u0435\u043a\u0442\u043d\u044b\u0439 \u043f\u0430\u043a\u0435\u0442 \u0447\u0435\u0440\u0435\u0437 \u043f\u0430\u0439\u043f\u043b\u0430\u0439\u043d (AutoSprint \u0435\u0433\u043e \u0432\u0438\u0434\u0438\u0442).
         boolean resetSprint = this.sprintReset.isValue() && mc.player.isSprinting() && this.canResetSprint();
-        // Send the stop-sprint packet straight to the server (bypassing the module pipeline)
-        // so the hit is registered as a fresh sprint hit with full knockback.
-        // We do NOT change client physics here - doing so is what slammed the player to the ground.
         if (resetSprint) {
-            NetworkUtility.sendWithoutEvent(new ClientCommandC2SPacket(mc.player, ClientCommandC2SPacket.Mode.STOP_SPRINTING));
+            mc.player.setSprinting(false);
         }
         mc.interactionManager.attackEntity(mc.player, target);
         mc.player.swingHand(Hand.MAIN_HAND);
         if (resetSprint) {
-            // Resume sprint on the server right after the hit.
-            NetworkUtility.sendWithoutEvent(new ClientCommandC2SPacket(mc.player, ClientCommandC2SPacket.Mode.START_SPRINTING));
-            // Restore the client sprint flag (vanilla attack() clears it) so movement speed
-            // never dips and the client/server sprint state stays in sync.
             mc.player.setSprinting(true);
         }
         this.delay = 10;
