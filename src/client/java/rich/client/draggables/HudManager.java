@@ -94,9 +94,9 @@ public class HudManager {
          if (this.isElementEnabled(var6)
             && var6.visible()
             && var1 >= var6.getX()
-            && var1 <= var6.getX() + var6.getWidth()
+            && var1 <= var6.getX() + var6.getWidth() * var6.getScale()
             && var3 >= var6.getY()
-            && var3 <= var6.getY() + var6.getHeight()) {
+            && var3 <= var6.getY() + var6.getHeight() * var6.getScale()) {
             return var6;
          }
       }
