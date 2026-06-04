@@ -281,3 +281,4 @@ public class Nametags extends ModuleStructure {
         g.fill(x + 2, y + 4, x + 5, y + 5, color); // ещё сужение
         g.fill(x + 3, y + 5, x + 4, y + 6, color); // острие
     }
+}
