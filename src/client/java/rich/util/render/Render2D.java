@@ -8,17 +8,12 @@ import net.minecraft.util.Identifier;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
 import org.joml.Matrix4f;
-import org.lwjgl.opengl.GL11;
-import org.lwjgl.opengl.GL14;
 import rich.Initialization;
 import rich.util.render.pipeline.Arc2D;
 import rich.util.render.pipeline.ArcOutline2D;
 
 public class Render2D {
    private static boolean inOverlayMode = false;
-   private static boolean savedDepthTest = false;
-   private static boolean savedDepthMask = false;
-   private static boolean savedBlend = false;
    private static final Identifier BACKGROUND_TEXTURE = Identifier.of("rich", "textures/menu/backmenu.png");
    private static final List<Runnable> OVERRIDE_TASKS = new ArrayList<>();
    private static final float Z_OVERRIDE = 0.0F;
@@ -98,61 +93,35 @@ public class Render2D {
       return 2.0F / var1;
    }
 
+   // MC 1.21+ uses a managed GpuDevice render backend (CometRenderer). Direct legacy GL
+   // state calls (glEnable/glDisable/glDepthMask/glBlendFuncSeparate/glClear/glIsEnabled)
+   // are invalid here and generate GL_INVALID_VALUE "Operation is not valid from a preview
+   // context" hundreds of times per frame, which stalls the driver and destroys FPS.
+   // Each RenderPipeline already declares its own blend/depth state, so these are no-ops.
    public static void beginOverlay() {
       inOverlayMode = true;
-      savedDepthTest = GL11.glIsEnabled(2929);
-      savedDepthMask = GL11.glGetBoolean(2930);
-      savedBlend = GL11.glIsEnabled(3042);
-      GL11.glDisable(2929);
-      GL11.glDepthMask(false);
-      GL11.glEnable(3042);
-      GL14.glBlendFuncSeparate(770, 771, 1, 771);
    }
 
    public static void endOverlay() {
-      if (savedDepthMask) {
-         GL11.glDepthMask(true);
-      }
-
-      if (savedDepthTest) {
-         GL11.glEnable(2929);
-      } else {
-         GL11.glDisable(2929);
-      }
-
-      if (!savedBlend) {
-         GL11.glDisable(3042);
-      }
-
       inOverlayMode = false;
    }
 
    public static void clearDepth() {
-      MinecraftClient var0 = MinecraftClient.getInstance();
-      if (var0.getFramebuffer() != null) {
-         GL11.glClear(256);
-      }
    }
 
    public static void enableBlend() {
-      GL11.glEnable(3042);
-      GL14.glBlendFuncSeparate(770, 771, 1, 771);
    }
 
    public static void disableBlend() {
-      GL11.glDisable(3042);
    }
 
    public static void enableDepthTest() {
-      GL11.glEnable(2929);
    }
 
    public static void disableDepthTest() {
-      GL11.glDisable(2929);
    }
 
    public static void depthMask(boolean var0) {
-      GL11.glDepthMask(var0);
    }
 
    public static void backgroundImage(float var0) {
