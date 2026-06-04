@@ -95,12 +95,14 @@ public class TargetHud extends AbstractHudElement {
             this.setHeight(40);
             float var8 = this.scaleAnimation.getOutput().floatValue();
             this.drawBackground(var6, var7, var8);
+            // text/bars FIRST so the font batch is never polluted by the skin texture
+            this.drawContent(var6, var7, var8, var5);
+            // face LAST (left side, does not overlap the text)
             try {
                this.drawFace(var6, var7, var8);
             } catch (Exception exception) {
-               // never let the face render abort the text/bars below
+               // never let the face render break the rest of the hud
             }
-            this.drawContent(var6, var7, var8, var5);
          }
       }
    }
@@ -252,15 +254,15 @@ public class TargetHud extends AbstractHudElement {
          Render2D.gradientRect(var21, var22, var23 * var41, var24, var44, var25);
       }
 
-      // --- text drawn LAST so nothing can clobber it ---
+      // --- text drawn here, BEFORE the face skin texture is rendered ---
       int var60 = (int)(255.0F * var3);
       int var61 = new Color(0, 0, 0, var60).getRGB();
       int var62 = new Color(255, 255, 255, var60).getRGB();
       this.drawOutlined(var16, var7, var8, 5.5F, var62, var61);
-      float var17 = Fonts.BOLD.getWidth(var15, 5.5F);
+      float var17b = Fonts.BOLD.getWidth(var15, 5.5F);
       float var59 = Fonts.BOLD.getWidth(var16, 5.5F);
       int var18 = new Color(235, 235, 235, var60).getRGB();
-      float var57 = var1 + this.getWidth() - 8.0F - var17;
+      float var57 = var1 + this.getWidth() - 8.0F - var17b;
       float var58 = var7 + var59 + 4.0F;
       if (var57 < var58) {
          var57 = var58;
