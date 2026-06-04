@@ -98,7 +98,7 @@ public class Nametags extends ModuleStructure {
             float screenY = Math.round(this.reuseScreen[1]);
             if (screenX < -80.0f || screenX > (float)sw + 80.0f || screenY < -80.0f || screenY > (float)sh + 80.0f) continue;
             float distance = (float)Math.sqrt(dist);
-            float scale = Math.max(0.5f, Math.min(1.0f, 1.0f - distance / 20.0f));
+            float scale = Math.max(0.6f, Math.min(1.0f, 1.0f - distance / 24.0f));
             this.renderNametag(guiGraphics, entity, screenX, screenY, scale, distance);
         }
     }
@@ -145,7 +145,7 @@ public class Nametags extends ModuleStructure {
         String hpPart = " " + hpStr;
         String pingPart = " " + ping + "ms";
 
-        float fontSize = 6.5f * scale;
+        float fontSize = 7.5f * scale;
         float nameW = Fonts.BOLD.getWidth(name, fontSize);
         float hpW = Fonts.BOLD.getWidth(hpPart, fontSize);
         float pingW = Fonts.BOLD.getWidth(pingPart, fontSize);
@@ -188,9 +188,10 @@ public class Nametags extends ModuleStructure {
         float barX = cx - totalW / 2.0f;
         float barY = textY + fontSize + 2.0f * scale;
         float barW = totalW;
-        float barH = Math.max(1.0f, 2.0f * scale);
+        float barH = Math.max(1.5f, 2.5f * scale);
 
-        guiGraphics.fill((int)barX, (int)barY, (int)(barX + barW), (int)(barY + barH), 0x50000000);
+        guiGraphics.fill((int)(barX - 1.0f), (int)(barY - 1.0f), (int)(barX + barW + 1.0f), (int)(barY + barH + 1.0f), 0xC0000000);
+        guiGraphics.fill((int)barX, (int)barY, (int)(barX + barW), (int)(barY + barH), 0x80000000);
 
         float fillW = barW * hpPct;
         if (fillW > 0.0f) {
@@ -204,7 +205,15 @@ public class Nametags extends ModuleStructure {
     }
 
     private void drawFont(String s, float x, float y, float size, int color) {
-        Fonts.BOLD.draw(s, x + 0.5f, y + 0.5f, size, 0xFF000000);
+        int outline = 0xFF000000;
+        Fonts.BOLD.draw(s, x - 0.8f, y, size, outline);
+        Fonts.BOLD.draw(s, x + 0.8f, y, size, outline);
+        Fonts.BOLD.draw(s, x, y - 0.8f, size, outline);
+        Fonts.BOLD.draw(s, x, y + 0.8f, size, outline);
+        Fonts.BOLD.draw(s, x - 0.6f, y - 0.6f, size, outline);
+        Fonts.BOLD.draw(s, x + 0.6f, y - 0.6f, size, outline);
+        Fonts.BOLD.draw(s, x - 0.6f, y + 0.6f, size, outline);
+        Fonts.BOLD.draw(s, x + 0.6f, y + 0.6f, size, outline);
         Fonts.BOLD.draw(s, x, y, size, color);
     }
 
