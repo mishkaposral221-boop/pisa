@@ -10,6 +10,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import rich.Initialization;
+import rich.client.draggables.AbstractHudElement;
 import rich.client.draggables.HudElement;
 import rich.client.draggables.HudManager;
 import rich.util.config.impl.consolelogger.Logger;
@@ -53,6 +54,7 @@ public class DragConfig {
             var5.addProperty("y", var4.getY());
             var5.addProperty("width", var4.getWidth());
             var5.addProperty("height", var4.getHeight());
+            var5.addProperty("scale", var4.getScale());
             var2.add(var4.getName(), var5);
          }
 
@@ -101,6 +103,10 @@ public class DragConfig {
 
                if (var6.has("height")) {
                   var5.setHeight(var6.get("height").getAsInt());
+               }
+
+               if (var6.has("scale") && var5 instanceof AbstractHudElement var7) {
+                  var7.setScale(var6.get("scale").getAsFloat());
                }
             }
          }
