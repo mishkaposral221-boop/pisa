@@ -202,14 +202,32 @@ public class TargetHud extends AbstractHudElement {
          long var40 = System.currentTimeMillis() - this.startTime;
          float var30 = 1500.0F;
          float var31 = (float)(var40 % (long)var30) / var30 * (float) Math.PI * 2.0F;
+         float var48 = Math.max(0.0F, Math.min(1.0F, var26));
+         float var49;
+         float var50;
+         float var51;
+         if (var48 >= 0.5F) {
+            float var52 = (var48 - 0.5F) / 0.5F;
+            var49 = 255.0F - 170.0F * var52;
+            var50 = 170.0F + 85.0F * var52;
+            var51 = 85.0F * var52;
+         } else {
+            float var53 = var48 / 0.5F;
+            var49 = 255.0F;
+            var50 = 85.0F * var53;
+            var51 = 0.0F;
+         }
+
          int[] var32 = new int[4];
 
          for (int var33 = 0; var33 < 2; var33++) {
             float var34 = (float)Math.sin(var31 - var33 * 1.5F);
-            float var35 = (var34 + 1.0F) / 2.0F;
-            int var36 = (int)(155.0F + 100.0F * var35);
-            var32[var33 * 2] = new Color(var36, var36, var36, (int)(255.0F * var3)).getRGB();
-            var32[var33 * 2 + 1] = new Color(var36, var36, var36, (int)(255.0F * var3)).getRGB();
+            float var35 = 0.75F + 0.25F * (var34 + 1.0F) / 2.0F;
+            int var54 = (int)Math.max(0.0F, Math.min(255.0F, var49 * var35));
+            int var55 = (int)Math.max(0.0F, Math.min(255.0F, var50 * var35));
+            int var56 = (int)Math.max(0.0F, Math.min(255.0F, var51 * var35));
+            var32[var33 * 2] = new Color(var54, var55, var56, (int)(255.0F * var3)).getRGB();
+            var32[var33 * 2 + 1] = new Color(var54, var55, var56, (int)(255.0F * var3)).getRGB();
          }
 
          Render2D.gradientRect(var21, var22, var23 * var26, var24, var32, var25);
