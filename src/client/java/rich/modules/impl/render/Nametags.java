@@ -119,7 +119,7 @@ public class Nametags extends ModuleStructure {
             ping = 0;
         }
         
-        // Собираем брон
+        // Собираем броню
         ArrayList<ItemStack> armorItems = new ArrayList<>();
         if (this.showArmor()) {
             ItemStack helmet = player.getEquippedStack(EquipmentSlot.HEAD);
@@ -172,14 +172,6 @@ public class Nametags extends ModuleStructure {
                 ItemStack item = armorItems.get(i);
                 float itemX = armorStartX + (float)(i * 18);
                 guiGraphics.drawItem(item, (int)itemX, (int)(bgY - 18));
-                
-                // Уровень зачарования над иконкой
-                int maxEnchLvl = getMaxEnchantmentLevel(item);
-                if (maxEnchLvl > 0) {
-                    String enchStr = romanize(maxEnchLvl);
-                    int enchW = font.getWidth(enchStr);
-                    guiGraphics.drawText(font, enchStr, (int)(itemX + 8 - enchW / 2), (int)(bgY - 24), 0xFFFFFFFF, true);
-                }
             }
         }
         
@@ -240,14 +232,12 @@ public class Nametags extends ModuleStructure {
             if (enchComp == null) return 0;
             
             int maxLevel = 0;
-            // Попробуем получить все зачарования итерацией
             try {
                 for (RegistryEntry<Enchantment> ench : enchComp.getEnchantments()) {
                     int level = enchComp.getLevel(ench);
                     if (level > maxLevel) maxLevel = level;
                 }
             } catch (Exception e2) {
-                // Fallback: просто возвращаем 0, если API не работает
                 return 0;
             }
             return maxLevel;
@@ -256,29 +246,13 @@ public class Nametags extends ModuleStructure {
         }
     }
     
-    // Конвертировать число в римские цифры
-    private String romanize(int num) {
-        if (num <= 0) return "";
-        if (num == 1) return "I";
-        if (num == 2) return "II";
-        if (num == 3) return "III";
-        if (num == 4) return "IV";
-        if (num == 5) return "V";
-        if (num == 6) return "VI";
-        if (num == 7) return "VII";
-        if (num == 8) return "VIII";
-        if (num == 9) return "IX";
-        if (num == 10) return "X";
-        return String.valueOf(num); // Fallback для очень высоких уровней
-    }
-    
     // Рисует маленькое сердечко 7x6 пикселей вручную
     private void drawHeart(DrawContext g, int x, int y, int color) {
-        g.fill(x + 1, y,     x + 3, y + 1, color); // верхняя левая часть
-        g.fill(x + 4, y,     x + 6, y + 1, color); // верхняя правая часть
-        g.fill(x,     y + 1, x + 7, y + 3, color); // широкая часть
-        g.fill(x + 1, y + 3, x + 6, y + 4, color); // сужение
-        g.fill(x + 2, y + 4, x + 5, y + 5, color); // ещё сужение
-        g.fill(x + 3, y + 5, x + 4, y + 6, color); // острие
+        g.fill(x + 1, y,     x + 3, y + 1, color);
+        g.fill(x + 4, y,     x + 6, y + 1, color);
+        g.fill(x,     y + 1, x + 7, y + 3, color);
+        g.fill(x + 1, y + 3, x + 6, y + 4, color);
+        g.fill(x + 2, y + 4, x + 5, y + 5, color);
+        g.fill(x + 3, y + 5, x + 4, y + 6, color);
     }
 }
