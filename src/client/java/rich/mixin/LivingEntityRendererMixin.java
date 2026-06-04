@@ -7,6 +7,7 @@ import java.util.Collections;
 import java.util.Map;
 import java.util.WeakHashMap;
 import net.minecraft.client.render.entity.state.LivingEntityRenderState;
+import net.minecraft.client.render.entity.state.PlayerEntityRenderState;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.client.render.RenderLayer;
 import net.minecraft.util.Identifier;
@@ -88,7 +89,7 @@ public abstract class LivingEntityRendererMixin<S extends LivingEntityRenderStat
    private RenderLayer renderLayerHook(LivingEntityRenderer<?, ?, ?> var1, LivingEntityRenderState var2, boolean var3, boolean var4, boolean var5) {
       Integer var6 = RICH$STATE_ENTITY_ID.get(var2);
       Chams var8 = Chams.getInstance();
-      if (var8 != null && var8.isState()) {
+      if (var8 != null && var8.isState() && var2 instanceof PlayerEntityRenderState) {
          boolean var9 = var6 != null && mc.player != null && var6 == mc.player.getId();
          if (!var9) {
             Identifier var10 = this.getTexture((S)var2);
