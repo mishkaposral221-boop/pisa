@@ -3,10 +3,14 @@ package rich.modules.impl.render;
 import java.util.ArrayList;
 import net.minecraft.client.font.TextRenderer;
 import net.minecraft.client.gui.DrawContext;
+import net.minecraft.component.DataComponentTypes;
+import net.minecraft.component.type.EnchantmentsComponent;
+import net.minecraft.enchantment.Enchantment;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EquipmentSlot;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.ItemStack;
+import net.minecraft.registry.entry.RegistryEntry;
 import net.minecraft.text.MutableText;
 import net.minecraft.text.StringVisitable;
 import net.minecraft.text.Text;
@@ -99,11 +103,10 @@ public class Nametags extends ModuleStructure {
         float health = player.getHealth();
         float absorption = player.getAbsorptionAmount();
         float maxHp = Math.max(1.0f, player.getMaxHealth());
-        float totalHealth = health + absorption;
         String name = player.getName().getString();
-        String hpStr = String.format("%.0f", Float.valueOf(totalHealth));
-
-        // PING игрока (мс)
+        String hpStr = String.format("%.0f", health);
+        
+        // Получаем пинг
         int ping = 0;
         try {
             net.minecraft.client.network.PlayerListEntry entry = mc.getNetworkHandler() != null
@@ -115,72 +118,153 @@ public class Nametags extends ModuleStructure {
         } catch (Exception e) {
             ping = 0;
         }
-        String pingStr = " " + ping + "ms";
-
-        MutableText nameComp = Text.literal((String)name);
-        MutableText hpComp = Text.literal((String)(" " + hpStr));
-        MutableText pingComp = Text.literal((String)pingStr);
-        int nameW = font.getWidth((StringVisitable)nameComp);
-        int hpW = font.getWidth((StringVisitable)hpComp);
-        int pingW = font.getWidth((StringVisitable)pingComp);
-        int totalW = nameW + hpW + pingW;
-        float bgPad = 5.0f;
-        float bgW = Math.max((float)totalW + bgPad * 2.0f, 60.0f);
-        float bgH = 9 + 10;
-        float bgX = -bgW / 2.0f;
-        float bgY = 0.0f;
-        guiGraphics.getMatrices().pushMatrix();
-        guiGraphics.getMatrices().translate(cx, cy);
-        guiGraphics.getMatrices().scale(scale, scale);
-        guiGraphics.fill((int)bgX, (int)bgY, (int)(bgX + bgW), (int)(bgY + bgH), -1879048192);
-        guiGraphics.fill((int)bgX, (int)bgY, (int)(bgX + bgW), (int)(bgY + 1.0f), 1085564159);
-        int textY = (int)(bgY + 3.0f);
-        guiGraphics.drawText(font, (Text)nameComp, -totalW / 2, textY, -1, true);
-        float hpPct = Math.min(1.0f, health / maxHp);
-        int hpColor = hpPct > 0.6f ? -11141291 : (hpPct > 0.3f ? -171 : -43691);
-        guiGraphics.drawText(font, (Text)hpComp, -totalW / 2 + nameW, textY, hpColor, true);
-        // ping: зелёный <80, жёлтый <150, красный выше
-        int pingColor = ping < 80 ? -11141291 : (ping < 150 ? -171 : -43691);
-        guiGraphics.drawText(font, (Text)pingComp, -totalW / 2 + nameW + hpW, textY, pingColor, true);
-
-        float barX = bgX + 3.0f;
-        float barY = bgY + 9.0f + 5.0f;
-        float barW = bgW - 6.0f;
-        float barH = 2.5f;
-        guiGraphics.fill((int)barX, (int)barY, (int)(barX + barW), (int)(barY + barH), 0x50000000);
-        float fillW = barW * Math.min(1.0f, health / maxHp);
-        if (fillW > 0.0f) {
-            int barColor = hpPct > 0.6f ? -11141291 : (hpPct > 0.3f ? -171 : -43691);
-            guiGraphics.fill((int)barX, (int)barY, (int)(barX + fillW), (int)(barY + barH), barColor);
-        }
-        if (absorption > 0.0f) {
-            float absW = barW * Math.min(1.0f, absorption / maxHp);
-            guiGraphics.fill((int)(barX + barW - absW), (int)barY, (int)(barX + barW), (int)(barY + barH), -9166);
-        }
+        
+        // Собираем брон
+        ArrayList<ItemStack> armorItems = new ArrayList<>();
         if (this.showArmor()) {
-            ArrayList<ItemStack> items = new ArrayList<ItemStack>();
             ItemStack helmet = player.getEquippedStack(EquipmentSlot.HEAD);
             ItemStack chest = player.getEquippedStack(EquipmentSlot.CHEST);
             ItemStack legs = player.getEquippedStack(EquipmentSlot.LEGS);
             ItemStack boots = player.getEquippedStack(EquipmentSlot.FEET);
             ItemStack mainHand = player.getEquippedStack(EquipmentSlot.MAINHAND);
             ItemStack offHand = player.getEquippedStack(EquipmentSlot.OFFHAND);
-            if (!helmet.isEmpty()) items.add(helmet);
-            if (!chest.isEmpty()) items.add(chest);
-            if (!legs.isEmpty()) items.add(legs);
-            if (!boots.isEmpty()) items.add(boots);
-            if (!mainHand.isEmpty()) items.add(mainHand);
-            if (!offHand.isEmpty()) items.add(offHand);
-            if (!items.isEmpty()) {
-                int count = items.size();
-                float totalItemW = (float)(count - 1) * 18.0f + 16.0f;
-                float startX = -totalItemW / 2.0f;
-                for (int i = 0; i < count; ++i) {
-                    int ix = (int)(startX + (float)(i * 18));
-                    guiGraphics.drawItem((ItemStack)items.get(i), ix, -16);
+            if (!helmet.isEmpty()) armorItems.add(helmet);
+            if (!chest.isEmpty()) armorItems.add(chest);
+            if (!legs.isEmpty()) armorItems.add(legs);
+            if (!boots.isEmpty()) armorItems.add(boots);
+            if (!mainHand.isEmpty()) armorItems.add(mainHand);
+            if (!offHand.isEmpty()) armorItems.add(offHand);
+        }
+        
+        // Расчёт размеров
+        float hpPct = Math.min(1.0f, health / maxHp);
+        int hpColor = hpPct > 0.6f ? 0xFF55FF55 : (hpPct > 0.3f ? 0xFFFFAA00 : 0xFFFF5555);
+        int pingColor = ping < 80 ? 0xFF55FF55 : (ping < 150 ? 0xFFFFAA00 : 0xFFFF5555);
+        
+        MutableText nameText = Text.literal(name);
+        MutableText hpText = Text.literal(" " + hpStr);
+        MutableText pingText = Text.literal(" " + ping + "ms");
+        
+        int nameW = font.getWidth(nameText);
+        int hpW = font.getWidth(hpText);
+        int pingW = font.getWidth(pingText);
+        int textRowW = nameW + hpW + pingW + 12; // +12 для иконки HP и отступа
+        
+        // Размеры брони
+        float armorRowH = armorItems.isEmpty() ? 0 : 22; // 16px items + padding
+        
+        float bgPad = 4.0f;
+        float bgW = Math.max((float)textRowW + bgPad * 2.0f, 50.0f);
+        float bgH = 11 + 3; // текст + HP бар
+        
+        float bgX = -bgW / 2.0f;
+        float bgY = -(armorRowH > 0 ? armorRowH + 2 : 0); // выравнивание если есть броня
+        
+        guiGraphics.getMatrices().pushMatrix();
+        guiGraphics.getMatrices().translate(cx, cy);
+        guiGraphics.getMatrices().scale(scale, scale);
+        
+        // === ВЕРХНИЙ РЯД: ИКОНКИ БРОНИ ===
+        if (!armorItems.isEmpty()) {
+            float totalArmorW = (float)armorItems.size() * 18.0f - 2.0f;
+            float armorStartX = -totalArmorW / 2.0f;
+            for (int i = 0; i < armorItems.size(); i++) {
+                ItemStack item = armorItems.get(i);
+                float itemX = armorStartX + (float)(i * 18);
+                guiGraphics.drawItem(item, (int)itemX, (int)(bgY - 18));
+                
+                // Уровень зачарования над иконкой
+                int maxEnchLvl = getMaxEnchantmentLevel(item);
+                if (maxEnchLvl > 0) {
+                    String enchStr = romanize(maxEnchLvl);
+                    int enchW = font.getWidth(enchStr);
+                    guiGraphics.drawText(font, enchStr, (int)(itemX + 8 - enchW / 2), (int)(bgY - 24), 0xFFFFFFFF, true);
                 }
             }
         }
+        
+        // === ФОНОВЫЙ ПРЯМОУГОЛЬНИК ===
+        // Основной фон (полупрозрачный)
+        guiGraphics.fill((int)bgX, (int)bgY, (int)(bgX + bgW), (int)(bgY + bgH), 0xC0000000);
+        // Тонкая цветная полосочка сверху (обводка/подсветка)
+        guiGraphics.fill((int)bgX, (int)bgY, (int)(bgX + bgW), (int)(bgY + 1), 0xFF4080FF);
+        
+        // === СТРОКА ТЕКСТА ===
+        int textY = (int)(bgY + 2);
+        
+        // HP иконка (сердечко)
+        guiGraphics.drawText(font, "❤", (int)(bgX + bgPad), textY, 0xFFFF5555, true);
+        
+        // Имя игрока
+        guiGraphics.drawText(font, nameText, (int)(bgX + bgPad + 10), textY, 0xFFFFFFFF, true);
+        
+        // HP значение
+        guiGraphics.drawText(font, hpText, (int)(bgX + bgPad + 10 + nameW), textY, hpColor, true);
+        
+        // Пинг
+        guiGraphics.drawText(font, pingText, (int)(bgX + bgPad + 10 + nameW + hpW), textY, pingColor, true);
+        
+        // === HP БАР ===
+        float barX = bgX + 2.0f;
+        float barY = bgY + bgH - 2.5f;
+        float barW = bgW - 4.0f;
+        float barH = 2.0f;
+        
+        // Фон бара
+        guiGraphics.fill((int)barX, (int)barY, (int)(barX + barW), (int)(barY + barH), 0x50000000);
+        
+        // Заполнение HP
+        float fillW = barW * hpPct;
+        if (fillW > 0.0f) {
+            int barColor = hpPct > 0.6f ? 0xFF55FF55 : (hpPct > 0.3f ? 0xFFFFAA00 : 0xFFFF5555);
+            guiGraphics.fill((int)barX, (int)barY, (int)(barX + fillW), (int)(barY + barH), barColor);
+        }
+        
+        // Absorption (жёлтые сердца)
+        if (absorption > 0.0f) {
+            float absW = barW * Math.min(1.0f, absorption / maxHp);
+            guiGraphics.fill((int)(barX + barW - absW), (int)barY, (int)(barX + barW), (int)(barY + barH), 0xFFFFAA00);
+        }
+        
         guiGraphics.getMatrices().popMatrix();
+    }
+    
+    // Вспомогательный метод: получить макс. уровень зачарования
+    private int getMaxEnchantmentLevel(ItemStack item) {
+        try {
+            EnchantmentsComponent enchComp = item.get(DataComponentTypes.ENCHANTMENTS);
+            if (enchComp == null) return 0;
+            
+            int maxLevel = 0;
+            // Попробуем получить все зачарования итерацией
+            try {
+                for (RegistryEntry<Enchantment> ench : enchComp.getEnchantments()) {
+                    int level = enchComp.getLevel(ench);
+                    if (level > maxLevel) maxLevel = level;
+                }
+            } catch (Exception e2) {
+                // Fallback: просто возвращаем 0, если API не работает
+                return 0;
+            }
+            return maxLevel;
+        } catch (Exception e) {
+            return 0;
+        }
+    }
+    
+    // Конвертировать число в римские цифры
+    private String romanize(int num) {
+        if (num <= 0) return "";
+        if (num == 1) return "I";
+        if (num == 2) return "II";
+        if (num == 3) return "III";
+        if (num == 4) return "IV";
+        if (num == 5) return "V";
+        if (num == 6) return "VI";
+        if (num == 7) return "VII";
+        if (num == 8) return "VIII";
+        if (num == 9) return "IX";
+        if (num == 10) return "X";
+        return String.valueOf(num); // Fallback для очень высоких уровней
     }
 }
