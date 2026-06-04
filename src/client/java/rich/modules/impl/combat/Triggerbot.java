@@ -24,18 +24,20 @@ public class Triggerbot extends ModuleStructure {
     public BooleanSetting sprintReset = new BooleanSetting("SprintReset", "Drop sprint one tick before an airborne crit (off = hit instantly)").setValue(false);
     // Ground combo: full bar = max damage + knockback (stops weak/early hits).
     public SliderSettings attackCharge = new SliderSettings("AttackCharge", "Cooldown-bar fraction for GROUND hits (1.0 = full bar)").range(0.7F, 1.0F).setValue(1.0F);
-    // Airborne crit: kept low so the SHORT falling window (and the moment right after the
-    // apex) is actually usable - a high threshold made the bot wait too long and miss it.
-    public SliderSettings critCharge = new SliderSettings("CritCharge", "Cooldown-bar fraction for AIRBORNE crits (lower = fires earlier in the fall)").range(0.3F, 1.0F).setValue(0.5F);
+    // Airborne crit. IMPORTANT: vanilla only registers a CRITICAL hit when the attack
+    // cooldown bar is > 0.9 (otherwise it is just a normal hit). So this must stay >= 0.9
+    // or the bot will swing without ever critting (this is exactly why crits failed under
+    // Mining Fatigue: the slowed attack speed kept the bar below 0.9 during the fall).
+    public SliderSettings critCharge = new SliderSettings("CritCharge", "Cooldown-bar fraction required for a CRIT (vanilla needs > 0.9)").range(0.9F, 1.0F).setValue(0.9F);
 
     // Deferred crit: tick N suppress sprint (STOP goes out), tick N+1 attack.
     private boolean pendingCrit = false;
     // Ticks since last water contact (server only counts crits once out of water).
     private int ticksOutOfWater = 10;
-    // How long we have been holding a charged hit on the ground waiting for a crit.
+    // How long we have been STUCK on the ground (jump held but unable to leave) waiting for a crit.
     private int groundHoldTicks = 0;
-    // Safety: if we hold for a crit but can't get airborne (e.g. ceiling), fall back to a
-    // ground hit after this many ticks so the bot never freezes.
+    // Safety: if we are genuinely stuck on the ground (e.g. a 2-block ceiling) we fall back to a
+    // ground hit after this many stuck ticks so the bot never freezes.
     private static final int GROUND_HOLD_LIMIT = 8;
 
     public static Triggerbot getInstance() {
@@ -95,17 +97,21 @@ public class Triggerbot extends ModuleStructure {
 
             float charge = this.charge();
 
-            // ---- AIRBORNE: strike the crit as soon as the bar is ready. ----
+            // ---- AIRBORNE: strike the crit as soon as the bar is actually crit-capable. ----
             if (!mc.player.isOnGround()) {
                 this.groundHoldTicks = 0;
                 if (!this.isPerfectCrit()) {
                     // Rising toward the apex (or not a valid crit yet): HOLD and let the bar
                     // fill. Holding never loses charge - the bar caps at 1.0 and only resets
-                    // when we actually attack, so the descent crit lands at full power.
+                    // when we actually attack, so even under attack-speed debuffs the charge
+                    // keeps building across bounces until a real crit is possible.
                     return;
                 }
                 if (charge < this.critCharge.getValue()) {
-                    return; // descending but bar not ready this tick -> wait
+                    // Descending but the bar is not crit-capable yet (e.g. Mining Fatigue):
+                    // do NOT swing - a sub-0.9 hit would be a wasted non-crit that resets the
+                    // bar. Wait; the charge carries over to the next bounce until it crits.
+                    return;
                 }
                 if (this.sprintReset.isValue() && mc.player.isSprinting() && this.canResetSprint()) {
                     wantSuppress = true;
@@ -117,16 +123,24 @@ public class Triggerbot extends ModuleStructure {
             }
 
             // ---- ON GROUND ----
-            // If a crit is coming (jump held / about to leave the ground) and CritPriority is
-            // on, HOLD the charged hit so the combo never eats the crit. The bar keeps filling
-            // while we wait, so nothing is lost.
+            // If a crit is coming (jump held while a crit is physically possible) and
+            // CritPriority is on, HOLD the charged hit so the combo never eats the crit.
             boolean critComing = this.critPriority.isValue() && this.critAchievable() && this.isJumpHeld();
             if (critComing) {
-                this.groundHoldTicks++;
+                // Only count ticks where we are genuinely STUCK on the ground (not rising).
+                // A real jump has upward velocity on its launch tick and the airborne branch
+                // resets this, so during normal bunny-hopping this stays ~0 and we never spam
+                // a combo. It only climbs when the player physically cannot gain fall distance
+                // (e.g. a 2-block ceiling), which is the only case a ground combo is correct.
+                if (mc.player.getVelocity().y <= 0.0) {
+                    this.groundHoldTicks++;
+                } else {
+                    this.groundHoldTicks = 0;
+                }
                 if (this.groundHoldTicks <= GROUND_HOLD_LIMIT) {
                     return; // hold for the upcoming crit
                 }
-                // Stuck on the ground (e.g. ceiling) -> stop starving, allow a ground hit.
+                // Genuinely stuck -> stop starving and allow a ground hit.
             } else {
                 this.groundHoldTicks = 0;
             }
@@ -141,8 +155,8 @@ public class Triggerbot extends ModuleStructure {
     }
 
     // The cooldown bar already accounts for the weapon's attack speed and any attribute
-    // modifiers (Haste-style / attack-speed buffs), so using it as THE timing signal makes
-    // the bot adapt to every situation automatically.
+    // modifiers (Haste-style buffs AND Mining-Fatigue-style debuffs), so using it as THE
+    // timing signal makes the bot adapt to every situation automatically.
     private float charge() {
         return mc.player.getAttackCooldownProgress(0.0F);
     }
