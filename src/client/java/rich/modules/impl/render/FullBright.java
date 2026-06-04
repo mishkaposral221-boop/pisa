@@ -17,15 +17,7 @@ public class FullBright extends ModuleStructure {
    }
 
    @Override
-   public void activate() {
-      if (this.mode.isSelected("Gamma")) {
-         mc.options.getGamma().setValue(10.0);
-      }
-   }
-
-   @Override
    public void deactivate() {
-      mc.options.getGamma().setValue(1.0);
       if (mc.player != null && mc.player.hasStatusEffect(StatusEffects.NIGHT_VISION)) {
          mc.player.removeStatusEffect(StatusEffects.NIGHT_VISION);
       }
@@ -35,14 +27,9 @@ public class FullBright extends ModuleStructure {
    public void onTick(TickEvent var1) {
       if (this.isState() && mc.player != null) {
          if (this.mode.isSelected("Night Vision")) {
-            mc.options.getGamma().setValue(1.0);
             mc.player.addStatusEffect(new StatusEffectInstance(StatusEffects.NIGHT_VISION, 500, 0, false, false, false));
-         } else {
-            if (mc.player.hasStatusEffect(StatusEffects.NIGHT_VISION)) {
-               mc.player.removeStatusEffect(StatusEffects.NIGHT_VISION);
-            }
-
-            mc.options.getGamma().setValue(10.0);
+         } else if (mc.player.hasStatusEffect(StatusEffects.NIGHT_VISION)) {
+            mc.player.removeStatusEffect(StatusEffects.NIGHT_VISION);
          }
       }
    }
