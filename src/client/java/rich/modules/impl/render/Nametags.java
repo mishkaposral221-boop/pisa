@@ -4,7 +4,7 @@ import java.util.ArrayList;
 import net.minecraft.client.font.TextRenderer;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.component.DataComponentTypes;
-import net.minecraft.component.type.EnchantmentsComponent;
+import net.minecraft.component.type.ItemEnchantmentsComponent;
 import net.minecraft.enchantment.Enchantment;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EquipmentSlot;
@@ -236,7 +236,7 @@ public class Nametags extends ModuleStructure {
     // Вспомогательный метод: получить макс. уровень зачарования
     private int getMaxEnchantmentLevel(ItemStack item) {
         try {
-            EnchantmentsComponent enchComp = item.get(DataComponentTypes.ENCHANTMENTS);
+            ItemEnchantmentsComponent enchComp = item.get(DataComponentTypes.ENCHANTMENTS);
             if (enchComp == null) return 0;
             
             int maxLevel = 0;
