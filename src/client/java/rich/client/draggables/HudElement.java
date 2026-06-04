@@ -33,6 +33,10 @@ public interface HudElement {
 
    void setHeight(int var1);
 
+   default float getScale() {
+      return 1.0F;
+   }
+
    default float getRoundingRadius() {
       return 4.0F;
    }
