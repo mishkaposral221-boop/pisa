@@ -5,7 +5,6 @@ import net.minecraft.client.gui.hud.InGameHud;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.ChatScreen;
 import net.minecraft.client.render.RenderTickCounter;
-import org.joml.Vector2f;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
@@ -54,7 +53,7 @@ public abstract class AnimationsMixin {
 
          if (Math.abs(richChatOffsetY) > 0.05F) {
             var1.getMatrices().pushMatrix();
-            var1.getMatrices().translate(new Vector2f(0.0F, richChatOffsetY));
+            var1.getMatrices().translate(0.0F, richChatOffsetY);
          }
       } else {
          richChatOffsetY = 0.0F;
@@ -84,9 +83,9 @@ public abstract class AnimationsMixin {
          float var10 = var9.getWindow().getScaledWidth() / 2.0F;
          float var11 = var9.getWindow().getScaledHeight() / 2.0F;
          var1.getMatrices().pushMatrix();
-         var1.getMatrices().translate(new Vector2f(var10, var11));
+         var1.getMatrices().translate(var10, var11);
          var1.getMatrices().scale(var8, var8);
-         var1.getMatrices().translate(new Vector2f(-var10, -var11));
+         var1.getMatrices().translate(-var10, -var11);
       } else {
          richTabScale = 1.0F;
       }

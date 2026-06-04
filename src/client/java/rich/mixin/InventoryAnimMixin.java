@@ -3,7 +3,6 @@ package rich.mixin;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.ingame.HandledScreen;
-import org.joml.Vector2f;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
@@ -48,9 +47,9 @@ public abstract class InventoryAnimMixin {
             float var12 = var10.getWindow().getScaledHeight() / 2.0F;
             float var13 = this.richInvScale;
             var1.getMatrices().pushMatrix();
-            var1.getMatrices().translate(new Vector2f(var11, var12));
+            var1.getMatrices().translate(var11, var12);
             var1.getMatrices().scale(var13, var13);
-            var1.getMatrices().translate(new Vector2f(-var11, -var12));
+            var1.getMatrices().translate(-var11, -var12);
             this.richInvPushed = true;
          }
       } else {

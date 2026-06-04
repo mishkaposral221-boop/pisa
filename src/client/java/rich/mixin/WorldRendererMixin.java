@@ -22,8 +22,16 @@ public class WorldRendererMixin implements IMinecraft {
          ChunkAnimator var3 = ChunkAnimator.getInstance();
          if (var3 != null && var3.isState()) {
             float var4 = var2.visibility();
-            float var5 = (1.0F - var4) * 100.0F;
-            int var6 = var2.y() - (int)var5;
+            if (var4 >= 1.0F) {
+               return var1;
+            }
+
+            int var5 = (int)((1.0F - var4) * 100.0F);
+            if (var5 == 0) {
+               return var1;
+            }
+
+            int var6 = var2.y() - var5;
             return new net.minecraft.client.gl.DynamicUniforms.ChunkSectionsValue(var2.modelView(), var2.x(), var6, var2.z(), var2.visibility(), var2.textureAtlasWidth(), var2.textureAtlasHeight());
          }
       }
