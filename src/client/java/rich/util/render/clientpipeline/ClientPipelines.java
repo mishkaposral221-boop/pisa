@@ -277,4 +277,17 @@ public class ClientPipelines {
       RenderSetup var1 = RenderSetup.builder(GUI_ARROW_BLEND_PIPELINE).texture("Sampler0", var0).translucent().expectedBufferSize(256).build();
       return RenderLayer.of("gui_arrow_blend", var1);
    });
+   public static final RenderPipeline CHAMS_ENTITY_PIPELINE = RenderPipelines.register(
+      RenderPipeline.builder(new Snippet[]{RenderPipelines.ENTITY_SNIPPET})
+         .withLocation("pipeline/chams_entity")
+         .withBlend(BlendFunction.TRANSLUCENT)
+         .withDepthTestFunction(DepthTestFunction.NO_DEPTH_TEST)
+         .withDepthWrite(false)
+         .withCull(false)
+         .build()
+   );
+   public static final Function<Identifier, RenderLayer> CHAMS_ENTITY = Util.memoize(var0 -> {
+      RenderSetup var1 = RenderSetup.builder(CHAMS_ENTITY_PIPELINE).texture("Sampler0", var0).translucent().expectedBufferSize(8192).build();
+      return RenderLayer.of("chams_entity", var1);
+   });
 }

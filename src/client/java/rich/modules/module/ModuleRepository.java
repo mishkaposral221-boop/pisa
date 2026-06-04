@@ -28,6 +28,7 @@ import rich.modules.impl.render.AspectRatio;
 import rich.modules.impl.render.AuctionHelper;
 import rich.modules.impl.render.BlockOverlay;
 import rich.modules.impl.render.CameraSettings;
+import rich.modules.impl.render.Chams;
 import rich.modules.impl.render.ChinaHat;
 import rich.modules.impl.render.ChunkAnimator;
 import rich.modules.impl.render.ClickGuiSettings;
@@ -93,6 +94,7 @@ public class ModuleRepository {
          .hidden(new ChunkAnimator())
          .add(new Ambience())
          .add(new ChinaHat())
+         .add(new Chams())
          .add(new AutoPotion())
          .add(new ClientSounds())
          .add(new TargetESP())

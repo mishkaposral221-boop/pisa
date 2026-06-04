@@ -21,3 +21,4 @@ accessible	field	net/minecraft/entity/Entity	fluidHeight	Lit/unimi/dsi/fastutil/
 accessible	field	net/minecraft/entity/Entity	submergedFluidTag	Ljava/util/Set;
 accessible	field	net/minecraft/client/gui/hud/BossBarHud	bossBars	Ljava/util/Map;
 accessible	method	net/minecraft/client/network/ClientPlayerInteractionManager	sendSequencedPacket	(Lnet/minecraft/client/world/ClientWorld;Lnet/minecraft/client/network/SequencedPacketCreator;)V
+accessible	field	net/minecraft/client/gl/RenderPipelines	ENTITY_SNIPPET	Lcom/mojang/blaze3d/pipeline/RenderPipeline$Snippet;

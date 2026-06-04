@@ -9,6 +9,7 @@ import java.util.WeakHashMap;
 import net.minecraft.client.render.entity.state.LivingEntityRenderState;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.client.render.RenderLayer;
+import net.minecraft.util.Identifier;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.client.gui.screen.ingame.HandledScreen;
 import net.minecraft.client.render.entity.model.EntityModel;
@@ -23,7 +24,9 @@ import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import rich.IMinecraft;
 import rich.modules.impl.combat.aura.AngleConnection;
+import rich.modules.impl.render.Chams;
 import rich.modules.impl.render.HitEffect;
+import rich.util.render.clientpipeline.ClientPipelines;
 
 @Mixin(LivingEntityRenderer.class)
 public abstract class LivingEntityRendererMixin<S extends LivingEntityRenderState, M extends EntityModel<? super S>> implements IMinecraft {
@@ -33,6 +36,9 @@ public abstract class LivingEntityRendererMixin<S extends LivingEntityRenderStat
    @Shadow
    @Nullable
    protected abstract RenderLayer getRenderLayer(S var1, boolean var2, boolean var3, boolean var4);
+
+   @Shadow
+   public abstract Identifier getTexture(S var1);
 
    @ModifyExpressionValue(
       method = "updateRenderState(Lnet/minecraft/entity/LivingEntity;Lnet/minecraft/client/render/entity/state/LivingEntityRenderState;F)V",
@@ -81,6 +87,17 @@ public abstract class LivingEntityRendererMixin<S extends LivingEntityRenderStat
    )
    private RenderLayer renderLayerHook(LivingEntityRenderer<?, ?, ?> var1, LivingEntityRenderState var2, boolean var3, boolean var4, boolean var5) {
       Integer var6 = RICH$STATE_ENTITY_ID.get(var2);
+      Chams var8 = Chams.getInstance();
+      if (var8 != null && var8.isState()) {
+         boolean var9 = var6 != null && mc.player != null && var6 == mc.player.getId();
+         if (!var9) {
+            Identifier var10 = this.getTexture((S)var2);
+            if (var10 != null) {
+               return ClientPipelines.CHAMS_ENTITY.apply(var10);
+            }
+         }
+      }
+
       HitEffect var7 = HitEffect.getInstance();
       if (!var4 && var6 != null && var7 != null && var7.shouldTintEntity(var6)) {
          var4 = true;
