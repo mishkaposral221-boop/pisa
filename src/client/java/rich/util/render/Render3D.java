@@ -90,6 +90,7 @@ public final class Render3D implements IMinecraft {
    }
 
    public static void onWorldRender(WorldRenderEvent var0) {
+      GlDebugFix.apply();
       if (mc.world != null && mc.player != null) {
          MatrixStack var1 = var0.getStack();
          net.minecraft.client.render.VertexConsumerProvider.Immediate var2 = mc.getBufferBuilders().getEntityVertexConsumers();
