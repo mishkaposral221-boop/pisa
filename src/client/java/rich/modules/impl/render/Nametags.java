@@ -193,7 +193,7 @@ public class Nametags extends ModuleStructure {
         int textY = (int)(bgY + 2);
         
         // Рассчитываем позицию для центрирования
-        int totalTextW = 8 + nameW + hpW + pingW; // 8px сердечко + текст
+        int totalTextW = 10 + nameW + hpW + pingW; // 10px сердечко + отступ + текст
         int textStartX = (int)(bgX + bgW / 2.0f - totalTextW / 2.0f);
         
         // HP иконка (сердечко, нарисованное вручную)
