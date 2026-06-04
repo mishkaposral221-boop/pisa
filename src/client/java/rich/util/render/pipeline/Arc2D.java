@@ -39,7 +39,7 @@ public class Arc2D {
                .withDepthTestFunction(DepthTestFunction.NO_DEPTH_TEST)
                .withCull(false)
                .build();
-            uniformBuffer = RenderSystem.getDevice().createBuffer(() -> "Arc2D Uniforms", 144, 320L);
+            uniformBuffer = RenderSystem.getDevice().createBuffer(() -> "Arc2D Uniforms", 136, 320L);
          } catch (Exception var1) {
             System.err.println("[Arc2D] Failed to init: " + var1.getMessage());
             var1.printStackTrace();

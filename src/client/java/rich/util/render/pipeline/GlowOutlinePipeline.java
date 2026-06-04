@@ -114,7 +114,7 @@ public class GlowOutlinePipeline {
             this.uniformBuffer.close();
          }
 
-         this.uniformBuffer = RenderSystem.getDevice().createBuffer(() -> "minecraft:glow_outline_uniform", 144, var2);
+         this.uniformBuffer = RenderSystem.getDevice().createBuffer(() -> "minecraft:glow_outline_uniform", 136, var2);
       }
 
       CommandEncoder var3 = RenderSystem.getDevice().createCommandEncoder();
