@@ -11,7 +11,6 @@ import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.registry.entry.RegistryEntry;
 import net.minecraft.text.MutableText;
-import net.minecraft.text.StringVisitable;
 import net.minecraft.text.Text;
 import net.minecraft.util.math.Vec3d;
 import org.joml.Matrix4f;
@@ -28,10 +27,13 @@ import rich.util.c;
 
 public class Nametags extends ModuleStructure {
     public BooleanSetting showArmor = new BooleanSetting("ShowArmor", "Display player armor info").setValue(true);
-    public SliderSettings armorDistance = new SliderSettings("ArmorDistance", "Макс. дистанция отрисовки брони (блоки)").range(8.0F, 64.0F).setValue(32.0F);
+    public SliderSettings armorDistance = new SliderSettings("ArmorDistance", "\u041c\u0430\u043a\u0441. \u0434\u0438\u0441\u0442\u0430\u043d\u0446\u0438\u044f \u043e\u0442\u0440\u0438\u0441\u043e\u0432\u043a\u0438 \u0431\u0440\u043e\u043d\u0438 (\u0431\u043b\u043e\u043a\u0438)").range(8.0F, 64.0F).setValue(32.0F);
 
-    // Переиспользуемые объекты, чтобы не создавать мусор каждый кадр
+    // \u041f\u0435\u0440\u0435\u0438\u0441\u043f\u043e\u043b\u044c\u0437\u0443\u0435\u043c\u044b\u0435 \u043e\u0431\u044a\u0435\u043a\u0442\u044b, \u0447\u0442\u043e\u0431\u044b \u043d\u0435 \u0441\u043e\u0437\u0434\u0430\u0432\u0430\u0442\u044c \u043c\u0443\u0441\u043e\u0440 \u043a\u0430\u0436\u0434\u044b\u0439 \u043a\u0430\u0434\u0440
     private final Vector4f reusablePos = new Vector4f();
+    private final Quaternionf reuseQuat = new Quaternionf();
+    private final Matrix4f reuseView = new Matrix4f();
+    private final float[] reuseScreen = new float[2];
     private final ArrayList<ItemStack> armorItems = new ArrayList<>(6);
 
     public Nametags() {
@@ -56,7 +58,7 @@ public class Nametags extends ModuleStructure {
         }
     }
 
-    private float[] worldToScreen(double wx, double wy, double wz, Vec3d camPos, Matrix4f viewMatrix, Matrix4f projMatrix, int sw, int sh) {
+    private boolean worldToScreen(double wx, double wy, double wz, Vec3d camPos, Matrix4f viewMatrix, Matrix4f projMatrix, int sw, int sh) {
         float dx = (float)(wx - camPos.x);
         float dy = (float)(wy - camPos.y);
         float dz = (float)(wz - camPos.z);
@@ -64,21 +66,22 @@ public class Nametags extends ModuleStructure {
         viewMatrix.transform(pos);
         projMatrix.transform(pos);
         if (pos.w() <= 0.001f) {
-            return null;
+            return false;
         }
         float ndcX = pos.x() / pos.w();
         float ndcY = pos.y() / pos.w();
-        float screenX = (ndcX + 1.0f) * 0.5f * (float)sw;
-        float screenY = (-ndcY + 1.0f) * 0.5f * (float)sh;
-        return new float[]{screenX, screenY};
+        this.reuseScreen[0] = (ndcX + 1.0f) * 0.5f * (float)sw;
+        this.reuseScreen[1] = (-ndcY + 1.0f) * 0.5f * (float)sh;
+        return true;
     }
 
     private void renderInternal(DrawContext guiGraphics, float partialTick) {
         if (mc.world == null || mc.player == null) {
             return;
         }
-        Quaternionf quat = new Quaternionf((Quaternionfc)mc.gameRenderer.getCamera().getRotation()).conjugate();
-        Matrix4f viewMatrix = new Matrix4f().rotation((Quaternionfc)quat);
+        Quaternionfc camRot = (Quaternionfc)mc.gameRenderer.getCamera().getRotation();
+        this.reuseQuat.set(camRot).conjugate();
+        Matrix4f viewMatrix = this.reuseView.rotation((Quaternionfc)this.reuseQuat);
         float fov = ((Integer)mc.options.getFov().getValue()).intValue();
         Matrix4f projMatrix = mc.gameRenderer.getBasicProjectionMatrix(fov);
         int sw = mc.getWindow().getScaledWidth();
@@ -87,20 +90,18 @@ public class Nametags extends ModuleStructure {
         TextRenderer font = mc.textRenderer;
         for (PlayerEntity entity : mc.world.getPlayers()) {
             if (entity == mc.player || entity.isSpectator()) continue;
-            PlayerEntity target = entity;
             double dist = mc.player.squaredDistanceTo(entity);
             if (dist > 4096.0) continue;
             double lerpX = entity.lastRenderX + (entity.getX() - entity.lastRenderX) * (double)partialTick;
             double lerpY = entity.lastRenderY + (entity.getY() - entity.lastRenderY) * (double)partialTick;
             double lerpZ = entity.lastRenderZ + (entity.getZ() - entity.lastRenderZ) * (double)partialTick;
             double headY = lerpY + (double)entity.getHeight() + 0.5;
-            float[] screen = this.worldToScreen(lerpX, headY, lerpZ, camPos, viewMatrix, projMatrix, sw, sh);
-            if (screen == null) continue;
-            float screenX = Math.round(screen[0]);
-            float screenY = Math.round(screen[1]);
+            if (!this.worldToScreen(lerpX, headY, lerpZ, camPos, viewMatrix, projMatrix, sw, sh)) continue;
+            float screenX = Math.round(this.reuseScreen[0]);
+            float screenY = Math.round(this.reuseScreen[1]);
             float distance = (float)Math.sqrt(dist);
             float scale = Math.max(0.5f, Math.min(1.0f, 1.0f - distance / 20.0f));
-            this.renderNametag(guiGraphics, font, target, screenX, screenY, scale, distance);
+            this.renderNametag(guiGraphics, font, entity, screenX, screenY, scale, distance);
         }
     }
 
@@ -111,7 +112,6 @@ public class Nametags extends ModuleStructure {
         String name = player.getName().getString();
         String hpStr = Integer.toString((int)health);
 
-        // Пинг
         int ping = 0;
         try {
             net.minecraft.client.network.PlayerListEntry entry = mc.getNetworkHandler() != null
@@ -124,7 +124,7 @@ public class Nametags extends ModuleStructure {
             ping = 0;
         }
 
-        // Собираем броню только вблизи (3D-модели предметов дорогие)
+        // \u0421\u043e\u0431\u0438\u0440\u0430\u0435\u043c \u0431\u0440\u043e\u043d\u044e \u0442\u043e\u043b\u044c\u043a\u043e \u0432\u0431\u043b\u0438\u0437\u0438 (3D-\u043c\u043e\u0434\u0435\u043b\u0438 \u043f\u0440\u0435\u0434\u043c\u0435\u0442\u043e\u0432 \u0434\u043e\u0440\u043e\u0433\u0438\u0435)
         this.armorItems.clear();
         if (this.showArmor() && distance <= this.armorDistance.getValue()) {
             ItemStack helmet = player.getEquippedStack(EquipmentSlot.HEAD);
@@ -141,7 +141,6 @@ public class Nametags extends ModuleStructure {
             if (!offHand.isEmpty()) this.armorItems.add(offHand);
         }
 
-        // Расчёт размеров
         float hpPct = Math.min(1.0f, health / maxHp);
         int hpColor = hpPct > 0.6f ? 0xFF55FF55 : (hpPct > 0.3f ? 0xFFFFAA00 : 0xFFFF5555);
         int pingColor = ping < 80 ? 0xFF55FF55 : (ping < 150 ? 0xFFFFAA00 : 0xFFFF5555);
@@ -168,7 +167,6 @@ public class Nametags extends ModuleStructure {
         guiGraphics.getMatrices().translate(cx, cy);
         guiGraphics.getMatrices().scale(scale, scale);
 
-        // Верхний ряд: иконки брони
         if (!this.armorItems.isEmpty()) {
             float totalArmorW = (float)this.armorItems.size() * 18.0f - 2.0f;
             float armorStartX = -totalArmorW / 2.0f;
@@ -179,11 +177,9 @@ public class Nametags extends ModuleStructure {
             }
         }
 
-        // Фоновый прямоугольник
         guiGraphics.fill((int)bgX, (int)bgY, (int)(bgX + bgW), (int)(bgY + bgH), 0xC0000000);
         guiGraphics.fill((int)bgX, (int)bgY, (int)(bgX + bgW), (int)(bgY + 1), 0xFF4080FF);
 
-        // Строка текста
         int textY = (int)(bgY + 2);
 
         int totalTextW = 10 + nameW + hpW + pingW;
@@ -195,7 +191,6 @@ public class Nametags extends ModuleStructure {
         guiGraphics.drawText(font, hpText, textStartX + 10 + nameW, textY, hpColor, true);
         guiGraphics.drawText(font, pingText, textStartX + 10 + nameW + hpW, textY, pingColor, true);
 
-        // HP бар
         float barX = bgX + 2.0f;
         float barY = bgY + bgH - 2.5f;
         float barW = bgW - 4.0f;
