@@ -47,30 +47,30 @@ public class TargetESP extends ModuleStructure implements IMinecraft {
    private LivingEntity lastTarget = null;
    private long targetLostTime = 0L;
    private static final long TARGET_DELAY_MS = 5000L;
-   private SelectSetting mode = new SelectSetting("Режим", "Тип TargetESP").value("Rhomb", "Ghost", "Chain", "Crystals", "Circle").selected("Rhomb");
-   private SliderSettings crystalRotationSpeed = new SliderSettings("Скорость вращения кристаллов", "Скорость вращения кристаллов")
+   private SelectSetting mode = new SelectSetting("\u0420\u0435\u0436\u0438\u043c", "\u0422\u0438\u043f TargetESP").value("Rhomb", "Ghost", "Chain", "Crystals", "Circle").selected("Rhomb");
+   private SliderSettings crystalRotationSpeed = new SliderSettings("\u0421\u043a\u043e\u0440\u043e\u0441\u0442\u044c \u0432\u0440\u0430\u0449\u0435\u043d\u0438\u044f \u043a\u0440\u0438\u0441\u0442\u0430\u043b\u043b\u043e\u0432", "\u0421\u043a\u043e\u0440\u043e\u0441\u0442\u044c \u0432\u0440\u0430\u0449\u0435\u043d\u0438\u044f \u043a\u0440\u0438\u0441\u0442\u0430\u043b\u043b\u043e\u0432")
       .range(0.1F, 2.0F)
       .visible(() -> this.mode.isSelected("Crystals"));
-   private SliderSettings crystalDistance = new SliderSettings("Дистанция", "Дистанция кристаллов от игрока")
+   private SliderSettings crystalDistance = new SliderSettings("\u0414\u0438\u0441\u0442\u0430\u043d\u0446\u0438\u044f", "\u0414\u0438\u0441\u0442\u0430\u043d\u0446\u0438\u044f \u043a\u0440\u0438\u0441\u0442\u0430\u043b\u043b\u043e\u0432 \u043e\u0442 \u0438\u0433\u0440\u043e\u043a\u0430")
       .range(0.1F, 2.0F)
       .visible(() -> this.mode.isSelected("Crystals"));
-   private ColorSetting color1 = new ColorSetting("Цвет 1", "Первый цвет градиента").setColor(new Color(255, 101, 57, 255).getRGB());
-   private ColorSetting color2 = new ColorSetting("Цвет 2", "Второй цвет градиента")
+   private ColorSetting color1 = new ColorSetting("\u0426\u0432\u0435\u0442 1", "\u041f\u0435\u0440\u0432\u044b\u0439 \u0446\u0432\u0435\u0442 \u0433\u0440\u0430\u0434\u0438\u0435\u043d\u0442\u0430").setColor(new Color(255, 101, 57, 255).getRGB());
+   private ColorSetting color2 = new ColorSetting("\u0426\u0432\u0435\u0442 2", "\u0412\u0442\u043e\u0440\u043e\u0439 \u0446\u0432\u0435\u0442 \u0433\u0440\u0430\u0434\u0438\u0435\u043d\u0442\u0430")
       .setColor(new Color(255, 50, 150, 255).getRGB())
       .visible(() -> !this.mode.isSelected("Crystals"));
-   private SliderSettings ghostSpeed = new SliderSettings("Скорость призраков", "Скорость вращения призраков")
+   private SliderSettings ghostSpeed = new SliderSettings("\u0421\u043a\u043e\u0440\u043e\u0441\u0442\u044c \u043f\u0440\u0438\u0437\u0440\u0430\u043a\u043e\u0432", "\u0421\u043a\u043e\u0440\u043e\u0441\u0442\u044c \u0432\u0440\u0430\u0449\u0435\u043d\u0438\u044f \u043f\u0440\u0438\u0437\u0440\u0430\u043a\u043e\u0432")
       .range(0.1F, 5.0F)
       .visible(() -> this.mode.isSelected("Ghost"));
-   private SliderSettings ghostHeadSize = new SliderSettings("Размер головы", "Размер головы призрака")
+   private SliderSettings ghostHeadSize = new SliderSettings("\u0420\u0430\u0437\u043c\u0435\u0440 \u0433\u043e\u043b\u043e\u0432\u044b", "\u0420\u0430\u0437\u043c\u0435\u0440 \u0433\u043e\u043b\u043e\u0432\u044b \u043f\u0440\u0438\u0437\u0440\u0430\u043a\u0430")
       .range(0.1F, 2.0F)
       .visible(() -> this.mode.isSelected("Ghost"));
-   private SliderSettings ghostMiddleSize = new SliderSettings("Размер середины", "Размер середины призрака")
+   private SliderSettings ghostMiddleSize = new SliderSettings("\u0420\u0430\u0437\u043c\u0435\u0440 \u0441\u0435\u0440\u0435\u0434\u0438\u043d\u044b", "\u0420\u0430\u0437\u043c\u0435\u0440 \u0441\u0435\u0440\u0435\u0434\u0438\u043d\u044b \u043f\u0440\u0438\u0437\u0440\u0430\u043a\u0430")
       .range(0.1F, 2.0F)
       .visible(() -> this.mode.isSelected("Ghost"));
-   private SliderSettings ghostTailSize = new SliderSettings("Размер хвоста", "Размер хвоста призрака")
+   private SliderSettings ghostTailSize = new SliderSettings("\u0420\u0430\u0437\u043c\u0435\u0440 \u0445\u0432\u043e\u0441\u0442\u0430", "\u0420\u0430\u0437\u043c\u0435\u0440 \u0445\u0432\u043e\u0441\u0442\u0430 \u043f\u0440\u0438\u0437\u0440\u0430\u043a\u0430")
       .range(0.1F, 2.0F)
       .visible(() -> this.mode.isSelected("Ghost"));
-   private SliderSettings ghostDistance = new SliderSettings("Дистанция", "Дистанция призраков от игрока")
+   private SliderSettings ghostDistance = new SliderSettings("\u0414\u0438\u0441\u0442\u0430\u043d\u0446\u0438\u044f", "\u0414\u0438\u0441\u0442\u0430\u043d\u0446\u0438\u044f \u043f\u0440\u0438\u0437\u0440\u0430\u043a\u043e\u0432 \u043e\u0442 \u0438\u0433\u0440\u043e\u043a\u0430")
       .range(1.0F, 20.0F)
       .visible(() -> this.mode.isSelected("Ghost"));
    private double smoothedPosX;
@@ -127,7 +127,7 @@ public class TargetESP extends ModuleStructure implements IMinecraft {
    public void onRender3D(WorldRenderEvent var1) {
       float var2 = this.getDeltaTime();
       LivingEntity var3 = null;
-      if (mc.targetedEntity instanceof LivingEntity var4 && var4.isAlive() && var4 != mc.player && !var4.isInvisible()) {
+      if (mc.targetedEntity instanceof LivingEntity var4 && var4.isAlive() && var4 != mc.player) {
          var3 = var4;
       }
 
