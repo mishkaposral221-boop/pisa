@@ -26,7 +26,9 @@ public class Triggerbot extends ModuleStructure {
     // Timing is driven ONLY by the attack-cooldown bar. This threshold is the
     // fraction of the bar that must be recharged before a hit (1.0 = full bar).
     // The bar already accounts for haste/Speed/fatigue, so timing self-adjusts.
-    public SliderSettings attackCharge = new SliderSettings("AttackCharge", "Cooldown-bar fraction required before a hit (1.0 = full bar = max dmg)").range(0.7F, 1.0F).setValue(0.95F);
+    // Default 1.0 = wait for the FULL bar: never hits early/undercharged, and the
+    // 20 TPS tick granularity keeps it from being noticeably late.
+    public SliderSettings attackCharge = new SliderSettings("AttackCharge", "Cooldown-bar fraction required before a hit (1.0 = full bar = max dmg)").range(0.7F, 1.0F).setValue(1.0F);
 
     // Deferred crit: tick N suppress sprint (STOP goes out), tick N+1 we attack.
     private boolean pendingCrit = false;
