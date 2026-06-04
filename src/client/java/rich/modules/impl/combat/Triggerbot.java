@@ -16,25 +16,26 @@ import rich.util.c;
 
 public class Triggerbot extends ModuleStructure {
     // Read by ClientPlayerEntityMixin: when true, the sprint INPUT is suppressed
-    // for this tick so vanilla drops sprint and sends STOP_SPRINTING before the
-    // crit attack. Only set while airborne for a crit, and only if SprintReset is on.
+    // for this tick so vanilla drops sprint and sends STOP_SPRINTING before a crit.
     public static volatile boolean SUPPRESS_SPRINT = false;
 
-    public BooleanSetting combo = new BooleanSetting("Combo", "Hit on the ground as soon as the bar is charged").setValue(true);
-    public BooleanSetting sprintReset = new BooleanSetting("SprintReset", "Drop sprint one tick before an airborne crit (off = hit instantly, better for short drops)").setValue(false);
-    // Ground combo: full bar = max damage + knockback. This is what stops weak/early hits.
-    public SliderSettings attackCharge = new SliderSettings("AttackCharge", "Cooldown-bar fraction for GROUND hits (1.0 = full bar = max dmg)").range(0.7F, 1.0F).setValue(1.0F);
-    // Airborne crit: a bit lower so the SHORT falling window when you step off a block
-    // is actually usable. A crit at ~0.85 charge still out-damages a full non-crit, and
-    // missing the crit entirely (because the bar wasn't 100% full for 2 ticks) is worse.
-    public SliderSettings critCharge = new SliderSettings("CritCharge", "Cooldown-bar fraction for AIRBORNE crits (lower = catches short block drops)").range(0.6F, 1.0F).setValue(0.85F);
+    public BooleanSetting combo = new BooleanSetting("Combo", "Hit on the ground when no crit is achievable").setValue(true);
+    public BooleanSetting critPriority = new BooleanSetting("CritPriority", "Always save the hit for a crit when one is coming, so the combo never eats a crit").setValue(true);
+    public BooleanSetting sprintReset = new BooleanSetting("SprintReset", "Drop sprint one tick before an airborne crit (off = hit instantly)").setValue(false);
+    // Ground combo: full bar = max damage + knockback (stops weak/early hits).
+    public SliderSettings attackCharge = new SliderSettings("AttackCharge", "Cooldown-bar fraction for GROUND hits (1.0 = full bar)").range(0.7F, 1.0F).setValue(1.0F);
+    // Airborne crit: a bit lower so the SHORT falling window off a block is usable.
+    public SliderSettings critCharge = new SliderSettings("CritCharge", "Cooldown-bar fraction for AIRBORNE crits (lower = catches short drops)").range(0.6F, 1.0F).setValue(0.85F);
 
-    // Deferred crit: tick N suppress sprint (STOP goes out), tick N+1 we attack.
+    // Deferred crit: tick N suppress sprint (STOP goes out), tick N+1 attack.
     private boolean pendingCrit = false;
-
-    // Ticks since last water contact; the server only accepts a crit once it agrees
-    // we are out of the water, so wait a few ticks after climbing out of a pool.
+    // Ticks since last water contact (server only counts crits once out of water).
     private int ticksOutOfWater = 10;
+    // How long we have been holding a charged hit on the ground waiting for a crit.
+    private int groundHoldTicks = 0;
+    // Safety: if we hold for a crit but can't get airborne (e.g. ceiling), fall back to a
+    // ground hit after this many ticks so the bot never freezes.
+    private static final int GROUND_HOLD_LIMIT = 8;
 
     public static Triggerbot getInstance() {
         return c.a(Triggerbot.class);
@@ -42,7 +43,7 @@ public class Triggerbot extends ModuleStructure {
 
     public Triggerbot() {
         super("Triggerbot", "Auto-attack targeted entities", ModuleCategory.VISUALS);
-        this.settings(this.combo, this.sprintReset, this.attackCharge, this.critCharge);
+        this.settings(this.combo, this.critPriority, this.sprintReset, this.attackCharge, this.critCharge);
     }
 
     @Override
@@ -51,6 +52,7 @@ public class Triggerbot extends ModuleStructure {
         SUPPRESS_SPRINT = false;
         this.pendingCrit = false;
         this.ticksOutOfWater = 10;
+        this.groundHoldTicks = 0;
     }
 
     @EventHandler
@@ -59,79 +61,99 @@ public class Triggerbot extends ModuleStructure {
         try {
             if (mc.player == null || mc.world == null || mc.currentScreen != null) {
                 this.pendingCrit = false;
+                this.groundHoldTicks = 0;
                 return;
             }
 
-            // Track time since last water contact (used to gate crits after a swim).
             if (mc.player.isTouchingWater() || mc.player.isSubmergedInWater() || mc.player.isSwimming()) {
                 this.ticksOutOfWater = 0;
             } else if (this.ticksOutOfWater < 100) {
                 this.ticksOutOfWater++;
             }
 
-            // Deferred crit hit: sprint was dropped last tick (STOP already sent) -> hit now.
-            // Only reached when SprintReset is enabled.
+            // Deferred crit hit (only when SprintReset is on): STOP was sent last tick -> hit now.
             if (this.pendingCrit) {
                 this.pendingCrit = false;
                 Entity pt = mc.targetedEntity;
-                if (!mc.player.isUsingItem()
-                    && this.isWeaponInHand()
-                    && pt instanceof LivingEntity
-                    && ((LivingEntity) pt).isAlive()
-                    && mc.player.getAttackCooldownProgress(0.0F) >= this.critCharge.getValue()) {
-                    mc.interactionManager.attackEntity(mc.player, pt);
-                    mc.player.swingHand(Hand.MAIN_HAND);
+                if (this.canHit(pt) && this.charge() >= this.critCharge.getValue()) {
+                    this.attack(pt);
                 }
                 return;
             }
 
             if (mc.player.isUsingItem() || !this.isWeaponInHand()) {
+                this.groundHoldTicks = 0;
                 return;
             }
 
             Entity target = mc.targetedEntity;
-            if (!(target instanceof LivingEntity) || !((LivingEntity) target).isAlive()) {
+            if (!this.canHit(target)) {
+                this.groundHoldTicks = 0;
                 return;
             }
 
-            if (!mc.player.isOnGround()) {
-                // AIRBORNE: only fire when this is a real, server-valid crit (falling, fallDistance > 0,
-                // out of water, no levitation, etc). Uses its own, lower charge gate so the short window
-                // when stepping off a block is actually usable.
-                if (!this.isPerfectCrit()) {
-                    return;
-                }
-                if (mc.player.getAttackCooldownProgress(0.0F) < this.critCharge.getValue()) {
-                    return;
-                }
+            float charge = this.charge();
 
+            // ---- AIRBORNE: strike the crit as soon as the bar is ready. ----
+            if (!mc.player.isOnGround()) {
+                this.groundHoldTicks = 0;
+                if (!this.isPerfectCrit()) {
+                    // Rising toward the apex (or not a valid crit yet): HOLD and let the bar
+                    // fill. Holding never loses charge - the bar caps at 1.0 and only resets
+                    // when we actually attack, so the descent crit lands at full power.
+                    return;
+                }
+                if (charge < this.critCharge.getValue()) {
+                    return; // descending but bar not ready this tick -> wait
+                }
                 if (this.sprintReset.isValue() && mc.player.isSprinting() && this.canResetSprint()) {
-                    // Sprint held: suppress sprint input THIS tick (vanilla drops sprint + sends STOP),
-                    // then hit on the NEXT tick so STOP_SPRINTING reaches the server before the attack.
                     wantSuppress = true;
                     this.pendingCrit = true;
                     return;
                 }
-
-                // Hit immediately - the crit lands in the same falling window (best for short drops).
-                mc.interactionManager.attackEntity(mc.player, target);
-                mc.player.swingHand(Hand.MAIN_HAND);
+                this.attack(target);
                 return;
             }
 
-            // ON GROUND: straight combo at full charge. Never blocked by held jump anymore,
-            // so combos actually register. Full bar keeps hits at max damage/knockback.
-            if (!this.combo.isValue()) {
-                return;
+            // ---- ON GROUND ----
+            // If a crit is coming (jump held / about to leave the ground) and CritPriority is
+            // on, HOLD the charged hit so the combo never eats the crit. The bar keeps filling
+            // while we wait, so nothing is lost.
+            boolean critComing = this.critPriority.isValue() && this.critAchievable() && this.isJumpHeld();
+            if (critComing) {
+                this.groundHoldTicks++;
+                if (this.groundHoldTicks <= GROUND_HOLD_LIMIT) {
+                    return; // hold for the upcoming crit
+                }
+                // Stuck on the ground (e.g. ceiling) -> stop starving, allow a ground hit.
+            } else {
+                this.groundHoldTicks = 0;
             }
-            if (mc.player.getAttackCooldownProgress(0.0F) < this.attackCharge.getValue()) {
-                return;
+
+            // Ground combo at full charge for max damage + knockback.
+            if (this.combo.isValue() && charge >= this.attackCharge.getValue()) {
+                this.attack(target);
             }
-            mc.interactionManager.attackEntity(mc.player, target);
-            mc.player.swingHand(Hand.MAIN_HAND);
         } finally {
             SUPPRESS_SPRINT = wantSuppress;
         }
+    }
+
+    // The cooldown bar already accounts for the weapon's attack speed and any attribute
+    // modifiers (Haste-style / attack-speed buffs), so using it as THE timing signal makes
+    // the bot adapt to every situation automatically.
+    private float charge() {
+        return mc.player.getAttackCooldownProgress(0.0F);
+    }
+
+    private void attack(Entity target) {
+        mc.interactionManager.attackEntity(mc.player, target);
+        mc.player.swingHand(Hand.MAIN_HAND);
+    }
+
+    private boolean canHit(Entity e) {
+        return !mc.player.isUsingItem() && this.isWeaponInHand()
+            && e instanceof LivingEntity && ((LivingEntity) e).isAlive();
     }
 
     private boolean isWeaponInHand() {
@@ -141,7 +163,15 @@ public class Triggerbot extends ModuleStructure {
             || item.getRegistryEntry().isIn(ItemTags.MELEE_WEAPON_ENCHANTABLE);
     }
 
-    // A clean vanilla crit the server (and anti-cheat) will actually count.
+    private boolean isJumpHeld() {
+        try {
+            return mc.player.input.playerInput.jump();
+        } catch (Throwable t) {
+            return false;
+        }
+    }
+
+    // A clean vanilla crit the server will actually count.
     private boolean isPerfectCrit() {
         return mc.player.fallDistance > 0.0
             && mc.player.getVelocity().y < 0.0
@@ -151,6 +181,16 @@ public class Triggerbot extends ModuleStructure {
             && !mc.player.isTouchingWater()
             && !mc.player.hasStatusEffect(StatusEffects.LEVITATION)
             && !mc.player.hasStatusEffect(StatusEffects.BLINDNESS)
+            && !mc.player.hasVehicle()
+            && !mc.player.getAbilities().flying;
+    }
+
+    // Whether a crit is even physically possible right now (so CritPriority should wait).
+    private boolean critAchievable() {
+        return this.ticksOutOfWater >= 3
+            && !mc.player.isTouchingWater()
+            && !mc.player.isClimbing()
+            && !mc.player.hasStatusEffect(StatusEffects.LEVITATION)
             && !mc.player.hasVehicle()
             && !mc.player.getAbilities().flying;
     }
