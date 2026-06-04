@@ -121,7 +121,7 @@ public class HotKeys extends AbstractHudElement {
             Render2D.outline(var7, var8, this.getWidth(), var34, 0.35F, ClientTheme.outline(var36), 5.0F);
          }
 
-         Scissor.enable(var7, var8, this.getWidth(), var34, 2.0F);
+         Scissor.enable(Render2D.scaleX(var7), Render2D.scaleY(var8), Render2D.scaleSize(this.getWidth()), Render2D.scaleSize(var34), 2.0F);
          long var38 = this.keysList.size();
          String var18 = String.valueOf(var38);
          float var19 = Fonts.BOLD.getWidth(var18, 6.0F);
