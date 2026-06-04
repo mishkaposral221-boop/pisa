@@ -40,6 +40,15 @@ public class Triggerbot extends ModuleStructure {
     // ground hit after this many stuck ticks so the bot never freezes.
     private static final int GROUND_HOLD_LIMIT = 8;
 
+    // How many consecutive ticks we have actually been standing on the ground. A ground combo is
+    // only allowed once this passes GROUND_COMBO_DELAY. During bunny-hopping the player only
+    // touches the ground for a tick or two between jumps, and on those ticks the jump key can be
+    // momentarily released (critComing = false) - which previously let an unwanted combo slip in
+    // "over time" in PvP. Requiring a few grounded ticks means only genuine ground fighting (the
+    // player deliberately staying down) ever combos, while crit-bouncing keeps this near zero.
+    private int ticksOnGround = 0;
+    private static final int GROUND_COMBO_DELAY = 3;
+
     public static Triggerbot getInstance() {
         return c.a(Triggerbot.class);
     }
@@ -56,6 +65,7 @@ public class Triggerbot extends ModuleStructure {
         this.pendingCrit = false;
         this.ticksOutOfWater = 10;
         this.groundHoldTicks = 0;
+        this.ticksOnGround = 0;
     }
 
     @EventHandler
@@ -65,6 +75,7 @@ public class Triggerbot extends ModuleStructure {
             if (mc.player == null || mc.world == null || mc.currentScreen != null) {
                 this.pendingCrit = false;
                 this.groundHoldTicks = 0;
+                this.ticksOnGround = 0;
                 return;
             }
 
@@ -72,6 +83,15 @@ public class Triggerbot extends ModuleStructure {
                 this.ticksOutOfWater = 0;
             } else if (this.ticksOutOfWater < 100) {
                 this.ticksOutOfWater++;
+            }
+
+            // Track how long we have continuously stood on the ground.
+            if (mc.player.isOnGround()) {
+                if (this.ticksOnGround < 100) {
+                    this.ticksOnGround++;
+                }
+            } else {
+                this.ticksOnGround = 0;
             }
 
             // Deferred crit hit (only when SprintReset is on): STOP was sent last tick -> hit now.
@@ -145,8 +165,12 @@ public class Triggerbot extends ModuleStructure {
                 this.groundHoldTicks = 0;
             }
 
-            // Ground combo at full charge for max damage + knockback.
-            if (this.combo.isValue() && charge >= this.attackCharge.getValue()) {
+            // Ground combo at full charge for max damage + knockback. Only after we have been
+            // grounded for a few ticks, so a momentary landing between crit jumps (where the jump
+            // key is briefly not held) can never sneak an unwanted combo in mid-fight.
+            if (this.combo.isValue()
+                && charge >= this.attackCharge.getValue()
+                && this.ticksOnGround >= GROUND_COMBO_DELAY) {
                 this.attack(target);
             }
         } finally {
