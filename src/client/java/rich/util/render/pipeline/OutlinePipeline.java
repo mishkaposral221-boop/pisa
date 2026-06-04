@@ -64,6 +64,10 @@ public class OutlinePipeline {
    }
 
    public void drawOutline(float var1, float var2, float var3, float var4, int[] var5, float[] var6, float[] var7, float var8) {
+      if (isFullyTransparent(var5) || isAllZero(var6)) {
+         return;
+      }
+
       MinecraftClient var9 = MinecraftClient.getInstance();
       if (var9.getFramebuffer() != null) {
          this.ensureInitialized();
@@ -74,6 +78,26 @@ public class OutlinePipeline {
          this.prepareUniformData(var1, var2, var3, var4, var12, var13, 2.0F, var5, var6, var7, var8);
          this.uploadAndDraw(var9);
       }
+   }
+
+   private static boolean isFullyTransparent(int[] var0) {
+      for (int var1 : var0) {
+         if ((var1 >>> 24) != 0) {
+            return false;
+         }
+      }
+
+      return true;
+   }
+
+   private static boolean isAllZero(float[] var0) {
+      for (float var1 : var0) {
+         if (var1 != 0.0F) {
+            return false;
+         }
+      }
+
+      return true;
    }
 
    private void prepareUniformData(
