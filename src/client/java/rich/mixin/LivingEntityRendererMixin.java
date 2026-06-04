@@ -6,8 +6,11 @@ import com.llamalad7.mixinextras.sugar.Local;
 import java.util.Collections;
 import java.util.Map;
 import java.util.WeakHashMap;
+import net.minecraft.client.render.command.OrderedRenderCommandQueue;
 import net.minecraft.client.render.entity.state.LivingEntityRenderState;
 import net.minecraft.client.render.entity.state.PlayerEntityRenderState;
+import net.minecraft.client.render.state.CameraRenderState;
+import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.client.render.RenderLayer;
 import net.minecraft.util.Identifier;
@@ -77,6 +80,32 @@ public abstract class LivingEntityRendererMixin<S extends LivingEntityRenderStat
    )
    private void updateRenderStateHook(LivingEntity var1, S var2, float var3, CallbackInfo var4) {
       RICH$STATE_ENTITY_ID.put(var2, var1.getId());
+   }
+
+   @Inject(
+      method = "render(Lnet/minecraft/client/render/entity/state/LivingEntityRenderState;Lnet/minecraft/client/util/math/MatrixStack;Lnet/minecraft/client/render/command/OrderedRenderCommandQueue;Lnet/minecraft/client/render/state/CameraRenderState;)V",
+      at = @At("HEAD")
+   )
+   private void richEquipmentChamsStart(LivingEntityRenderState var1, MatrixStack var2, OrderedRenderCommandQueue var3, CameraRenderState var4, CallbackInfo var5) {
+      Chams.RICH$EQUIPMENT_TARGET = this.richIsChamsTarget(var1);
+   }
+
+   @Inject(
+      method = "render(Lnet/minecraft/client/render/entity/state/LivingEntityRenderState;Lnet/minecraft/client/util/math/MatrixStack;Lnet/minecraft/client/render/command/OrderedRenderCommandQueue;Lnet/minecraft/client/render/state/CameraRenderState;)V",
+      at = @At("RETURN")
+   )
+   private void richEquipmentChamsEnd(LivingEntityRenderState var1, MatrixStack var2, OrderedRenderCommandQueue var3, CameraRenderState var4, CallbackInfo var5) {
+      Chams.RICH$EQUIPMENT_TARGET = false;
+   }
+
+   @Unique
+   private boolean richIsChamsTarget(LivingEntityRenderState var1) {
+      Chams var2 = Chams.getInstance();
+      if (var2 == null || !var2.isState() || !(var1 instanceof PlayerEntityRenderState)) {
+         return false;
+      }
+      Integer var3 = RICH$STATE_ENTITY_ID.get(var1);
+      return var3 != null && mc.player != null && var3 != mc.player.getId();
    }
 
    @Redirect(
