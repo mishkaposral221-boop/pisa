@@ -19,16 +19,18 @@ public class Triggerbot extends ModuleStructure {
     public static volatile boolean SUPPRESS_SPRINT = false;
 
     // ---- The only user-facing control is the server preset. ----
-    // The two modes share all the timing logic; the ONLY difference is how the crit is delivered:
-    //   FunTime   - lenient anticheat: an instant attack on the falling tick already registers a
-    //               critical hit, so we swing immediately (fastest).
-    //   HolyWorld - strict anticheat: it rejects a crit performed while the player is sprinting and
-    //               scores it as a plain hit. So we first drop sprint (suppress the sprint input so
-    //               vanilla sends STOP_SPRINTING) and only attack on the NEXT tick. This is exactly
-    //               why crits "didn't pass" on HolyWorld before.
+    // IMPORTANT: vanilla NEVER scores a critical hit while the player is sprinting (it becomes a
+    // plain knockback hit instead). In duels you are sprinting almost all the time, which is why
+    // crits "didn't pass" on BOTH servers. So both modes now drop sprint one tick before the crit
+    // and swing on the next tick - this is exactly what a manual crit (w-tap) does.
+    //
+    // The remaining difference between the presets:
+    //   FunTime   - lenient server: also auto-combos charged ground hits for maximum pressure.
+    //   HolyWorld - strict anticheat: crit-only, no auto ground combo, so its stricter timing
+    //               checks never flag the bot for an unnatural combo.
     public static final String MODE_FUNTIME = "FunTime";
     public static final String MODE_HOLYWORLD = "HolyWorld";
-    public SelectSetting mode = new SelectSetting("Mode", "Server preset - only the crit delivery differs").value(MODE_FUNTIME, MODE_HOLYWORLD);
+    public SelectSetting mode = new SelectSetting("Mode", "Server preset").value(MODE_FUNTIME, MODE_HOLYWORLD);
 
     // Deferred crit: tick N suppress sprint (STOP goes out), tick N+1 attack.
     private boolean pendingCrit = false;
@@ -62,9 +64,14 @@ public class Triggerbot extends ModuleStructure {
         this.settings(this.mode);
     }
 
-    // HolyWorld's anticheat needs the sprint dropped one tick before a crit; FunTime does not.
+    // Both presets must drop sprint before a crit - vanilla never crits while sprinting.
     private boolean useSprintReset() {
-        return this.mode.isSelected(MODE_HOLYWORLD);
+        return true;
+    }
+
+    // Only FunTime adds the aggressive auto ground combo; HolyWorld stays crit-only.
+    private boolean allowGroundCombo() {
+        return this.mode.isSelected(MODE_FUNTIME);
     }
 
     @Override
@@ -103,7 +110,7 @@ public class Triggerbot extends ModuleStructure {
                 this.ticksOnGround = 0;
             }
 
-            // Deferred crit hit (HolyWorld mode only): STOP was sent last tick -> hit now.
+            // Deferred crit hit: STOP_SPRINTING was sent last tick -> hit now (not sprinting).
             if (this.pendingCrit) {
                 this.pendingCrit = false;
                 Entity pt = mc.targetedEntity;
@@ -138,11 +145,12 @@ public class Triggerbot extends ModuleStructure {
                     return;
                 }
                 if (this.useSprintReset() && mc.player.isSprinting() && this.canResetSprint()) {
-                    // HolyWorld: drop sprint this tick, attack next tick so the crit is counted.
+                    // Drop sprint this tick, attack next tick so the server counts the crit.
                     wantSuppress = true;
                     this.pendingCrit = true;
                     return;
                 }
+                // Already not sprinting -> the crit is clean, swing immediately.
                 this.attack(target);
                 return;
             }
@@ -166,10 +174,10 @@ public class Triggerbot extends ModuleStructure {
                 this.groundHoldTicks = 0;
             }
 
-            // Ground combo at full charge for max damage + knockback. Only after we have been
-            // grounded for a few ticks, so a momentary landing between crit jumps can never sneak
-            // an unwanted combo in mid-fight.
-            if (charge >= GROUND_ATTACK_CHARGE && this.ticksOnGround >= GROUND_COMBO_DELAY) {
+            // Ground combo at full charge for max damage + knockback. FunTime only, and only after
+            // we have been grounded for a few ticks, so a momentary landing between crit jumps can
+            // never sneak an unwanted combo in mid-fight.
+            if (this.allowGroundCombo() && charge >= GROUND_ATTACK_CHARGE && this.ticksOnGround >= GROUND_COMBO_DELAY) {
                 this.attack(target);
             }
         } finally {
