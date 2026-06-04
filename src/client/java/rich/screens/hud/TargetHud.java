@@ -9,7 +9,6 @@ import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.render.entity.LivingEntityRenderer;
 import rich.client.draggables.AbstractHudElement;
 import rich.theme.ClientTheme;
-import rich.util.color.ColorUtil;
 import rich.util.network.Network;
 import rich.util.render.Render2D;
 import rich.util.render.font.Fonts;
@@ -108,8 +107,6 @@ public class TargetHud extends AbstractHudElement {
       int var4 = (int)(255.0F * var3);
       Render2D.gradientRect(var1 + 2.0F, var2 + 2.0F, this.getWidth() - 4, this.getHeight() - 4, ClientTheme.bgGradient(var4), 6.0F);
       Render2D.outline(var1 + 2.0F, var2 + 2.0F, this.getWidth() - 4, this.getHeight() - 4, 0.35F, ClientTheme.outline(var4), 5.0F);
-      int var5 = ColorUtil.b(0, 0, 0, 0);
-      Render2D.blur(var1 + 2.0F, var2 + 2.0F, 1.0F, 1.0F, 0.0F, 7.0F, var5);
    }
 
    private void drawFace(float var1, float var2, float var3) {
