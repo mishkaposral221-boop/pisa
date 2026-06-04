@@ -95,7 +95,11 @@ public class TargetHud extends AbstractHudElement {
             this.setHeight(40);
             float var8 = this.scaleAnimation.getOutput().floatValue();
             this.drawBackground(var6, var7, var8);
-            this.drawFace(var6, var7, var8);
+            try {
+               this.drawFace(var6, var7, var8);
+            } catch (Exception exception) {
+               // never let the face render abort the text/bars below
+            }
             this.drawContent(var6, var7, var8, var5);
          }
       }
@@ -111,6 +115,9 @@ public class TargetHud extends AbstractHudElement {
       if (this.mc.getEntityRenderDispatcher().getRenderer(this.lastTarget) instanceof LivingEntityRenderer var5) {
          LivingEntityRenderState var6 = (LivingEntityRenderState)var5.getAndUpdateRenderState(this.lastTarget, this.lastTickDelta);
          Identifier var7 = var5.getTexture(var6);
+         if (var7 == null) {
+            return;
+         }
          float var8 = 24.0F;
          float var9 = var1 + 9.0F;
          float var10 = var2 + 8.0F;
@@ -155,20 +162,7 @@ public class TargetHud extends AbstractHudElement {
       float var14 = this.snapToStep(this.displayedHealth, 0.25F);
       String var15 = this.getHealthString(var14);
       String var16 = this.lastTarget.getName().getString();
-      int var60 = (int)(255.0F * var3);
-      int var61 = new Color(0, 0, 0, var60).getRGB();
-      Fonts.BOLD.draw(var16, var7 + 0.5F, var8 + 0.5F, 5.5F, var61);
-      Fonts.BOLD.draw(var16, var7, var8, 5.5F, new Color(255, 255, 255, var60).getRGB());
-      float var17 = Fonts.BOLD.getWidth(var15, 5.5F);
-      float var59 = Fonts.BOLD.getWidth(var16, 5.5F);
-      int var18 = new Color(235, 235, 235, var60).getRGB();
-      float var57 = var1 + this.getWidth() - 8.0F - var17;
-      float var58 = var7 + var59 + 4.0F;
-      if (var57 < var58) {
-         var57 = var58;
-      }
-      Fonts.BOLD.draw(var15, var57 + 0.5F, var8 + 0.5F, 5.5F, var61);
-      Fonts.BOLD.draw(var15, var57, var8, 5.5F, var18);
+
       float var19;
       if (var12) {
          var19 = 1.0F;
@@ -257,6 +251,29 @@ public class TargetHud extends AbstractHudElement {
 
          Render2D.gradientRect(var21, var22, var23 * var41, var24, var44, var25);
       }
+
+      // --- text drawn LAST so nothing can clobber it ---
+      int var60 = (int)(255.0F * var3);
+      int var61 = new Color(0, 0, 0, var60).getRGB();
+      int var62 = new Color(255, 255, 255, var60).getRGB();
+      this.drawOutlined(var16, var7, var8, 5.5F, var62, var61);
+      float var17 = Fonts.BOLD.getWidth(var15, 5.5F);
+      float var59 = Fonts.BOLD.getWidth(var16, 5.5F);
+      int var18 = new Color(235, 235, 235, var60).getRGB();
+      float var57 = var1 + this.getWidth() - 8.0F - var17;
+      float var58 = var7 + var59 + 4.0F;
+      if (var57 < var58) {
+         var57 = var58;
+      }
+      this.drawOutlined(var15, var57, var8, 5.5F, var18, var61);
+   }
+
+   private void drawOutlined(String text, float x, float y, float size, int color, int outline) {
+      Fonts.BOLD.draw(text, x - 0.5F, y, size, outline);
+      Fonts.BOLD.draw(text, x + 0.5F, y, size, outline);
+      Fonts.BOLD.draw(text, x, y - 0.5F, size, outline);
+      Fonts.BOLD.draw(text, x, y + 0.5F, size, outline);
+      Fonts.BOLD.draw(text, x, y, size, color);
    }
 
    private boolean hasArmor(LivingEntity var1) {
