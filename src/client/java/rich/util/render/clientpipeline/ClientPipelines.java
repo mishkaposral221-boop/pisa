@@ -282,8 +282,8 @@ public class ClientPipelines {
          .withLocation("pipeline/chams_entity")
          .withBlend(BlendFunction.TRANSLUCENT)
          .withDepthTestFunction(DepthTestFunction.NO_DEPTH_TEST)
-         .withDepthWrite(false)
-         .withCull(false)
+         .withDepthWrite(true)
+         .withCull(true)
          .build()
    );
    public static final Function<Identifier, RenderLayer> CHAMS_ENTITY = Util.memoize(var0 -> {
