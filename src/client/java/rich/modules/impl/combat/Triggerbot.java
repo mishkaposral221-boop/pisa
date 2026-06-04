@@ -24,8 +24,9 @@ public class Triggerbot extends ModuleStructure {
     public BooleanSetting sprintReset = new BooleanSetting("SprintReset", "Drop sprint one tick before an airborne crit (off = hit instantly)").setValue(false);
     // Ground combo: full bar = max damage + knockback (stops weak/early hits).
     public SliderSettings attackCharge = new SliderSettings("AttackCharge", "Cooldown-bar fraction for GROUND hits (1.0 = full bar)").range(0.7F, 1.0F).setValue(1.0F);
-    // Airborne crit: a bit lower so the SHORT falling window off a block is usable.
-    public SliderSettings critCharge = new SliderSettings("CritCharge", "Cooldown-bar fraction for AIRBORNE crits (lower = catches short drops)").range(0.6F, 1.0F).setValue(0.85F);
+    // Airborne crit: kept low so the SHORT falling window (and the moment right after the
+    // apex) is actually usable - a high threshold made the bot wait too long and miss it.
+    public SliderSettings critCharge = new SliderSettings("CritCharge", "Cooldown-bar fraction for AIRBORNE crits (lower = fires earlier in the fall)").range(0.3F, 1.0F).setValue(0.5F);
 
     // Deferred crit: tick N suppress sprint (STOP goes out), tick N+1 attack.
     private boolean pendingCrit = false;
