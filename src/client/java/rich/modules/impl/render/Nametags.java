@@ -6,7 +6,6 @@ import net.minecraft.client.gui.DrawContext;
 import net.minecraft.component.DataComponentTypes;
 import net.minecraft.component.type.ItemEnchantmentsComponent;
 import net.minecraft.enchantment.Enchantment;
-import net.minecraft.entity.Entity;
 import net.minecraft.entity.EquipmentSlot;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.ItemStack;
@@ -80,9 +79,9 @@ public class Nametags extends ModuleStructure {
         int sh = mc.getWindow().getScaledHeight();
         Vec3d camPos = mc.gameRenderer.getCamera().getCameraPos();
         TextRenderer font = mc.textRenderer;
-        for (Entity entity : mc.world.getEntities()) {
-            if (entity == mc.player || entity.isSpectator() || !(entity instanceof PlayerEntity)) continue;
-            PlayerEntity target = (PlayerEntity)entity;
+        for (PlayerEntity entity : mc.world.getPlayers()) {
+            if (entity == mc.player || entity.isSpectator()) continue;
+            PlayerEntity target = entity;
             double dist = mc.player.squaredDistanceTo(entity);
             if (dist > 4096.0) continue;
             double lerpX = entity.lastRenderX + (entity.getX() - entity.lastRenderX) * (double)partialTick;
