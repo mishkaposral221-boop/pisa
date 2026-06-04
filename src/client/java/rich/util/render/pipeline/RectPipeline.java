@@ -69,6 +69,10 @@ public class RectPipeline {
    }
 
    public void drawRect(float var1, float var2, float var3, float var4, int[] var5, float[] var6, float var7) {
+      if (var3 <= 0.0F || var4 <= 0.0F || isFullyTransparent(var5)) {
+         return;
+      }
+
       MinecraftClient var8 = MinecraftClient.getInstance();
       if (var8.getFramebuffer() != null) {
          this.ensureInitialized();
@@ -80,6 +84,16 @@ public class RectPipeline {
          this.prepareUniformData(var1, var2, var3, var4, var11, var12, 2.0F, var7, var13, var6);
          this.uploadAndDraw(var8);
       }
+   }
+
+   private static boolean isFullyTransparent(int[] var0) {
+      for (int var1 : var0) {
+         if ((var1 >>> 24) != 0) {
+            return false;
+         }
+      }
+
+      return true;
    }
 
    private int[] convertTo9Colors(int[] var1) {
