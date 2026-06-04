@@ -39,7 +39,7 @@ public class ArcOutline2D {
                .withDepthTestFunction(DepthTestFunction.NO_DEPTH_TEST)
                .withCull(false)
                .build();
-            uniformBuffer = RenderSystem.getDevice().createBuffer(() -> "ArcOutline2D Uniforms", 136, 176L);
+            uniformBuffer = RenderSystem.getDevice().createBuffer(() -> "ArcOutline2D Uniforms", 144, 176L);
          } catch (Exception var1) {
             System.err.println("[ArcOutline2D] Failed to init: " + var1.getMessage());
          }

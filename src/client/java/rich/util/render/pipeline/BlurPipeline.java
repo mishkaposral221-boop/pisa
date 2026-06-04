@@ -185,7 +185,7 @@ public class BlurPipeline {
             this.uniformBuffer.close();
          }
 
-         this.uniformBuffer = RenderSystem.getDevice().createBuffer(() -> "minecraft:blur_uniform", 136, var17);
+         this.uniformBuffer = RenderSystem.getDevice().createBuffer(() -> "minecraft:blur_uniform", 144, var17);
       }
    }
 

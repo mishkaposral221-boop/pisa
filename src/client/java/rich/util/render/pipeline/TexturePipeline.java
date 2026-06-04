@@ -197,7 +197,7 @@ public class TexturePipeline {
             this.uniformBuffer.close();
          }
 
-         this.uniformBuffer = RenderSystem.getDevice().createBuffer(() -> "minecraft:texture_uniform", 136, var3);
+         this.uniformBuffer = RenderSystem.getDevice().createBuffer(() -> "minecraft:texture_uniform", 144, var3);
       }
 
       CommandEncoder var4 = RenderSystem.getDevice().createCommandEncoder();

@@ -194,7 +194,7 @@ public class KawaseBlurPipeline {
                   this.uniformBuffer.close();
                }
 
-               this.uniformBuffer = RenderSystem.getDevice().createBuffer(() -> "minecraft:kawase_uniform", 136, var15);
+               this.uniformBuffer = RenderSystem.getDevice().createBuffer(() -> "minecraft:kawase_uniform", 144, var15);
             }
 
             var7.writeToBuffer(this.uniformBuffer.slice(), this.dataBuffer);
