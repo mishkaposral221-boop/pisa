@@ -76,10 +76,8 @@ public class TargetHud extends AbstractHudElement {
    private String getHealthString(float var1) {
       if (this.lastTarget != null && this.lastTarget.isInvisible() && !this.hasArmor(this.lastTarget) && !Network.isSpookyTime() && !Network.isCopyTime()) {
          return "??";
-      } else if (var1 >= 100.0F) {
-         return String.valueOf((int)var1);
       } else {
-         return var1 >= 10.0F ? String.format("%.1f", var1) : String.format("%.2f", var1);
+         return String.valueOf(Math.round(var1));
       }
    }
 
@@ -157,14 +155,19 @@ public class TargetHud extends AbstractHudElement {
       float var14 = this.snapToStep(this.displayedHealth, 0.25F);
       String var15 = this.getHealthString(var14);
       String var16 = this.lastTarget.getName().getString();
+      int var60 = (int)(255.0F * var3);
+      int var61 = new Color(0, 0, 0, var60).getRGB();
+      Fonts.BOLD.draw(var16, var7 + 0.5F, var8 + 0.5F, 5.5F, var61);
+      Fonts.BOLD.draw(var16, var7, var8, 5.5F, new Color(255, 255, 255, var60).getRGB());
       float var17 = Fonts.BOLD.getWidth(var15, 5.5F);
-      Fonts.BOLD.draw(var16, var7, var8, 5.5F, new Color(255, 255, 255, (int)(255.0F * var3)).getRGB());
-      int var18 = new Color(215, 215, 215, (int)(255.0F * var3)).getRGB();
+      float var59 = Fonts.BOLD.getWidth(var16, 5.5F);
+      int var18 = new Color(235, 235, 235, var60).getRGB();
       float var57 = var1 + this.getWidth() - 8.0F - var17;
-      float var58 = var7 + Fonts.BOLD.getWidth(var16, 5.5F) + 4.0F;
+      float var58 = var7 + var59 + 4.0F;
       if (var57 < var58) {
          var57 = var58;
       }
+      Fonts.BOLD.draw(var15, var57 + 0.5F, var8 + 0.5F, 5.5F, var61);
       Fonts.BOLD.draw(var15, var57, var8, 5.5F, var18);
       float var19;
       if (var12) {
