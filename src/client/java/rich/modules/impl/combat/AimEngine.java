@@ -137,7 +137,10 @@ public class AimEngine {
         wantYaw = MathHelper.wrapDegrees((float)(wantYaw - player.getYaw()));
         wantPitch -= player.getPitch();
         float sens = (float)((Double)client.options.getMouseSensitivity().getValue()).doubleValue() * 0.6f + 0.2f;
-        float step = sens * sens * sens * 0.8f;
+        // Real Minecraft rotation quantum (GCD): one mouse-pixel = (sens*0.6+0.2)^3 * 8.0 * 0.15 = sens^3 * 1.2.
+        // Snapping our pull to THIS grid keeps the total yaw/pitch delta a clean multiple of the player's
+        // own sensitivity step, so server-side GCD/rotation checks can't tell the assist apart from the mouse.
+        float step = sens * sens * sens * 1.2f;
         float deadzone = Math.max((float)Math.toDegrees(Math.atan2(halfW, dist)) * 0.18f, 0.30f);
         float totalAngle = (float)Math.sqrt(wantYaw * wantYaw + wantPitch * wantPitch);
         if (totalAngle > aimFov + 12.0f) {
@@ -157,10 +160,12 @@ public class AimEngine {
             float strength = movingToward ? 0.42f + t * 0.48f : 0.14f + t * 0.18f;
             float maxPull = movingToward ? 4.2f + t * 5.5f : 1.2f + t * 1.6f;
             float moveScale = movingToward ? MathHelper.clamp((float)(mouseDelta * 0.85f), (float)0.28f, (float)0.95f) : 0.35f;
-            float jitter = (this.aimRandom.nextFloat() - 0.5f) * 0.16f;
+            // Independent yaw/pitch jitter: correlated noise on both axes is itself a detectable signature.
+            float jitterYaw = (this.aimRandom.nextFloat() - 0.5f) * 0.16f;
+            float jitterPitch = (this.aimRandom.nextFloat() - 0.5f) * 0.10f;
             float undershoot = this.aimRandom.nextFloat() < 0.2f ? 0.7f + this.aimRandom.nextFloat() * 0.2f : 1.0f;
-            float rawYawPull = MathHelper.clamp((float)(wantYaw * strength * moveScale * undershoot + jitter), (float)(-maxPull), (float)maxPull);
-            float rawPitchPull = MathHelper.clamp((float)(wantPitch * strength * moveScale * 0.55f * undershoot + jitter * 0.3f), (float)(-maxPull * 0.55f), (float)(maxPull * 0.55f));
+            float rawYawPull = MathHelper.clamp((float)(wantYaw * strength * moveScale * undershoot + jitterYaw), (float)(-maxPull), (float)maxPull);
+            float rawPitchPull = MathHelper.clamp((float)(wantPitch * strength * moveScale * 0.55f * undershoot + jitterPitch), (float)(-maxPull * 0.55f), (float)(maxPull * 0.55f));
             applyYaw = Math.abs(rawYawPull) > step ? (float)Math.round(rawYawPull / step) * step : 0.0f;
             applyPitch = Math.abs(rawPitchPull) > step ? (float)Math.round(rawPitchPull / step) * step : 0.0f;
         } else if (totalAngle > deadzone * 0.4f) {
