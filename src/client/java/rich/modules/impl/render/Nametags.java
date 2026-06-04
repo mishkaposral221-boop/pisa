@@ -23,14 +23,19 @@ import rich.events.impl.DrawEvent;
 import rich.modules.module.ModuleStructure;
 import rich.modules.module.category.ModuleCategory;
 import rich.modules.module.setting.implement.BooleanSetting;
+import rich.modules.module.setting.implement.SliderSettings;
 import rich.util.c;
 
 public class Nametags extends ModuleStructure {
     public BooleanSetting showArmor = new BooleanSetting("ShowArmor", "Display player armor info").setValue(true);
+    public SliderSettings armorDistance = new SliderSettings("ArmorDistance", "\u041c\u0430\u043a\u0441. \u0434\u0438\u0441\u0442\u0430\u043d\u0446\u0438\u044f \u043e\u0442\u0440\u0438\u0441\u043e\u0432\u043a\u0438 \u0431\u0440\u043e\u043d\u0438 (\u0431\u043b\u043e\u043a\u0438)").range(8.0F, 64.0F).setValue(32.0F);
+
+    // \u041f\u0435\u0440\u0435\u0438\u0441\u043f\u043e\u043b\u044c\u0437\u0443\u0435\u043c\u044b\u0435 \u043e\u0431\u044a\u0435\u043a\u0442\u044b \u2014 \u043d\u0435 \u0441\u043e\u0437\u0434\u0430\u0451\u043c \u043c\u0443\u0441\u043e\u0440 \u043a\u0430\u0436\u0434\u044b\u0439 \u043a\u0430\u0434\u0440\n    private final Vector4f reusablePos = new Vector4f();
+    private final ArrayList<ItemStack> armorItems = new ArrayList<>(6);
 
     public Nametags() {
         super("Nametags", "Display player names above heads", ModuleCategory.VISUALS);
-        this.settings(this.showArmor);
+        this.settings(this.showArmor, this.armorDistance);
     }
 
     public static Nametags getInstance() {
@@ -50,11 +55,11 @@ public class Nametags extends ModuleStructure {
         }
     }
 
-    private static float[] worldToScreen(double wx, double wy, double wz, Vec3d camPos, Matrix4f viewMatrix, Matrix4f projMatrix, int sw, int sh) {
+    private float[] worldToScreen(double wx, double wy, double wz, Vec3d camPos, Matrix4f viewMatrix, Matrix4f projMatrix, int sw, int sh) {
         float dx = (float)(wx - camPos.x);
         float dy = (float)(wy - camPos.y);
         float dz = (float)(wz - camPos.z);
-        Vector4f pos = new Vector4f(dx, dy, dz, 1.0f);
+        Vector4f pos = this.reusablePos.set(dx, dy, dz, 1.0f);
         viewMatrix.transform(pos);
         projMatrix.transform(pos);
         if (pos.w() <= 0.001f) {
@@ -88,7 +93,7 @@ public class Nametags extends ModuleStructure {
             double lerpY = entity.lastRenderY + (entity.getY() - entity.lastRenderY) * (double)partialTick;
             double lerpZ = entity.lastRenderZ + (entity.getZ() - entity.lastRenderZ) * (double)partialTick;
             double headY = lerpY + (double)entity.getHeight() + 0.5;
-            float[] screen = Nametags.worldToScreen(lerpX, headY, lerpZ, camPos, viewMatrix, projMatrix, sw, sh);
+            float[] screen = this.worldToScreen(lerpX, headY, lerpZ, camPos, viewMatrix, projMatrix, sw, sh);
             if (screen == null) continue;
             float screenX = Math.round(screen[0]);
             float screenY = Math.round(screen[1]);
@@ -103,10 +108,9 @@ public class Nametags extends ModuleStructure {
         float absorption = player.getAbsorptionAmount();
         float maxHp = Math.max(1.0f, player.getMaxHealth());
         String name = player.getName().getString();
-        String hpStr = String.format("%.0f", health);
+        String hpStr = Integer.toString((int)health);
         
-        // Получаем пинг
-        int ping = 0;
+        // \u041f\u0438\u043d\u0433\n        int ping = 0;
         try {
             net.minecraft.client.network.PlayerListEntry entry = mc.getNetworkHandler() != null
                     ? mc.getNetworkHandler().getPlayerListEntry(player.getUuid())
@@ -118,25 +122,24 @@ public class Nametags extends ModuleStructure {
             ping = 0;
         }
         
-        // Собираем броню
-        ArrayList<ItemStack> armorItems = new ArrayList<>();
-        if (this.showArmor()) {
+        // \u0421\u043e\u0431\u0438\u0440\u0430\u0435\u043c \u0431\u0440\u043e\u043d\u044e (\u0442\u043e\u043b\u044c\u043a\u043e \u0432\u0431\u043b\u0438\u0437\u0438 \u2014 3D-\u043c\u043e\u0434\u0435\u043b\u0438 \u043f\u0440\u0435\u0434\u043c\u0435\u0442\u043e\u0432 \u0434\u043e\u0440\u043e\u0433\u0438\u0435)
+        this.armorItems.clear();
+        if (this.showArmor() && distance <= this.armorDistance.getValue()) {
             ItemStack helmet = player.getEquippedStack(EquipmentSlot.HEAD);
             ItemStack chest = player.getEquippedStack(EquipmentSlot.CHEST);
             ItemStack legs = player.getEquippedStack(EquipmentSlot.LEGS);
             ItemStack boots = player.getEquippedStack(EquipmentSlot.FEET);
             ItemStack mainHand = player.getEquippedStack(EquipmentSlot.MAINHAND);
             ItemStack offHand = player.getEquippedStack(EquipmentSlot.OFFHAND);
-            if (!helmet.isEmpty()) armorItems.add(helmet);
-            if (!chest.isEmpty()) armorItems.add(chest);
-            if (!legs.isEmpty()) armorItems.add(legs);
-            if (!boots.isEmpty()) armorItems.add(boots);
-            if (!mainHand.isEmpty()) armorItems.add(mainHand);
-            if (!offHand.isEmpty()) armorItems.add(offHand);
+            if (!helmet.isEmpty()) this.armorItems.add(helmet);
+            if (!chest.isEmpty()) this.armorItems.add(chest);
+            if (!legs.isEmpty()) this.armorItems.add(legs);
+            if (!boots.isEmpty()) this.armorItems.add(boots);
+            if (!mainHand.isEmpty()) this.armorItems.add(mainHand);
+            if (!offHand.isEmpty()) this.armorItems.add(offHand);
         }
         
-        // Расчёт размеров
-        float hpPct = Math.min(1.0f, health / maxHp);
+        // \u0420\u0430\u0441\u0447\u0451\u0442 \u0440\u0430\u0437\u043c\u0435\u0440\u043e\u0432\n        float hpPct = Math.min(1.0f, health / maxHp);
         int hpColor = hpPct > 0.6f ? 0xFF55FF55 : (hpPct > 0.3f ? 0xFFFFAA00 : 0xFFFF5555);
         int pingColor = ping < 80 ? 0xFF55FF55 : (ping < 150 ? 0xFFFFAA00 : 0xFFFF5555);
         
@@ -147,75 +150,62 @@ public class Nametags extends ModuleStructure {
         int nameW = font.getWidth(nameText);
         int hpW = font.getWidth(hpText);
         int pingW = font.getWidth(pingText);
-        int textRowW = nameW + hpW + pingW + 12; // +12 для иконки HP и отступа
+        int textRowW = nameW + hpW + pingW + 12;
         
-        // Размеры брони
-        float armorRowH = armorItems.isEmpty() ? 0 : 22; // 16px items + padding
+        float armorRowH = this.armorItems.isEmpty() ? 0 : 22;
         
         float bgPad = 4.0f;
         float bgW = Math.max((float)textRowW + bgPad * 2.0f, 50.0f);
-        float bgH = 11 + 3; // текст + HP бар
+        float bgH = 11 + 3;
         
         float bgX = -bgW / 2.0f;
-        float bgY = -(armorRowH > 0 ? armorRowH + 2 : 0); // выравнивание если есть броня
+        float bgY = -(armorRowH > 0 ? armorRowH + 2 : 0);
         
         guiGraphics.getMatrices().pushMatrix();
         guiGraphics.getMatrices().translate(cx, cy);
         guiGraphics.getMatrices().scale(scale, scale);
         
-        // === ВЕРХНИЙ РЯД: ИКОНКИ БРОНИ ===
-        if (!armorItems.isEmpty()) {
-            float totalArmorW = (float)armorItems.size() * 18.0f - 2.0f;
+        // === \u0412\u0415\u0420\u0425\u041d\u0418\u0419 \u0420\u042f\u0414: \u0418\u041a\u041e\u041d\u041a\u0418 \u0411\u0420\u041e\u041d\u0418 ===
+        if (!this.armorItems.isEmpty()) {
+            float totalArmorW = (float)this.armorItems.size() * 18.0f - 2.0f;
             float armorStartX = -totalArmorW / 2.0f;
-            for (int i = 0; i < armorItems.size(); i++) {
-                ItemStack item = armorItems.get(i);
+            for (int i = 0; i < this.armorItems.size(); i++) {
+                ItemStack item = this.armorItems.get(i);
                 float itemX = armorStartX + (float)(i * 18);
                 guiGraphics.drawItem(item, (int)itemX, (int)(bgY - 18));
             }
         }
         
-        // === ФОНОВЫЙ ПРЯМОУГОЛЬНИК ===
-        // Основной фон (полупрозрачный)
+        // === \u0424\u041e\u041d\u041e\u0412\u042b\u0419 \u041f\u0420\u042f\u041c\u041e\u0423\u0413\u041e\u041b\u042c\u041d\u0418\u041a ===
         guiGraphics.fill((int)bgX, (int)bgY, (int)(bgX + bgW), (int)(bgY + bgH), 0xC0000000);
-        // Тонкая цветная полосочка сверху (обводка/подсветка)
         guiGraphics.fill((int)bgX, (int)bgY, (int)(bgX + bgW), (int)(bgY + 1), 0xFF4080FF);
         
-        // === СТРОКА ТЕКСТА ===
+        // === \u0421\u0422\u0420\u041e\u041a\u0410 \u0422\u0415\u041a\u0421\u0422\u0410 ===
         int textY = (int)(bgY + 2);
         
-        // Рассчитываем позицию для центрирования
-        int totalTextW = 10 + nameW + hpW + pingW; // 10px сердечко + отступ + текст
+        int totalTextW = 10 + nameW + hpW + pingW;
         int textStartX = (int)(bgX + bgW / 2.0f - totalTextW / 2.0f);
         
-        // HP иконка (сердечко, нарисованное вручную)
         this.drawHeart(guiGraphics, textStartX + 1, textY + 1, 0xFFFF5555);
         
-        // Имя игрока
         guiGraphics.drawText(font, nameText, textStartX + 10, textY, 0xFFFFFFFF, true);
-        
-        // HP значение
         guiGraphics.drawText(font, hpText, textStartX + 10 + nameW, textY, hpColor, true);
-        
-        // Пинг
         guiGraphics.drawText(font, pingText, textStartX + 10 + nameW + hpW, textY, pingColor, true);
         
-        // === HP БАР ===
+        // === HP \u0411\u0410\u0420 ===
         float barX = bgX + 2.0f;
         float barY = bgY + bgH - 2.5f;
         float barW = bgW - 4.0f;
         float barH = 2.0f;
         
-        // Фон бара
         guiGraphics.fill((int)barX, (int)barY, (int)(barX + barW), (int)(barY + barH), 0x50000000);
         
-        // Заполнение HP
         float fillW = barW * hpPct;
         if (fillW > 0.0f) {
             int barColor = hpPct > 0.6f ? 0xFF55FF55 : (hpPct > 0.3f ? 0xFFFFAA00 : 0xFFFF5555);
             guiGraphics.fill((int)barX, (int)barY, (int)(barX + fillW), (int)(barY + barH), barColor);
         }
         
-        // Absorption (жёлтые сердца)
         if (absorption > 0.0f) {
             float absW = barW * Math.min(1.0f, absorption / maxHp);
             guiGraphics.fill((int)(barX + barW - absW), (int)barY, (int)(barX + barW), (int)(barY + barH), 0xFFFFAA00);
@@ -224,7 +214,6 @@ public class Nametags extends ModuleStructure {
         guiGraphics.getMatrices().popMatrix();
     }
     
-    // Вспомогательный метод: получить макс. уровень зачарования
     private int getMaxEnchantmentLevel(ItemStack item) {
         try {
             ItemEnchantmentsComponent enchComp = item.get(DataComponentTypes.ENCHANTMENTS);
@@ -245,7 +234,6 @@ public class Nametags extends ModuleStructure {
         }
     }
     
-    // Рисует маленькое сердечко 7x6 пикселей вручную
     private void drawHeart(DrawContext g, int x, int y, int color) {
         g.fill(x + 1, y,     x + 3, y + 1, color);
         g.fill(x + 4, y,     x + 6, y + 1, color);
