@@ -54,6 +54,14 @@ public class FontRenderer {
       return this.fonts.get(var1);
    }
 
+   public void beginBatch() {
+      this.pipeline.beginBatch();
+   }
+
+   public void endBatch() {
+      this.pipeline.endBatch();
+   }
+
    public void drawText(String var1, String var2, float var3, float var4, float var5, int var6) {
       FontAtlas var7 = this.fonts.get(var1);
       if (var7 != null) {

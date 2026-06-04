@@ -3,6 +3,7 @@ package rich.client.draggables;
 import java.util.ArrayList;
 import java.util.List;
 import net.minecraft.client.gui.DrawContext;
+import rich.Initialization;
 import rich.events.impl.PacketEvent;
 import rich.modules.impl.render.Hud;
 import rich.screens.hud.ArmorHud;
@@ -16,6 +17,7 @@ import rich.screens.hud.Potions;
 import rich.screens.hud.TargetHud;
 import rich.screens.hud.Watermark;
 import rich.util.config.impl.drag.DragConfig;
+import rich.util.render.font.FontRenderer;
 
 public class HudManager {
    private final List<HudElement> elements = new ArrayList<>();
@@ -54,10 +56,17 @@ public class HudManager {
    public void render(DrawContext var1, float var2, int var3, int var4) {
       Hud var5 = this.getCachedHud();
       if (var5 != null && var5.isState()) {
-         for (HudElement var7 : this.elements) {
-            if (var5.interfaceSettings.isSelected(var7.getName()) && var7.visible()) {
-               var7.render(var1, var2);
+         FontRenderer var6 = Initialization.getInstance().getManager().getRenderCore().getFontRenderer();
+         var6.beginBatch();
+
+         try {
+            for (HudElement var8 : this.elements) {
+               if (var5.interfaceSettings.isSelected(var8.getName()) && var8.visible()) {
+                  var8.render(var1, var2);
+               }
             }
+         } finally {
+            var6.endBatch();
          }
       }
    }

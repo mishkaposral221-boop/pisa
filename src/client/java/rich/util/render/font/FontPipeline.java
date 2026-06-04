@@ -65,6 +65,7 @@ public class FontPipeline {
    private int currentOutlineColor = 0;
    private GpuTextureView cachedTextureView = null;
    private GpuTexture cachedGpuTexture = null;
+   private boolean batching = false;
 
    private int getFixedScaledWidth() {
       MinecraftClient var1 = MinecraftClient.getInstance();
@@ -86,6 +87,15 @@ public class FontPipeline {
          MemoryUtil.memFree(var1);
          this.initialized = true;
       }
+   }
+
+   public void beginBatch() {
+      this.batching = true;
+   }
+
+   public void endBatch() {
+      this.batching = false;
+      this.flush();
    }
 
    public void drawText(FontAtlas var1, String var2, float var3, float var4, float var5, int var6) {
@@ -184,7 +194,7 @@ public class FontPipeline {
                   }
                }
 
-               if (!this.charBatch.isEmpty() && this.currentAtlas != null) {
+               if (!this.batching && !this.charBatch.isEmpty() && this.currentAtlas != null) {
                   this.flush();
                }
             }
@@ -282,7 +292,7 @@ public class FontPipeline {
                   }
                }
 
-               if (!this.charBatch.isEmpty() && this.currentAtlas != null) {
+               if (!this.batching && !this.charBatch.isEmpty() && this.currentAtlas != null) {
                   this.flush();
                }
             }
