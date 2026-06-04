@@ -23,10 +23,11 @@ public class Triggerbot extends ModuleStructure {
     public BooleanSetting combo = new BooleanSetting("Combo", "Combo on the ground; in the air hit on the crit tick").setValue(true);
     public BooleanSetting critPriority = new BooleanSetting("CritPriority", "While jump is held, don't waste the hit on a ground combo").setValue(true);
     public BooleanSetting sprintReset = new BooleanSetting("SprintReset", "Drop sprint via input one tick so the crit lands, then resume").setValue(true);
-    public SliderSettings attackCharge = new SliderSettings("AttackCharge", "Min attack charge before a hit").range(0.7F, 1.0F).setValue(0.95F);
-    public SliderSettings minDelay = new SliderSettings("MinDelayMs", "Hard floor between hits in ms (anti packet-spam)").range(0.0F, 1000.0F).setValue(300.0F);
+    // Timing is driven ONLY by the attack-cooldown bar. This threshold is the
+    // fraction of the bar that must be recharged before a hit (1.0 = full bar).
+    // The bar already accounts for haste/Speed/fatigue, so timing self-adjusts.
+    public SliderSettings attackCharge = new SliderSettings("AttackCharge", "Cooldown-bar fraction required before a hit (1.0 = full bar = max dmg)").range(0.7F, 1.0F).setValue(0.95F);
 
-    private long lastAttackMs = 0L;
     // Deferred crit: tick N suppress sprint (STOP goes out), tick N+1 we attack.
     private boolean pendingCrit = false;
 
@@ -36,7 +37,7 @@ public class Triggerbot extends ModuleStructure {
 
     public Triggerbot() {
         super("Triggerbot", "Auto-attack targeted entities", ModuleCategory.VISUALS);
-        this.settings(this.combo, this.critPriority, this.sprintReset, this.attackCharge, this.minDelay);
+        this.settings(this.combo, this.critPriority, this.sprintReset, this.attackCharge);
     }
 
     @Override
@@ -63,10 +64,9 @@ public class Triggerbot extends ModuleStructure {
                     && this.isWeaponInHand()
                     && pt instanceof LivingEntity
                     && ((LivingEntity) pt).isAlive()
-                    && mc.player.getAttackCooldownProgress(0.0F) >= this.attackCharge.getValue()) {
+                    && this.isCooldownReady()) {
                     mc.interactionManager.attackEntity(mc.player, pt);
                     mc.player.swingHand(Hand.MAIN_HAND);
-                    this.lastAttackMs = System.currentTimeMillis();
                 }
                 return;
             }
@@ -83,10 +83,8 @@ public class Triggerbot extends ModuleStructure {
                 return;
             }
 
-            if (System.currentTimeMillis() - this.lastAttackMs < this.minDelay.getValue()) {
-                return;
-            }
-            if (mc.player.getAttackCooldownProgress(0.0F) < this.attackCharge.getValue()) {
+            // Single timing gate: the attack-cooldown bar. Adapts to haste/Speed/fatigue.
+            if (!this.isCooldownReady()) {
                 return;
             }
 
@@ -100,7 +98,6 @@ public class Triggerbot extends ModuleStructure {
                 }
                 mc.interactionManager.attackEntity(mc.player, target);
                 mc.player.swingHand(Hand.MAIN_HAND);
-                this.lastAttackMs = System.currentTimeMillis();
                 return;
             }
 
@@ -120,10 +117,13 @@ public class Triggerbot extends ModuleStructure {
             // Not sprinting (or reset off) -> hit immediately, the crit lands anyway.
             mc.interactionManager.attackEntity(mc.player, target);
             mc.player.swingHand(Hand.MAIN_HAND);
-            this.lastAttackMs = System.currentTimeMillis();
         } finally {
             SUPPRESS_SPRINT = wantSuppress;
         }
+    }
+
+    private boolean isCooldownReady() {
+        return mc.player.getAttackCooldownProgress(0.0F) >= this.attackCharge.getValue();
     }
 
     private boolean isWeaponInHand() {
