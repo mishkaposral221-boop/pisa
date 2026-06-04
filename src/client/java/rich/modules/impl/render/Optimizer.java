@@ -1,8 +1,6 @@
 package rich.modules.impl.render;
 
 import net.minecraft.client.option.CloudRenderMode;
-import net.minecraft.client.option.GraphicsMode;
-import net.minecraft.client.option.ParticlesMode;
 import rich.modules.module.ModuleStructure;
 import rich.modules.module.category.ModuleCategory;
 import rich.util.c;
@@ -15,8 +13,6 @@ public class Optimizer extends ModuleStructure {
    private boolean savedVsync;
    private int savedMaxFps;
    private boolean savedBobView;
-   private ParticlesMode savedParticles;
-   private GraphicsMode savedGraphics;
    private double savedEntityDistanceScaling;
 
    public static Optimizer getInstance() {
@@ -37,8 +33,6 @@ public class Optimizer extends ModuleStructure {
          this.savedVsync = (Boolean)mc.options.getEnableVsync().getValue();
          this.savedMaxFps = (Integer)mc.options.getMaxFps().getValue();
          this.savedBobView = (Boolean)mc.options.getBobView().getValue();
-         this.savedParticles = (ParticlesMode)mc.options.getParticles().getValue();
-         this.savedGraphics = (GraphicsMode)mc.options.getGraphicsMode().getValue();
          this.savedEntityDistanceScaling = (Double)mc.options.getEntityDistanceScaling().getValue();
          mc.options.getEntityShadows().setValue(false);
          mc.options.getCloudRenderMode().setValue(CloudRenderMode.OFF);
@@ -47,8 +41,6 @@ public class Optimizer extends ModuleStructure {
          mc.options.getEnableVsync().setValue(false);
          mc.options.getMaxFps().setValue(260);
          mc.options.getBobView().setValue(false);
-         mc.options.getParticles().setValue(ParticlesMode.MINIMAL);
-         mc.options.getGraphicsMode().setValue(GraphicsMode.FAST);
          mc.options.getEntityDistanceScaling().setValue(0.5);
          mc.options.sendClientSettings();
       }
@@ -64,8 +56,6 @@ public class Optimizer extends ModuleStructure {
          mc.options.getEnableVsync().setValue(this.savedVsync);
          mc.options.getMaxFps().setValue(this.savedMaxFps);
          mc.options.getBobView().setValue(this.savedBobView);
-         mc.options.getParticles().setValue(this.savedParticles);
-         mc.options.getGraphicsMode().setValue(this.savedGraphics);
          mc.options.getEntityDistanceScaling().setValue(this.savedEntityDistanceScaling);
          mc.options.sendClientSettings();
       }
