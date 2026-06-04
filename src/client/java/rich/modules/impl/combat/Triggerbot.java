@@ -31,6 +31,11 @@ public class Triggerbot extends ModuleStructure {
     // Deferred crit: tick N suppress sprint (STOP goes out), tick N+1 we attack.
     private boolean pendingCrit = false;
 
+    // Ticks since the player was last in contact with water. The server only
+    // accepts a crit once it agrees we are out of the water, so after climbing
+    // out of a pool we wait a few ticks before attempting an airborne crit.
+    private int ticksOutOfWater = 10;
+
     public static Triggerbot getInstance() {
         return c.a(Triggerbot.class);
     }
@@ -45,6 +50,7 @@ public class Triggerbot extends ModuleStructure {
         super.deactivate();
         SUPPRESS_SPRINT = false;
         this.pendingCrit = false;
+        this.ticksOutOfWater = 10;
     }
 
     @EventHandler
@@ -54,6 +60,13 @@ public class Triggerbot extends ModuleStructure {
             if (mc.player == null || mc.world == null || mc.currentScreen != null) {
                 this.pendingCrit = false;
                 return;
+            }
+
+            // Track time since last water contact (used to gate crits after a swim).
+            if (mc.player.isTouchingWater() || mc.player.isSubmergedInWater() || mc.player.isSwimming()) {
+                this.ticksOutOfWater = 0;
+            } else if (this.ticksOutOfWater < 100) {
+                this.ticksOutOfWater++;
             }
 
             // Deferred crit hit: sprint was dropped last tick (STOP already sent) -> hit now.
@@ -93,7 +106,11 @@ public class Triggerbot extends ModuleStructure {
                 if (!this.combo.isValue()) {
                     return;
                 }
-                if (this.critPriority.isValue() && this.isJumpHeld()) {
+                // CritPriority: while a crit is still achievable (jump held, or we are
+                // climbing out of water and could jump), don't waste the hit on a flat
+                // ground combo. But if a crit is impossible right now (levitation), allow
+                // the ground hit so the triggerbot isn't frozen.
+                if (this.critPriority.isValue() && this.critStillPossible() && this.isJumpHeld()) {
                     return;
                 }
                 mc.interactionManager.attackEntity(mc.player, target);
@@ -101,7 +118,9 @@ public class Triggerbot extends ModuleStructure {
                 return;
             }
 
-            // Airborne: only when really in a crit state (falling + fallDistance).
+            // Airborne: only when really in a crit state (falling + fallDistance + out of
+            // water + descending + no levitation). If not, hold the hit instead of
+            // throwing a flat one that the anti-cheat will not count as a crit.
             if (!this.isPerfectCrit()) {
                 return;
             }
@@ -141,13 +160,25 @@ public class Triggerbot extends ModuleStructure {
         }
     }
 
+    // A clean vanilla crit the server (and HolyWorld anti-cheat) will actually count.
     private boolean isPerfectCrit() {
         return mc.player.fallDistance > 0.0
+            && mc.player.getVelocity().y < 0.0
+            && this.ticksOutOfWater >= 3
             && !mc.player.isOnGround()
             && !mc.player.isClimbing()
             && !mc.player.isTouchingWater()
+            && !mc.player.hasStatusEffect(StatusEffects.LEVITATION)
             && !mc.player.hasStatusEffect(StatusEffects.BLINDNESS)
             && !mc.player.hasVehicle()
+            && !mc.player.getAbilities().flying;
+    }
+
+    // True while a crit is at least achievable soon (so CritPriority should keep waiting).
+    // Levitation makes crits impossible (you rise, fallDistance never builds), so return
+    // false there and let the ground combo fire instead of freezing.
+    private boolean critStillPossible() {
+        return !mc.player.hasStatusEffect(StatusEffects.LEVITATION)
             && !mc.player.getAbilities().flying;
     }
 
