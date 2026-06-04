@@ -1,45 +1,64 @@
 package rich.mixin;
 
+import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
 import com.llamalad7.mixinextras.sugar.Local;
 import net.minecraft.client.render.RenderLayer;
 import net.minecraft.client.render.entity.equipment.EquipmentRenderer;
 import net.minecraft.util.Identifier;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.ModifyArg;
 import rich.modules.impl.render.Chams;
 import rich.util.render.clientpipeline.ClientPipelines;
 
-// AUTHORITATIVE APPROACH (yarn 1.21.11 javadoc verified).
+// Armor through walls.
 //
-// Armor does NOT resolve its layer through Model.getLayer (that is why the three
-// previous attempts silently did nothing). Instead EquipmentRenderer.render
-// (the worker overload that also takes the @Nullable Identifier textureId) builds
-// the RenderLayer itself and passes it into queue.submitModel(... RenderLayer ...).
+// The body chams works by swapping the entity RenderLayer to the no-depth CHAMS_ENTITY
+// layer inside LivingEntityRenderer.render (synchronous). Armor is submitted within that
+// same render() call by EquipmentRenderer, so the RICH$EQUIPMENT_TARGET flag is set.
 //
-// So we intercept the RenderLayer ARGUMENT of that submitModel call. This is
-// independent of how the layer was created. While the current player is flagged as
-// a Chams target (set by LivingEntityRendererMixin around the target's render(),
-// which is synchronous and also covers the armor feature), we swap the layer for
-// the no-depth CHAMS_ENTITY layer built from the same equipment texture -- exactly
-// the swap that already makes the body show through walls.
+// EquipmentRenderer builds the armor RenderLayer itself and passes it into
+// queue.submitModel(... RenderLayer ...). We swap THAT RenderLayer argument for the
+// no-depth CHAMS_ENTITY layer built from the armor texture.
 //
-// target = "submitModel" is intentionally owner/descriptor-less so it matches the
-// call regardless of which submitModel overload / receiver type the worker uses.
+// The catch the previous attempts kept hitting: for the base armor layer the worker's
+// @Nullable Identifier textureId ARGUMENT is null - the real texture is resolved inside
+// the method via this.layerTextures.apply(key). So we obtain the texture from BOTH:
+//   * the textureId arg (when the build does pass it), captured via @Local, and
+//   * the result of layerTextures.apply(...) (the null-arg case). That Function returns
+//     an Identifier, while the sibling trimSprites Function returns a Sprite, so an
+//     instanceof check picks out the texture unambiguously without guessing ordinals.
 @Mixin(EquipmentRenderer.class)
 public class ArmorChamsMixin {
+   @Unique
+   private Identifier rich$lastEquipTexture;
+
+   // Capture the internally-resolved armor texture. require = 0: if this build passes the
+   // texture as the arg instead of resolving it here, there may be no such call and that
+   // is fine - the @ModifyArg below still gets it from the arg.
+   @ModifyExpressionValue(
+      method = "render(Lnet/minecraft/client/render/entity/equipment/EquipmentModel$LayerType;Lnet/minecraft/registry/RegistryKey;Lnet/minecraft/client/model/Model;Ljava/lang/Object;Lnet/minecraft/item/ItemStack;Lnet/minecraft/client/util/math/MatrixStack;Lnet/minecraft/client/render/command/OrderedRenderCommandQueue;ILnet/minecraft/util/Identifier;II)V",
+      at = @At(value = "INVOKE", target = "Ljava/util/function/Function;apply(Ljava/lang/Object;)Ljava/lang/Object;"),
+      require = 0
+   )
+   private Object rich$captureEquipTexture(Object result) {
+      if (result instanceof Identifier id) {
+         this.rich$lastEquipTexture = id;
+      }
+      return result;
+   }
+
    @ModifyArg(
       method = "render(Lnet/minecraft/client/render/entity/equipment/EquipmentModel$LayerType;Lnet/minecraft/registry/RegistryKey;Lnet/minecraft/client/model/Model;Ljava/lang/Object;Lnet/minecraft/item/ItemStack;Lnet/minecraft/client/util/math/MatrixStack;Lnet/minecraft/client/render/command/OrderedRenderCommandQueue;ILnet/minecraft/util/Identifier;II)V",
       at = @At(value = "INVOKE", target = "submitModel")
    )
-   private RenderLayer richArmorChamsLayer(RenderLayer original, @Local(argsOnly = true) Identifier textureId) {
-      if (textureId == null) {
+   private RenderLayer rich$armorChamsLayer(RenderLayer original, @Local(argsOnly = true) Identifier textureArg) {
+      Chams chams = Chams.getInstance();
+      if (chams == null || !chams.isState() || !Chams.RICH$EQUIPMENT_TARGET) {
          return original;
       }
-      Chams chams = Chams.getInstance();
-      if (chams != null && chams.isState() && Chams.RICH$EQUIPMENT_TARGET) {
-         return ClientPipelines.CHAMS_ENTITY.apply(textureId);
-      }
-      return original;
+      Identifier tex = textureArg != null ? textureArg : this.rich$lastEquipTexture;
+      return tex != null ? ClientPipelines.CHAMS_ENTITY.apply(tex) : original;
    }
 }
