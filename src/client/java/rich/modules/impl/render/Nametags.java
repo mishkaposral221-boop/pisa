@@ -27,9 +27,9 @@ import rich.util.c;
 
 public class Nametags extends ModuleStructure {
     public BooleanSetting showArmor = new BooleanSetting("ShowArmor", "Display player armor info").setValue(true);
-    public SliderSettings armorDistance = new SliderSettings("ArmorDistance", "\u041c\u0430\u043a\u0441. \u0434\u0438\u0441\u0442\u0430\u043d\u0446\u0438\u044f \u043e\u0442\u0440\u0438\u0441\u043e\u0432\u043a\u0438 \u0431\u0440\u043e\u043d\u0438 (\u0431\u043b\u043e\u043a\u0438)").range(8.0F, 64.0F).setValue(32.0F);
+    public SliderSettings armorDistance = new SliderSettings("ArmorDistance", "Макс. дистанция отрисовки брони (блоки)").range(8.0F, 64.0F).setValue(32.0F);
 
-    // \u041f\u0435\u0440\u0435\u0438\u0441\u043f\u043e\u043b\u044c\u0437\u0443\u0435\u043c\u044b\u0435 \u043e\u0431\u044a\u0435\u043a\u0442\u044b, \u0447\u0442\u043e\u0431\u044b \u043d\u0435 \u0441\u043e\u0437\u0434\u0430\u0432\u0430\u0442\u044c \u043c\u0443\u0441\u043e\u0440 \u043a\u0430\u0436\u0434\u044b\u0439 \u043a\u0430\u0434\u0440
+    // Переиспользуемые объекты, чтобы не создавать мусор каждый кадр
     private final Vector4f reusablePos = new Vector4f();
     private final Quaternionf reuseQuat = new Quaternionf();
     private final Matrix4f reuseView = new Matrix4f();
@@ -99,6 +99,8 @@ public class Nametags extends ModuleStructure {
             if (!this.worldToScreen(lerpX, headY, lerpZ, camPos, viewMatrix, projMatrix, sw, sh)) continue;
             float screenX = Math.round(this.reuseScreen[0]);
             float screenY = Math.round(this.reuseScreen[1]);
+            // Отсекаем тэги, которые спроецировались далеко за пределы экрана — их всё равно не видно
+            if (screenX < -80.0f || screenX > (float)sw + 80.0f || screenY < -80.0f || screenY > (float)sh + 80.0f) continue;
             float distance = (float)Math.sqrt(dist);
             float scale = Math.max(0.5f, Math.min(1.0f, 1.0f - distance / 20.0f));
             this.renderNametag(guiGraphics, font, entity, screenX, screenY, scale, distance);
@@ -124,7 +126,7 @@ public class Nametags extends ModuleStructure {
             ping = 0;
         }
 
-        // \u0421\u043e\u0431\u0438\u0440\u0430\u0435\u043c \u0431\u0440\u043e\u043d\u044e \u0442\u043e\u043b\u044c\u043a\u043e \u0432\u0431\u043b\u0438\u0437\u0438 (3D-\u043c\u043e\u0434\u0435\u043b\u0438 \u043f\u0440\u0435\u0434\u043c\u0435\u0442\u043e\u0432 \u0434\u043e\u0440\u043e\u0433\u0438\u0435)
+        // Собираем броню только вблизи (3D-модели предметов дорогие)
         this.armorItems.clear();
         if (this.showArmor() && distance <= this.armorDistance.getValue()) {
             ItemStack helmet = player.getEquippedStack(EquipmentSlot.HEAD);

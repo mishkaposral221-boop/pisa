@@ -126,8 +126,12 @@ public class Esp extends ModuleStructure {
    @EventHandler
    public void onWorldRender(WorldRenderEvent var1) {
       if (!this.players.isEmpty()) {
+         if (mc.player == null) {
+            return;
+         }
          float var2 = var1.getPartialTicks();
          Vec3d var3 = mc.gameRenderer.getCamera().getCameraPos();
+         Vec3d look = mc.player.getRotationVector();
          long var4 = System.currentTimeMillis();
          int var6 = this.boxColor.getColorNoAlpha();
          int var7 = this.friendColor.getColorNoAlpha();
@@ -149,6 +153,12 @@ public class Esp extends ModuleStructure {
                double var25 = var19 - var3.y;
                double var27 = var21 - var3.z;
                if (!(var23 * var23 + var25 * var25 + var27 * var27 < 1.0)) {
+                  // Отсекаем игроков, которые явно позади камеры — их не видно даже сквозь стены на экране
+                  double lenFwd = Math.sqrt(var23 * var23 + var25 * var25 + var27 * var27);
+                  if (lenFwd > 2.0 && (var23 * look.x + var25 * look.y + var27 * look.z) / lenFwd < -0.2) {
+                     continue;
+                  }
+
                   boolean var29 = var16 instanceof PlayerEntity && FriendUtils.isFriend((PlayerEntity)var16);
                   long var30 = var16.getUuid().getMostSignificantBits();
                   Long var32 = var12 ? this.hitTimes.get(var30) : null;
