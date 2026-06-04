@@ -5,6 +5,7 @@
   "client": [
     "AccessibilityOnboardingScreenMixin",
     "AnimationsMixin",
+    "ArmorChamsMixin",
     "BlockOutlineMixin",
     "CameraMixin",
     "ChatInputSuggestorMixin",
