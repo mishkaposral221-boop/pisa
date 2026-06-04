@@ -60,6 +60,18 @@ public class Render2D {
       return scaleActive ? var0 * scaleAmount : var0;
    }
 
+   public static float scaleX(float var0) {
+      return tx(var0);
+   }
+
+   public static float scaleY(float var0) {
+      return ty(var0);
+   }
+
+   public static float scaleSize(float var0) {
+      return td(var0);
+   }
+
    public static int getFixedScaledWidth() {
       Window var0 = MinecraftClient.getInstance().getWindow();
       return (int)Math.ceil(var0.getFramebufferWidth() / 2.0);
