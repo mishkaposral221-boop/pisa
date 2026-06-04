@@ -177,7 +177,7 @@ public class RectPipeline {
             this.uniformBuffer.close();
          }
 
-         this.uniformBuffer = RenderSystem.getDevice().createBuffer(() -> "minecraft:rect_uniform", 136, var2);
+         this.uniformBuffer = RenderSystem.getDevice().createBuffer(() -> "minecraft:rect_uniform", 144, var2);
       }
 
       CommandEncoder var3 = RenderSystem.getDevice().createCommandEncoder();

@@ -90,7 +90,7 @@ public class GlassCompositePipeline {
             this.uniformBuffer.close();
          }
 
-         this.uniformBuffer = RenderSystem.getDevice().createBuffer(() -> "minecraft:glass_composite_uniform", 136, var12);
+         this.uniformBuffer = RenderSystem.getDevice().createBuffer(() -> "minecraft:glass_composite_uniform", 144, var12);
       }
 
       CommandEncoder var13 = RenderSystem.getDevice().createCommandEncoder();

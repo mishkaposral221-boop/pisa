@@ -56,7 +56,7 @@ public class WheelPipeline {
          var1.flip();
          this.dummyVertexBuffer = RenderSystem.getDevice().createBuffer(() -> "rich:wheel_dummy_vertex", 32, var1);
          MemoryUtil.memFree(var1);
-         this.uniformBuffer = RenderSystem.getDevice().createBuffer(() -> "rich:wheel_uniform", 136, 64L);
+         this.uniformBuffer = RenderSystem.getDevice().createBuffer(() -> "rich:wheel_uniform", 144, 64L);
          this.initialized = true;
       }
    }

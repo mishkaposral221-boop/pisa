@@ -82,7 +82,7 @@ public class MaskDiffPipeline {
             this.uniformBuffer.close();
          }
 
-         this.uniformBuffer = RenderSystem.getDevice().createBuffer(() -> "minecraft:mask_diff_uniform", 136, var11);
+         this.uniformBuffer = RenderSystem.getDevice().createBuffer(() -> "minecraft:mask_diff_uniform", 144, var11);
       }
 
       var8.writeToBuffer(this.uniformBuffer.slice(), this.dataBuffer);
