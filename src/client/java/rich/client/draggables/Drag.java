@@ -18,8 +18,12 @@ public class Drag {
    private static final float OUTLINE_OFFSET = 0.0F;
    private static final float OUTLINE_THICKNESS = 1.0F;
    private static final int OUTLINE_COLOR = ColorUtil.b(255, 255, 255, 255);
+   private static final double RESIZE_HANDLE = 8.0;
    private static final Set<String> EXCLUDED_ELEMENTS = Set.of("Notifications");
    private static HudElement draggingElement;
+   private static HudElement resizingElement;
+   private static int resizeBaseW;
+   private static int resizeBaseH;
    private static int startX;
    private static int startY;
    private static final Map<HudElement, SweepAnim> sweepAnimations = new HashMap<>();
@@ -31,23 +35,33 @@ public class Drag {
          Hud var6 = Hud.getInstance();
          if (var6 != null) {
             if (!var4) {
-               if (draggingElement != null) {
+               if (draggingElement != null || resizingElement != null) {
                   DragConfig.getInstance().save();
                   draggingElement = null;
+                  resizingElement = null;
                }
 
                sweepAnimations.clear();
                wasHovered.clear();
             }
 
-            if (var4 && draggingElement != null) {
+            if (var4 && resizingElement != null) {
+               if (resizingElement instanceof AbstractHudElement var40) {
+                  float var41 = (float)(var1 - resizingElement.getX()) / (float)Math.max(1, resizeBaseW);
+                  float var42 = (float)(var2 - resizingElement.getY()) / (float)Math.max(1, resizeBaseH);
+                  var40.setScale((var41 + var42) / 2.0F);
+               }
+            } else if (var4 && draggingElement != null) {
                MinecraftClient var7 = MinecraftClient.getInstance();
                int var8 = var7.getWindow().getScaledWidth();
                int var9 = var7.getWindow().getScaledHeight();
                int var10 = var1 - startX;
                int var11 = var2 - startY;
-               var10 = Math.max(0, Math.min(var8 - draggingElement.getWidth(), var10));
-               var11 = Math.max(0, Math.min(var9 - draggingElement.getHeight(), var11));
+               float var43 = draggingElement.getScale();
+               int var44 = (int)(draggingElement.getWidth() * var43);
+               int var45 = (int)(draggingElement.getHeight() * var43);
+               var10 = Math.max(0, Math.min(var8 - var44, var10));
+               var11 = Math.max(0, Math.min(var9 - var45, var11));
                draggingElement.setX(var10);
                draggingElement.setY(var11);
             }
@@ -63,10 +77,11 @@ public class Drag {
                      boolean var25 = wasHovered.getOrDefault(var22, false);
                      float var27 = var22.getRoundingRadius();
                      float var12 = 0.0F;
+                     float var46 = var22.getScale();
                      float var13 = var22.getX() - var12;
                      float var14 = var22.getY() - var12;
-                     float var15 = var22.getWidth() + var12 * 2.0F;
-                     float var16 = var22.getHeight() + var12 * 2.0F;
+                     float var15 = var22.getWidth() * var46 + var12 * 2.0F;
+                     float var16 = var22.getHeight() * var46 + var12 * 2.0F;
                      float var17 = Math.max(0.0F, var27 + var12);
                      SweepAnim var18 = sweepAnimations.computeIfAbsent(var22, var0x -> new SweepAnim(0.05F));
                      if (var23 && !var25) {
@@ -107,25 +122,36 @@ public class Drag {
             double var5 = var0.y();
             HudElement var7 = var2.getElementAt(var3, var5);
             if (var7 != null && var7 instanceof AbstractHudElement var8 && var8.isDraggable()) {
-               draggingElement = var7;
-               startX = (int)var3 - var7.getX();
-               startY = (int)var5 - var7.getY();
+               float var9 = var7.getScale();
+               double var10 = var7.getX() + var7.getWidth() * var9;
+               double var12 = var7.getY() + var7.getHeight() * var9;
+               if (var3 >= var10 - RESIZE_HANDLE && var5 >= var12 - RESIZE_HANDLE) {
+                  resizingElement = var7;
+                  resizeBaseW = var7.getWidth();
+                  resizeBaseH = var7.getHeight();
+               } else {
+                  draggingElement = var7;
+                  startX = (int)var3 - var7.getX();
+                  startY = (int)var5 - var7.getY();
+               }
             }
          }
       }
    }
 
    public static void onMouseRelease(Click var0) {
-      if (var0.button() == 0 && draggingElement != null) {
+      if (var0.button() == 0 && (draggingElement != null || resizingElement != null)) {
          DragConfig.getInstance().save();
          draggingElement = null;
+         resizingElement = null;
       }
    }
 
    public static void resetDragging() {
-      if (draggingElement != null) {
+      if (draggingElement != null || resizingElement != null) {
          DragConfig.getInstance().save();
          draggingElement = null;
+         resizingElement = null;
       }
 
       sweepAnimations.clear();
@@ -133,15 +159,16 @@ public class Drag {
    }
 
    public static boolean isDragging() {
-      return draggingElement != null;
+      return draggingElement != null || resizingElement != null;
    }
 
    private static boolean isHovered(HudElement var0, double var1, double var3) {
       int var5 = var0.getX();
       int var6 = var0.getY();
-      int var7 = var0.getWidth();
-      int var8 = var0.getHeight();
-      return var1 >= var5 && var1 <= var5 + var7 && var3 >= var6 && var3 <= var6 + var8;
+      float var7 = var0.getScale();
+      double var8 = var0.getWidth() * var7;
+      double var10 = var0.getHeight() * var7;
+      return var1 >= var5 && var1 <= var5 + var8 && var3 >= var6 && var3 <= var6 + var10;
    }
 
    private static HudManager getHudManager() {
