@@ -15,7 +15,9 @@ import rich.util.c;
 
 public class Triggerbot extends ModuleStructure {
     public BooleanSetting smartCrits = new BooleanSetting("SmartCrits", "Only attack when at low fall damage").setValue(true);
+    public BooleanSetting sprintReset = new BooleanSetting("SprintReset", "Briefly stop sprinting right before the hit, then resume if forward is still held (more knockback)").setValue(true);
     private int delay = 0;
+    private boolean resumeSprint = false;
 
     public static Triggerbot getInstance() {
         return c.a(Triggerbot.class);
@@ -23,13 +25,20 @@ public class Triggerbot extends ModuleStructure {
 
     public Triggerbot() {
         super("Triggerbot", "Auto-attack targeted entities", ModuleCategory.VISUALS);
-        this.settings(this.smartCrits);
+        this.settings(this.smartCrits, this.sprintReset);
     }
 
     @EventHandler
     public void onTick(ClientTickStartEvent event) {
         if (mc.player == null || mc.world == null) {
             return;
+        }
+        // Возобновляем бег на следующий тик после сброса, если игрок всё ещё удерживает движение вперёд
+        if (this.resumeSprint) {
+            this.resumeSprint = false;
+            if (mc.options.forwardKey.isPressed() && !mc.player.isSneaking()) {
+                mc.player.setSprinting(true);
+            }
         }
         if (mc.currentScreen != null) {
             return;
@@ -54,6 +63,11 @@ public class Triggerbot extends ModuleStructure {
         }
         if (!this.autoCrit()) {
             return;
+        }
+        // Сброс бега прямо перед ударом для максимального отбрасывания
+        if (this.sprintReset.isValue() && mc.player.isSprinting()) {
+            mc.player.setSprinting(false);
+            this.resumeSprint = true;
         }
         KeyBinding.onKeyPressed((InputUtil.Key)mc.options.attackKey.getDefaultKey());
         this.delay = 10;
