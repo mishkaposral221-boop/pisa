@@ -242,4 +242,24 @@ public class TargetHud extends AbstractHudElement {
          float var43 = (float)(var29 % (long)var42) / var42 * (float) Math.PI * 2.0F;
          int[] var44 = new int[4];
 
-         for (int var45 = 0; var45 < 2;
+         for (int var45 = 0; var45 < 2; var45++) {
+            float var46 = (float)Math.sin(var43 - var45 * 1.5F);
+            float var47 = (var46 + 1.0F) / 2.0F;
+            short var37 = 255;
+            int var38 = (int)(165.0F + 50.0F * var47);
+            byte var39 = 0;
+            var44[var45 * 2] = new Color(var37, var38, var39, (int)(200.0F * var3)).getRGB();
+            var44[var45 * 2 + 1] = new Color(var37, var38, var39, (int)(200.0F * var3)).getRGB();
+         }
+
+         Render2D.gradientRect(var21, var22, var23 * var41, var24, var44, var25);
+      }
+   }
+
+   private boolean hasArmor(LivingEntity var1) {
+      return !var1.getEquippedStack(EquipmentSlot.HEAD).isEmpty()
+         || !var1.getEquippedStack(EquipmentSlot.CHEST).isEmpty()
+         || !var1.getEquippedStack(EquipmentSlot.LEGS).isEmpty()
+         || !var1.getEquippedStack(EquipmentSlot.FEET).isEmpty();
+   }
+}
