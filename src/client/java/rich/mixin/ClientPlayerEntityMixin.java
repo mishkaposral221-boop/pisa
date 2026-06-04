@@ -3,6 +3,7 @@ package rich.mixin;
 import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
 import com.mojang.authlib.GameProfile;
 import net.minecraft.entity.MovementType;
+import net.minecraft.util.PlayerInput;
 import net.minecraft.util.math.Vec2f;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.client.MinecraftClient;
@@ -26,6 +27,7 @@ import rich.events.impl.PlayerTravelEvent;
 import rich.events.impl.PushEvent;
 import rich.events.impl.TickEvent;
 import rich.events.impl.UsingItemEvent;
+import rich.modules.impl.combat.Triggerbot;
 import rich.modules.impl.combat.aura.AngleConnection;
 import rich.util.move.MoveUtil;
 
@@ -60,6 +62,23 @@ public abstract class ClientPlayerEntityMixin extends AbstractClientPlayerEntity
    @Inject(method = "tickMovement", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/input/Input;tick()V", shift = Shift.AFTER))
    private void onInputTick(CallbackInfo var1) {
       if (IMinecraft.mc.player != null) {
+         // Triggerbot: drop the sprint INPUT for this tick so vanilla's own sprint
+         // logic releases sprint and sends a single, correctly-timed STOP_SPRINTING.
+         try {
+            if (Triggerbot.SUPPRESS_SPRINT
+               && Triggerbot.getInstance() != null
+               && Triggerbot.getInstance().isState()
+               && this.input != null
+               && this.input.playerInput != null
+               && this.input.playerInput.sprint()) {
+               PlayerInput var3 = this.input.playerInput;
+               this.input.playerInput = new PlayerInput(
+                  var3.forward(), var3.backward(), var3.left(), var3.right(), var3.jump(), var3.sneak(), false
+               );
+            }
+         } catch (Throwable var4) {
+         }
+
          PlayerTravelEvent var2 = new PlayerTravelEvent(Vec3d.ZERO, false);
          EventManager.callEvent(var2);
       }
