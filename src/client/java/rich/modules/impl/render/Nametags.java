@@ -192,17 +192,21 @@ public class Nametags extends ModuleStructure {
         // === СТРОКА ТЕКСТА ===
         int textY = (int)(bgY + 2);
         
-        // HP иконка (сердечко)
-        guiGraphics.drawText(font, "❤", (int)(bgX + bgPad), textY, 0xFFFF5555, true);
+        // Рассчитываем позицию для центрирования
+        int totalTextW = 8 + nameW + hpW + pingW; // 8px сердечко + текст
+        int textStartX = (int)(bgX + bgW / 2.0f - totalTextW / 2.0f);
+        
+        // HP иконка (сердечко, нарисованное вручную)
+        this.drawHeart(guiGraphics, textStartX + 1, textY + 1, 0xFFFF5555);
         
         // Имя игрока
-        guiGraphics.drawText(font, nameText, (int)(bgX + bgPad + 10), textY, 0xFFFFFFFF, true);
+        guiGraphics.drawText(font, nameText, textStartX + 10, textY, 0xFFFFFFFF, true);
         
         // HP значение
-        guiGraphics.drawText(font, hpText, (int)(bgX + bgPad + 10 + nameW), textY, hpColor, true);
+        guiGraphics.drawText(font, hpText, textStartX + 10 + nameW, textY, hpColor, true);
         
         // Пинг
-        guiGraphics.drawText(font, pingText, (int)(bgX + bgPad + 10 + nameW + hpW), textY, pingColor, true);
+        guiGraphics.drawText(font, pingText, textStartX + 10 + nameW + hpW, textY, pingColor, true);
         
         // === HP БАР ===
         float barX = bgX + 2.0f;
@@ -267,4 +271,13 @@ public class Nametags extends ModuleStructure {
         if (num == 10) return "X";
         return String.valueOf(num); // Fallback для очень высоких уровней
     }
-}
+    
+    // Рисует маленькое сердечко 7x6 пикселей вручную
+    private void drawHeart(DrawContext g, int x, int y, int color) {
+        g.fill(x + 1, y,     x + 3, y + 1, color); // верхняя левая часть
+        g.fill(x + 4, y,     x + 6, y + 1, color); // верхняя правая часть
+        g.fill(x,     y + 1, x + 7, y + 3, color); // широкая часть
+        g.fill(x + 1, y + 3, x + 6, y + 4, color); // сужение
+        g.fill(x + 2, y + 4, x + 5, y + 5, color); // ещё сужение
+        g.fill(x + 3, y + 5, x + 4, y + 6, color); // острие
+    }
