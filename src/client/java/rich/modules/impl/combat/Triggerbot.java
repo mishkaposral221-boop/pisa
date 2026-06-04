@@ -3,6 +3,7 @@ package rich.modules.impl.combat;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.item.Item;
+import net.minecraft.network.packet.c2s.play.ClientCommandC2SPacket;
 import net.minecraft.registry.tag.ItemTags;
 import net.minecraft.util.Hand;
 import rich.events.api.EventHandler;
@@ -11,10 +12,11 @@ import rich.modules.module.ModuleStructure;
 import rich.modules.module.category.ModuleCategory;
 import rich.modules.module.setting.implement.BooleanSetting;
 import rich.util.c;
+import rich.util.network.NetworkUtility;
 
 public class Triggerbot extends ModuleStructure {
     public BooleanSetting smartCrits = new BooleanSetting("SmartCrits", "Only attack when at low fall damage").setValue(true);
-    public BooleanSetting sprintReset = new BooleanSetting("SprintReset", "Reset sprint right before the hit for full knockback, then resume").setValue(true);
+    public BooleanSetting sprintReset = new BooleanSetting("SprintReset", "Server-side sprint reset right before the hit for full knockback").setValue(true);
     private int delay = 0;
 
     public static Triggerbot getInstance() {
@@ -55,21 +57,26 @@ public class Triggerbot extends ModuleStructure {
         if (!this.autoCrit()) {
             return;
         }
-        // Атомарный сброс бега вокруг удара (как в ауре): stop -> attack -> resume.
-        // Всё в одном тике, чтобы AutoSprint не успел вернуть спринт до удара.
         boolean resetSprint = this.sprintReset.isValue() && mc.player.isSprinting() && this.canResetSprint();
+        // Send the stop-sprint packet straight to the server (bypassing the module pipeline)
+        // so the hit is registered as a fresh sprint hit with full knockback.
+        // We do NOT change client physics here - doing so is what slammed the player to the ground.
         if (resetSprint) {
-            mc.player.setSprinting(false);
+            NetworkUtility.sendWithoutEvent(new ClientCommandC2SPacket(mc.player, ClientCommandC2SPacket.Mode.STOP_SPRINTING));
         }
         mc.interactionManager.attackEntity(mc.player, target);
         mc.player.swingHand(Hand.MAIN_HAND);
         if (resetSprint) {
+            // Resume sprint on the server right after the hit.
+            NetworkUtility.sendWithoutEvent(new ClientCommandC2SPacket(mc.player, ClientCommandC2SPacket.Mode.START_SPRINTING));
+            // Restore the client sprint flag (vanilla attack() clears it) so movement speed
+            // never dips and the client/server sprint state stays in sync.
             mc.player.setSprinting(true);
         }
         this.delay = 10;
     }
 
-    // Не сбрасываем спринт в воде и при полёте на элитрах — иначе ломается движение
+    // Never reset sprint in water or while gliding (elytra) - it breaks movement.
     private boolean canResetSprint() {
         if (mc.player.isTouchingWater() || mc.player.isSubmergedInWater() || mc.player.isSwimming()) {
             return false;
