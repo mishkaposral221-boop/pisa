@@ -26,7 +26,7 @@ public class Esp extends ModuleStructure {
    private List<Entity> players = new ArrayList<>(32);
    private long lastUpdateTime;
    private static final long CACHE_DURATION = 50L;
-   private static final double MAX_RENDER_DIST_SQ = 65536.0;
+   private static final double MAX_RENDER_DIST_SQ = 4096.0;
    private static final double MIN_DIST_SQ = 1.0;
    private final HashMap<Long, Long> hitTimes = new HashMap<>();
    private static final long HIT_EFFECT_DURATION = 200L;
@@ -70,7 +70,7 @@ public class Esp extends ModuleStructure {
             for (Entity var6 : mc.world.getEntities()) {
                if (var6 != mc.player
                   && !var6.isInvisible()
-                  && !(var6.squaredDistanceTo(var4) > 65536.0)
+                  && !(var6.squaredDistanceTo(var4) > 4096.0)
                   && (var6.getCustomName() == null || !var6.getCustomName().getString().startsWith("Ghost_"))) {
                   this.players.add(var6);
                }
