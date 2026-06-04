@@ -160,7 +160,12 @@ public class TargetHud extends AbstractHudElement {
       float var17 = Fonts.BOLD.getWidth(var15, 5.5F);
       Fonts.BOLD.draw(var16, var7, var8, 5.5F, new Color(255, 255, 255, (int)(255.0F * var3)).getRGB());
       int var18 = new Color(215, 215, 215, (int)(255.0F * var3)).getRGB();
-      Fonts.BOLD.draw(var15, var1 + this.getWidth() - 10.0F - var17, var8, 5.5F, var18);
+      float var57 = var1 + this.getWidth() - 8.0F - var17;
+      float var58 = var7 + Fonts.BOLD.getWidth(var16, 5.5F) + 4.0F;
+      if (var57 < var58) {
+         var57 = var58;
+      }
+      Fonts.BOLD.draw(var15, var57, var8, 5.5F, var18);
       float var19;
       if (var12) {
          var19 = 1.0F;
@@ -237,24 +242,4 @@ public class TargetHud extends AbstractHudElement {
          float var43 = (float)(var29 % (long)var42) / var42 * (float) Math.PI * 2.0F;
          int[] var44 = new int[4];
 
-         for (int var45 = 0; var45 < 2; var45++) {
-            float var46 = (float)Math.sin(var43 - var45 * 1.5F);
-            float var47 = (var46 + 1.0F) / 2.0F;
-            short var37 = 255;
-            int var38 = (int)(165.0F + 50.0F * var47);
-            byte var39 = 0;
-            var44[var45 * 2] = new Color(var37, var38, var39, (int)(200.0F * var3)).getRGB();
-            var44[var45 * 2 + 1] = new Color(var37, var38, var39, (int)(200.0F * var3)).getRGB();
-         }
-
-         Render2D.gradientRect(var21, var22, var23 * var41, var24, var44, var25);
-      }
-   }
-
-   private boolean hasArmor(LivingEntity var1) {
-      return !var1.getEquippedStack(EquipmentSlot.HEAD).isEmpty()
-         || !var1.getEquippedStack(EquipmentSlot.CHEST).isEmpty()
-         || !var1.getEquippedStack(EquipmentSlot.LEGS).isEmpty()
-         || !var1.getEquippedStack(EquipmentSlot.FEET).isEmpty();
-   }
-}
+         for (int var45 = 0; var45 < 2;

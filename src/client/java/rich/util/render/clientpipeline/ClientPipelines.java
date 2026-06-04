@@ -287,7 +287,7 @@ public class ClientPipelines {
          .build()
    );
    public static final Function<Identifier, RenderLayer> CHAMS_ENTITY = Util.memoize(var0 -> {
-      RenderSetup var1 = RenderSetup.builder(CHAMS_ENTITY_PIPELINE).texture("Sampler0", var0).translucent().expectedBufferSize(8192).build();
+      RenderSetup var1 = RenderSetup.builder(CHAMS_ENTITY_PIPELINE).texture("Sampler0", var0).useLightmap().useOverlay().translucent().expectedBufferSize(8192).build();
       return RenderLayer.of("chams_entity", var1);
    });
 }
