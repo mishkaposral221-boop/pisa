@@ -50,6 +50,7 @@ public class RectPipeline {
    private GpuBuffer dummyVertexBuffer;
    private ByteBuffer dataBuffer;
    private boolean initialized = false;
+   private final int[] colors9 = new int[9];
 
    private void ensureInitialized() {
       if (!this.initialized) {
@@ -82,7 +83,7 @@ public class RectPipeline {
    }
 
    private int[] convertTo9Colors(int[] var1) {
-      int[] var2 = new int[9];
+      int[] var2 = this.colors9;
       if (var1.length == 1) {
          for (int var3 = 0; var3 < 9; var3++) {
             var2[var3] = var1[0];
