@@ -28,6 +28,12 @@ public class Render2D {
    private static final int[] COLORS_9 = new int[9];
    private static final float[] RADII_4 = new float[4];
    private static final float[] THICKNESS_8 = new float[8];
+   private static final int[] TEX_COLORS_4 = new int[4];
+   private static final float[] TEX_RADII_4 = new float[4];
+   private static final int[] FB_COLORS_4 = new int[4];
+   private static final float[] FB_RADII_4 = new float[4];
+   private static final float[] BLUR_RADII_4 = new float[4];
+   private static final float[] GLOW_RADII_4 = new float[4];
 
    private static boolean scaleActive = false;
    private static float scalePivotX = 0.0F;
@@ -321,18 +327,21 @@ public class Render2D {
    }
 
    public static void blur(float var0, float var1, float var2, float var3, float var4, int var5) {
-      float[] var6 = new float[]{0.0F, 0.0F, 0.0F, 0.0F};
-      Initialization.getInstance().getManager().getRenderCore().getBlurPipeline().drawBlur(tx(var0), ty(var1), td(var2), td(var3), var4, var6, var5);
+      BLUR_RADII_4[0] = BLUR_RADII_4[1] = BLUR_RADII_4[2] = BLUR_RADII_4[3] = 0.0F;
+      Initialization.getInstance().getManager().getRenderCore().getBlurPipeline().drawBlur(tx(var0), ty(var1), td(var2), td(var3), var4, BLUR_RADII_4, var5);
    }
 
    public static void blur(float var0, float var1, float var2, float var3, float var4, float var5, int var6) {
-      float[] var7 = new float[]{var5, var5, var5, var5};
-      Initialization.getInstance().getManager().getRenderCore().getBlurPipeline().drawBlur(tx(var0), ty(var1), td(var2), td(var3), var4, var7, var6);
+      BLUR_RADII_4[0] = BLUR_RADII_4[1] = BLUR_RADII_4[2] = BLUR_RADII_4[3] = var5;
+      Initialization.getInstance().getManager().getRenderCore().getBlurPipeline().drawBlur(tx(var0), ty(var1), td(var2), td(var3), var4, BLUR_RADII_4, var6);
    }
 
    public static void blur(float var0, float var1, float var2, float var3, float var4, float var5, float var6, float var7, float var8, int var9) {
-      float[] var10 = new float[]{var5, var6, var7, var8};
-      Initialization.getInstance().getManager().getRenderCore().getBlurPipeline().drawBlur(tx(var0), ty(var1), td(var2), td(var3), var4, var10, var9);
+      BLUR_RADII_4[0] = var5;
+      BLUR_RADII_4[1] = var6;
+      BLUR_RADII_4[2] = var7;
+      BLUR_RADII_4[3] = var8;
+      Initialization.getInstance().getManager().getRenderCore().getBlurPipeline().drawBlur(tx(var0), ty(var1), td(var2), td(var3), var4, BLUR_RADII_4, var9);
    }
 
    public static void texture(Identifier var0, float var1, float var2, float var3, float var4, int var5) {
@@ -360,13 +369,13 @@ public class Render2D {
    public static void texture(
       Identifier var0, float var1, float var2, float var3, float var4, float var5, float var6, float var7, float var8, int var9, float var10, float var11
    ) {
-      int[] var12 = new int[]{var9, var9, var9, var9};
-      float[] var13 = new float[]{var11, var11, var11, var11};
+      TEX_COLORS_4[0] = TEX_COLORS_4[1] = TEX_COLORS_4[2] = TEX_COLORS_4[3] = var9;
+      TEX_RADII_4[0] = TEX_RADII_4[1] = TEX_RADII_4[2] = TEX_RADII_4[3] = var11;
       Initialization.getInstance()
          .getManager()
          .getRenderCore()
          .getTexturePipeline()
-         .drawTexture(var0, tx(var1), ty(var2), td(var3), td(var4), var5, var6, var7, var8, var12, var13, var10);
+         .drawTexture(var0, tx(var1), ty(var2), td(var3), td(var4), var5, var6, var7, var8, TEX_COLORS_4, TEX_RADII_4, var10);
    }
 
    public static void drawTexture(
@@ -431,25 +440,28 @@ public class Render2D {
 
    public static void drawFramebufferTexture(int var0, float var1, float var2, float var3, float var4, float var5, float var6, float var7, float var8) {
       int var9 = (int)(var8 * 255.0F) << 24 | (int)(var5 * 255.0F) << 16 | (int)(var6 * 255.0F) << 8 | (int)(var7 * 255.0F);
-      int[] var10 = new int[]{var9, var9, var9, var9};
-      float[] var11 = new float[]{0.0F, 0.0F, 0.0F, 0.0F};
-      Initialization.getInstance().getManager().getRenderCore().getTexturePipeline().drawFramebufferTexture(var0, tx(var1), ty(var2), td(var3), td(var4), var10, var11, var8);
+      FB_COLORS_4[0] = FB_COLORS_4[1] = FB_COLORS_4[2] = FB_COLORS_4[3] = var9;
+      FB_RADII_4[0] = FB_RADII_4[1] = FB_RADII_4[2] = FB_RADII_4[3] = 0.0F;
+      Initialization.getInstance().getManager().getRenderCore().getTexturePipeline().drawFramebufferTexture(var0, tx(var1), ty(var2), td(var3), td(var4), FB_COLORS_4, FB_RADII_4, var8);
    }
 
    public static void glowOutline(float var0, float var1, float var2, float var3, float var4, int var5, float var6, float var7, float var8) {
-      float[] var9 = new float[]{var6, var6, var6, var6};
-      Initialization.getInstance().getManager().getRenderCore().getGlowOutlinePipeline().drawGlowOutline(tx(var0), ty(var1), td(var2), td(var3), var5, var4, var9, var7, var8);
+      GLOW_RADII_4[0] = GLOW_RADII_4[1] = GLOW_RADII_4[2] = GLOW_RADII_4[3] = var6;
+      Initialization.getInstance().getManager().getRenderCore().getGlowOutlinePipeline().drawGlowOutline(tx(var0), ty(var1), td(var2), td(var3), var5, var4, GLOW_RADII_4, var7, var8);
    }
 
    public static void glowOutline(
       float var0, float var1, float var2, float var3, float var4, int var5, float var6, float var7, float var8, float var9, float var10, float var11
    ) {
-      float[] var12 = new float[]{var6, var7, var8, var9};
+      GLOW_RADII_4[0] = var6;
+      GLOW_RADII_4[1] = var7;
+      GLOW_RADII_4[2] = var8;
+      GLOW_RADII_4[3] = var9;
       Initialization.getInstance()
          .getManager()
          .getRenderCore()
          .getGlowOutlinePipeline()
-         .drawGlowOutline(tx(var0), ty(var1), td(var2), td(var3), var5, var4, var12, var10, var11);
+         .drawGlowOutline(tx(var0), ty(var1), td(var2), td(var3), var5, var4, GLOW_RADII_4, var10, var11);
    }
 
    public static Matrix4f createProjection() {
