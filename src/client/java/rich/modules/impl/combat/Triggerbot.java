@@ -22,8 +22,12 @@ public class Triggerbot extends ModuleStructure {
     public BooleanSetting sprintReset = new BooleanSetting("SprintReset", "Drop sprint on crit hit (WARNING: causes rubber-band on strict anticheat)").setValue(false);
     // \u041c\u0438\u043d\u0438\u043c\u0430\u043b\u044c\u043d\u044b\u0439 \u0437\u0430\u0440\u044f\u0434.
     public SliderSettings attackCharge = new SliderSettings("AttackCharge", "Min attack charge before a hit").range(0.7F, 1.0F).setValue(0.95F);
-    // \u041d\u0430 \u0441\u043a\u043e\u043b\u044c\u043a\u043e \u0442\u0438\u043a\u043e\u0432 \u0432\u043f\u0435\u0440\u0451\u0434 \u0441\u0438\u043c\u0443\u043b\u0438\u0440\u0443\u0435\u043c \u043f\u0430\u0434\u0435\u043d\u0438\u0435 \u0434\u043b\u044f \u043f\u043e\u0438\u0441\u043a\u0430 \u043e\u043a\u043d\u0430 \u043a\u0440\u0438\u0442\u0430.
-    public SliderSettings lookahead = new SliderSettings("CritLookahead", "How many ticks to simulate ahead to time the crit").range(1.0F, 12.0F).setValue(6.0F);
+    // \u0416\u0451\u0441\u0442\u043a\u0438\u0439 \u043f\u043e\u043b \u043c\u0435\u0436\u0434\u0443 \u0443\u0434\u0430\u0440\u0430\u043c\u0438 (\u043c\u0441) \u2014 \u0430\u043d\u0442\u0438-\u0441\u043f\u0430\u043c \u043f\u0430\u043a\u0435\u0442\u043e\u0432.
+    public SliderSettings minDelay = new SliderSettings("MinDelayMs", "Hard floor between hits in ms (anti packet-spam)").range(0.0F, 1000.0F).setValue(300.0F);
+    // \u041d\u0430 \u0441\u043a\u043e\u043b\u044c\u043a\u043e \u0442\u0438\u043a\u043e\u0432 \u0432\u043f\u0435\u0440\u0451\u0434 \u0441\u0438\u043c\u0443\u043b\u0438\u0440\u0443\u0435\u043c \u043f\u0430\u0434\u0435\u043d\u0438\u0435.
+    public SliderSettings lookahead = new SliderSettings("CritLookahead", "How many ticks to simulate ahead to time the crit").range(1.0F, 12.0F).setValue(4.0F);
+
+    private long lastAttackMs = 0L;
 
     public static Triggerbot getInstance() {
         return c.a(Triggerbot.class);
@@ -31,7 +35,7 @@ public class Triggerbot extends ModuleStructure {
 
     public Triggerbot() {
         super("Triggerbot", "Auto-attack targeted entities", ModuleCategory.VISUALS);
-        this.settings(this.combo, this.sprintReset, this.attackCharge, this.lookahead);
+        this.settings(this.combo, this.sprintReset, this.attackCharge, this.minDelay, this.lookahead);
     }
 
     @EventHandler
@@ -57,6 +61,11 @@ public class Triggerbot extends ModuleStructure {
             return;
         }
 
+        // \u0416\u0451\u0441\u0442\u043a\u0438\u0439 \u0430\u043d\u0442\u0438-\u0441\u043f\u0430\u043c: \u043d\u0435 \u0447\u0430\u0449\u0435 \u043e\u0434\u043d\u043e\u0433\u043e \u0443\u0434\u0430\u0440\u0430 \u0432 minDelay \u043c\u0441 (\u0434\u0430\u0436\u0435 \u0435\u0441\u043b\u0438 \u0432\u0430\u043d\u0438\u043b\u044c\u043d\u044b\u0439 \u043a\u0443\u043b\u0434\u0430\u0443\u043d \u043d\u0435 \u0441\u0431\u0440\u043e\u0441\u0438\u043b\u0441\u044f).
+        if (System.currentTimeMillis() - this.lastAttackMs < this.minDelay.getValue()) {
+            return;
+        }
+
         // \u041e\u0442\u043a\u0430\u0442 \u0430\u0442\u0430\u043a\u0438.
         if (mc.player.getAttackCooldownProgress(0.0F) < this.attackCharge.getValue()) {
             return;
@@ -71,7 +80,12 @@ public class Triggerbot extends ModuleStructure {
             return;
         }
 
-        // \u0412 \u0432\u043e\u0437\u0434\u0443\u0445\u0435 \u2014 \u0430\u0434\u0430\u043f\u0442\u0438\u0432\u043d\u044b\u0439 \u0442\u0430\u0439\u043c\u0438\u043d\u0433 \u043a\u0440\u0438\u0442\u0430 (\u0441\u0438\u043c\u0443\u043b\u044f\u0446\u0438\u044f \u043f\u0430\u0434\u0435\u043d\u0438\u044f).
+        // \u041e\u043f\u0442\u0438\u043c\u0438\u0437\u0430\u0446\u0438\u044f: \u043f\u043e\u043a\u0430 \u043b\u0435\u0442\u0438\u043c \u0432\u0432\u0435\u0440\u0445 \u2014 \u043a\u0440\u0438\u0442\u0430 \u043d\u0435\u0442 \u0438 \u043d\u0435 \u0441\u043a\u043e\u0440\u043e, \u043d\u0435 \u0433\u0440\u0443\u0437\u0438\u043c \u0441\u0438\u043c\u0443\u043b\u044f\u0446\u0438\u0435\u0439.
+        if (mc.player.getVelocity().y > 0.3) {
+            return;
+        }
+
+        // \u0410\u0434\u0430\u043f\u0442\u0438\u0432\u043d\u044b\u0439 \u0442\u0430\u0439\u043c\u0438\u043d\u0433 \u043a\u0440\u0438\u0442\u0430 (\u0441\u0438\u043c\u0443\u043b\u044f\u0446\u0438\u044f \u043f\u0430\u0434\u0435\u043d\u0438\u044f).
         int max = Math.round(this.lookahead.getValue());
         int firstCritTick = -1;
         for (int t = 0; t <= max; t++) {
@@ -80,11 +94,8 @@ public class Triggerbot extends ModuleStructure {
                 break;
             }
         }
-        if (firstCritTick < 0) {
-            return;
-        }
-        if (firstCritTick > 0) {
-            // \u041a\u0440\u0438\u0442 \u0431\u0443\u0434\u0435\u0442 \u0441\u043a\u043e\u0440\u043e \u2014 \u0436\u0434\u0451\u043c \u043d\u0443\u0436\u043d\u044b\u0439 \u0442\u0438\u043a.
+        if (firstCritTick != 0) {
+            // \u041a\u0440\u0438\u0442\u0430 \u0441\u0435\u0439\u0447\u0430\u0441 \u043d\u0435\u0442: \u043b\u0438\u0431\u043e \u043d\u0435\u0434\u043e\u0441\u0442\u0438\u0436\u0438\u043c (-1), \u043b\u0438\u0431\u043e \u0431\u0443\u0434\u0435\u0442 \u0441\u043a\u043e\u0440\u043e \u2014 \u0436\u0434\u0451\u043c.
             return;
         }
         // \u043a\u0440\u0438\u0442 \u0434\u043e\u0441\u0442\u0443\u043f\u0435\u043d \u0441\u0435\u0439\u0447\u0430\u0441.
@@ -92,7 +103,7 @@ public class Triggerbot extends ModuleStructure {
     }
 
     private void attack(Entity target, boolean crit) {
-        // \u0421\u0431\u0440\u043e\u0441 \u0441\u043f\u0440\u0438\u043d\u0442\u0430 \u0422\u041e\u041b\u042c\u041a\u041e \u0435\u0441\u043b\u0438 \u044f\u0432\u043d\u043e \u0432\u043a\u043b\u044e\u0447\u0451\u043d (\u043f\u043e \u0443\u043c\u043e\u043b\u0447\u0430\u043d\u0438\u044e \u0432\u044b\u043a\u043b \u2014 \u043d\u0438\u043a\u0430\u043a\u0438\u0445 \u043f\u043e\u0431\u043e\u0447\u043a\u0438 \u043d\u0430 \u0434\u0432\u0438\u0436\u0435\u043d\u0438\u0435).
+        // \u0421\u0431\u0440\u043e\u0441 \u0441\u043f\u0440\u0438\u043d\u0442\u0430 \u0422\u041e\u041b\u042c\u041a\u041e \u0435\u0441\u043b\u0438 \u044f\u0432\u043d\u043e \u0432\u043a\u043b\u044e\u0447\u0451\u043d (\u043f\u043e \u0443\u043c\u043e\u043b\u0447\u0430\u043d\u0438\u044e \u0432\u044b\u043a\u043b).
         boolean reset = crit && this.sprintReset.isValue() && mc.player.isSprinting() && this.canResetSprint();
         if (reset) {
             mc.player.setSprinting(false);
@@ -102,6 +113,7 @@ public class Triggerbot extends ModuleStructure {
         if (reset) {
             mc.player.setSprinting(true);
         }
+        this.lastAttackMs = System.currentTimeMillis();
     }
 
     private boolean isPerfectCrit() {
