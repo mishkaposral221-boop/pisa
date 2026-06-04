@@ -19,8 +19,10 @@ import rich.util.render.Render3D;
 import rich.util.render.font.Fonts;
 
 public class Nametags extends ModuleStructure {
-    public BooleanSetting showArmor = new BooleanSetting("ShowArmor", "Display player armor above the tag").setValue(true);
-    public SliderSettings armorDistance = new SliderSettings("ArmorDistance", "Max distance to draw armor (blocks)").range(8.0F, 64.0F).setValue(32.0F);
+    // \u0418\u043a\u043e\u043d\u043a\u0438 \u0431\u0440\u043e\u043d\u0438 \u0432 \u0442\u0435\u0433\u0430\u0445 = \u0440\u0435\u043d\u0434\u0435\u0440 3D-\u043c\u043e\u0434\u0435\u043b\u0435\u0439 \u043a\u0430\u0436\u0434\u044b\u0439 \u043a\u0430\u0434\u0440 => \u0434\u043e\u0440\u043e\u0433\u043e. \u041f\u043e \u0443\u043c\u043e\u043b\u0447\u0430\u043d\u0438\u044e \u0412\u042b\u041a\u041b.
+    public BooleanSetting showArmor = new BooleanSetting("ShowArmor", "Draw armor icons over the tag (costs FPS; chams already show armor in 3D)").setValue(false);
+    public SliderSettings renderDistance = new SliderSettings("Distance", "Max distance to draw tags (blocks)").range(8.0F, 64.0F).setValue(40.0F);
+    public SliderSettings armorDistance = new SliderSettings("ArmorDistance", "Max distance to draw armor icons (blocks)").range(8.0F, 48.0F).setValue(20.0F);
 
     private final Vector4f reusablePos = new Vector4f();
     private final float[] reuseScreen = new float[2];
@@ -28,7 +30,7 @@ public class Nametags extends ModuleStructure {
 
     public Nametags() {
         super("Nametags", "Display player names above heads", ModuleCategory.VISUALS);
-        this.settings(this.showArmor, this.armorDistance);
+        this.settings(this.showArmor, this.renderDistance, this.armorDistance);
     }
 
     public static Nametags getInstance() {
@@ -79,12 +81,16 @@ public class Nametags extends ModuleStructure {
         float sw = Render2D.getFixedScaledWidth();
         float sh = Render2D.getFixedScaledHeight();
         float td = Render3D.lastTickDelta;
+        float maxDist = this.renderDistance.getValue();
+        float maxDist2 = maxDist * maxDist;
+        boolean armorOn = this.showArmor();
+        float armorMax = this.armorDistance.getValue();
         for (PlayerEntity entity : mc.world.getPlayers()) {
             if (entity == mc.player || entity.isSpectator()) {
                 continue;
             }
             double dist2 = mc.player.squaredDistanceTo(entity);
-            if (dist2 > 4096.0) {
+            if (dist2 > maxDist2) {
                 continue;
             }
             Vec3d p = entity.getLerpedPos(td);
@@ -96,12 +102,12 @@ public class Nametags extends ModuleStructure {
             float cy = this.reuseScreen[1];
             float distance = (float)Math.sqrt(dist2);
             float scale = Math.max(0.75f, Math.min(1.1f, 1.1f - distance * 0.010f));
-            this.renderTag(g, entity, cx, cy, scale, distance);
+            this.renderTag(g, entity, cx, cy, scale, distance, armorOn, armorMax);
         }
     }
 
-    // \u041c\u0418\u041d\u0418\u041c\u0410\u041b\u0418\u0417\u041c: \u0447\u0438\u0441\u0442\u043e\u0435 \u0438\u043c\u044f + \u0442\u043e\u043d\u043a\u0430\u044f \u043f\u043e\u043b\u043e\u0441\u043a\u0430 HP \u043f\u043e\u0434 \u043d\u0438\u043c. \u0411\u0435\u0437 \u043f\u0438\u043d\u0433\u0430/\u043d\u0430\u0434\u043f\u0438\u0441\u0438 "hp".
-    private void renderTag(DrawContext g, PlayerEntity player, float cx, float cy, float scale, float distance) {
+    // \u041c\u0418\u041d\u0418\u041c\u0410\u041b\u0418\u0417\u041c + \u0434\u0451\u0448\u0435\u0432\u043e: \u0438\u043c\u044f + \u0442\u043e\u043d\u043a\u0430\u044f \u043f\u043e\u043b\u043e\u0441\u043a\u0430 HP. \u0411\u0435\u0437 \u0434\u043e\u0440\u043e\u0433\u043e\u0433\u043e \u0437\u0430\u043a\u0440\u0443\u0433\u043b\u0451\u043d\u043d\u043e\u0433\u043e \u043a\u043e\u043d\u0442\u0443\u0440\u0430.
+    private void renderTag(DrawContext g, PlayerEntity player, float cx, float cy, float scale, float distance, boolean armorOn, float armorMax) {
         float health = player.getHealth();
         float maxHp = Math.max(1.0f, player.getMaxHealth());
         String name = player.getName().getString();
@@ -122,9 +128,8 @@ public class Nametags extends ModuleStructure {
         float panelY = cy - panelH;
         float radius = Math.max(2.0f, 3.0f * scale);
 
-        // \u0442\u043e\u043d\u043a\u0430\u044f \u043f\u043e\u043b\u0443\u043f\u0440\u043e\u0437\u0440\u0430\u0447\u043d\u0430\u044f \u0442\u0430\u0431\u043b\u0435\u0442\u043a\u0430 + \u0435\u043b\u0432\u0430 \u0437\u0430\u043c\u0435\u0442\u043d\u044b\u0439 \u043a\u043e\u043d\u0442\u0443\u0440
-        Render2D.rect(panelX, panelY, panelW, panelH, 0x80101015, radius);
-        Render2D.outline(panelX, panelY, panelW, panelH, 0.35f * scale, 0x40FFFFFF, radius);
+        // \u043e\u0434\u043d\u0430 \u043f\u043e\u043b\u0443\u043f\u0440\u043e\u0437\u0440\u0430\u0447\u043d\u0430\u044f \u0442\u0430\u0431\u043b\u0435\u0442\u043a\u0430 (\u0431\u0435\u0437 outline \u2014 \u044d\u043a\u043e\u043d\u043e\u043c\u0438\u044f FPS)
+        Render2D.rect(panelX, panelY, panelW, panelH, 0x99101015, radius);
 
         // \u0438\u043c\u044f \u043f\u043e \u0446\u0435\u043d\u0442\u0440\u0443
         float tx = cx - nameW / 2.0f;
@@ -142,7 +147,7 @@ public class Nametags extends ModuleStructure {
             Render2D.rect(barX, barY, Math.max(barH, barW * hpPct), barH, hpColor, barRadius);
         }
 
-        if (this.showArmor() && distance <= this.armorDistance.getValue()) {
+        if (armorOn && distance <= armorMax) {
             this.armorItems.clear();
             ItemStack mainHand = player.getEquippedStack(EquipmentSlot.MAINHAND);
             ItemStack helmet = player.getEquippedStack(EquipmentSlot.HEAD);
