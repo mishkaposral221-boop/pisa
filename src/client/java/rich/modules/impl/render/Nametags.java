@@ -19,10 +19,10 @@ import rich.util.render.Render3D;
 import rich.util.render.font.Fonts;
 
 public class Nametags extends ModuleStructure {
-    // \u0418\u043a\u043e\u043d\u043a\u0438 \u0431\u0440\u043e\u043d\u0438 \u0432 \u0442\u0435\u0433\u0430\u0445 = \u0440\u0435\u043d\u0434\u0435\u0440 3D-\u043c\u043e\u0434\u0435\u043b\u0435\u0439 \u043a\u0430\u0436\u0434\u044b\u0439 \u043a\u0430\u0434\u0440 => \u0434\u043e\u0440\u043e\u0433\u043e. \u041f\u043e \u0443\u043c\u043e\u043b\u0447\u0430\u043d\u0438\u044e \u0412\u042b\u041a\u041b.
-    public BooleanSetting showArmor = new BooleanSetting("ShowArmor", "Draw armor icons over the tag (costs FPS; chams already show armor in 3D)").setValue(false);
+    // \u041f\u043e\u043a\u0430\u0437\u044b\u0432\u0430\u0442\u044c \u0440\u044f\u0434 \u0438\u043a\u043e\u043d\u043e\u043a (\u043f\u0440\u0435\u0434\u043c\u0435\u0442 \u0432 \u0440\u0443\u043a\u0435 + \u0431\u0440\u043e\u043d\u044f) \u043d\u0430\u0434 \u0442\u0435\u0433\u043e\u043c. \u0420\u0438\u0441\u0443\u0435\u0442\u0441\u044f \u0442\u043e\u043b\u044c\u043a\u043e \u0432\u0431\u043b\u0438\u0437\u0438, \u0447\u0442\u043e\u0431\u044b \u043d\u0435 \u0441\u044a\u0435\u0434\u0430\u0442\u044c FPS.
+    public BooleanSetting showArmor = new BooleanSetting("ShowArmor", "Draw held item + armor icons over the tag (close range only; turn off if FPS drops)").setValue(true);
     public SliderSettings renderDistance = new SliderSettings("Distance", "Max distance to draw tags (blocks)").range(8.0F, 64.0F).setValue(40.0F);
-    public SliderSettings armorDistance = new SliderSettings("ArmorDistance", "Max distance to draw armor icons (blocks)").range(8.0F, 48.0F).setValue(20.0F);
+    public SliderSettings armorDistance = new SliderSettings("ArmorDistance", "Max distance to draw the icon row (blocks)").range(8.0F, 48.0F).setValue(24.0F);
 
     private final Vector4f reusablePos = new Vector4f();
     private final float[] reuseScreen = new float[2];
@@ -106,11 +106,13 @@ public class Nametags extends ModuleStructure {
         }
     }
 
-    // \u041c\u0418\u041d\u0418\u041c\u0410\u041b\u0418\u0417\u041c + \u0434\u0451\u0448\u0435\u0432\u043e: \u0438\u043c\u044f + \u0442\u043e\u043d\u043a\u0430\u044f \u043f\u043e\u043b\u043e\u0441\u043a\u0430 HP. \u0411\u0435\u0437 \u0434\u043e\u0440\u043e\u0433\u043e\u0433\u043e \u0437\u0430\u043a\u0440\u0443\u0433\u043b\u0451\u043d\u043d\u043e\u0433\u043e \u043a\u043e\u043d\u0442\u0443\u0440\u0430.
+    // \u0422\u0435\u0433: \u0438\u043c\u044f + \u0447\u0438\u0441\u043b\u043e HP (\u0446\u0432\u0435\u0442 \u043f\u043e \u0437\u0434\u043e\u0440\u043e\u0432\u044c\u044e) + \u0442\u043e\u043d\u043a\u0430\u044f \u043f\u043e\u043b\u043e\u0441\u043a\u0430, \u0438 \u0440\u044f\u0434 \u0438\u043a\u043e\u043d\u043e\u043a \u044d\u043a\u0438\u043f\u0438\u0440\u043e\u0432\u043a\u0438 \u0441\u0432\u0435\u0440\u0445\u0443.
     private void renderTag(DrawContext g, PlayerEntity player, float cx, float cy, float scale, float distance, boolean armorOn, float armorMax) {
         float health = player.getHealth();
         float maxHp = Math.max(1.0f, player.getMaxHealth());
         String name = player.getName().getString();
+        int hp = (int)Math.ceil(health);
+        String hpStr = Integer.toString(hp);
         float hpPct = Math.max(0.0f, Math.min(1.0f, health / maxHp));
         int hpColor = hpPct > 0.6f ? 0xFF63E6A0 : (hpPct > 0.3f ? 0xFFF2C14E : 0xFFF26D6D);
 
@@ -120,24 +122,30 @@ public class Nametags extends ModuleStructure {
         float textH = fontSize;
         float barGap = 2.0f * scale;
         float barH = Math.max(1.5f, 2.0f * scale);
+        float hpGap = 4.0f * scale;
 
         float nameW = Fonts.BOLD.getWidth(name, fontSize);
-        float panelW = nameW + padX * 2.0f;
+        float hpW = Fonts.BOLD.getWidth(hpStr, fontSize);
+        float contentW = nameW + hpGap + hpW;
+        float panelW = contentW + padX * 2.0f;
         float panelH = padY * 2.0f + textH + barGap + barH;
         float panelX = cx - panelW / 2.0f;
         float panelY = cy - panelH;
         float radius = Math.max(2.0f, 3.0f * scale);
 
-        // \u043e\u0434\u043d\u0430 \u043f\u043e\u043b\u0443\u043f\u0440\u043e\u0437\u0440\u0430\u0447\u043d\u0430\u044f \u0442\u0430\u0431\u043b\u0435\u0442\u043a\u0430 (\u0431\u0435\u0437 outline \u2014 \u044d\u043a\u043e\u043d\u043e\u043c\u0438\u044f FPS)
+        // \u043f\u043e\u043b\u0443\u043f\u0440\u043e\u0437\u0440\u0430\u0447\u043d\u0430\u044f \u0442\u0430\u0431\u043b\u0435\u0442\u043a\u0430
         Render2D.rect(panelX, panelY, panelW, panelH, 0x99101015, radius);
 
-        // \u0438\u043c\u044f \u043f\u043e \u0446\u0435\u043d\u0442\u0440\u0443
-        float tx = cx - nameW / 2.0f;
+        // \u0438\u043c\u044f + \u0447\u0438\u0441\u043b\u043e HP \u0432 \u043e\u0434\u043d\u0443 \u0441\u0442\u0440\u043e\u043a\u0443
+        float tx = panelX + padX;
         float ty = panelY + padY;
         Fonts.BOLD.draw(name, tx + 0.4f, ty + 0.4f, fontSize, 0xC0000000);
         Fonts.BOLD.draw(name, tx, ty, fontSize, 0xFFFFFFFF);
+        float hx = tx + nameW + hpGap;
+        Fonts.BOLD.draw(hpStr, hx + 0.4f, ty + 0.4f, fontSize, 0xC0000000);
+        Fonts.BOLD.draw(hpStr, hx, ty, fontSize, hpColor);
 
-        // \u0442\u043e\u043d\u043a\u0430\u044f \u0437\u0430\u043a\u0440\u0443\u0433\u043b\u0451\u043d\u043d\u0430\u044f \u043f\u043e\u043b\u043e\u0441\u043a\u0430 HP
+        // \u0442\u043e\u043d\u043a\u0430\u044f \u043f\u043e\u043b\u043e\u0441\u043a\u0430 HP
         float barX = panelX + padX;
         float barY = ty + textH + barGap;
         float barW = panelW - padX * 2.0f;
@@ -147,20 +155,21 @@ public class Nametags extends ModuleStructure {
             Render2D.rect(barX, barY, Math.max(barH, barW * hpPct), barH, hpColor, barRadius);
         }
 
+        // \u0440\u044f\u0434 \u0438\u043a\u043e\u043d\u043e\u043a: \u043f\u0440\u0435\u0434\u043c\u0435\u0442 \u0432 \u0440\u0443\u043a\u0435 + \u0431\u0440\u043e\u043d\u044f, \u043d\u0430\u0434 \u0442\u0430\u0431\u043b\u0435\u0442\u043a\u043e\u0439
         if (armorOn && distance <= armorMax) {
             this.armorItems.clear();
             ItemStack mainHand = player.getEquippedStack(EquipmentSlot.MAINHAND);
+            ItemStack offHand = player.getEquippedStack(EquipmentSlot.OFFHAND);
             ItemStack helmet = player.getEquippedStack(EquipmentSlot.HEAD);
             ItemStack chest = player.getEquippedStack(EquipmentSlot.CHEST);
             ItemStack legs = player.getEquippedStack(EquipmentSlot.LEGS);
             ItemStack boots = player.getEquippedStack(EquipmentSlot.FEET);
-            ItemStack offHand = player.getEquippedStack(EquipmentSlot.OFFHAND);
             if (!mainHand.isEmpty()) this.armorItems.add(mainHand);
+            if (!offHand.isEmpty()) this.armorItems.add(offHand);
             if (!helmet.isEmpty()) this.armorItems.add(helmet);
             if (!chest.isEmpty()) this.armorItems.add(chest);
             if (!legs.isEmpty()) this.armorItems.add(legs);
             if (!boots.isEmpty()) this.armorItems.add(boots);
-            if (!offHand.isEmpty()) this.armorItems.add(offHand);
             if (!this.armorItems.isEmpty()) {
                 float itemScale = scale * 0.8f;
                 float itemSize = 16.0f * itemScale;
