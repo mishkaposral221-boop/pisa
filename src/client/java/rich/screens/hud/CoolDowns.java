@@ -13,7 +13,6 @@ import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
 import net.minecraft.client.gui.DrawContext;
 import rich.client.draggables.AbstractHudElement;
-import rich.util.color.ColorUtil;
 import rich.util.animations.Direction;
 import rich.util.render.Render2D;
 import rich.util.render.font.Fonts;
@@ -173,8 +172,6 @@ public class CoolDowns extends AbstractHudElement {
          int var42 = 23;
          float var43 = 80.0F;
          boolean var44 = !this.cooldownAnimations.isEmpty();
-         int var45 = ColorUtil.b(0, 0, 0, 0);
-         Render2D.blur(var39, var41, 1.0F, 1.0F, 0.0F, 0.0F, var45);
          float var14 = Fonts.BOLD.getWidth("00:00", 6.0F);
          if (!var44) {
             var42 += 11;
@@ -265,7 +262,6 @@ public class CoolDowns extends AbstractHudElement {
                },
                3.0F
             );
-            Render2D.blur(var39, var41, 1.0F, 1.0F, 0.0F, 0.0F, var45);
             Render2D.outline(var53 + 1.0F, var41 + var51 - 1.0F, var52, 9.0F, 0.05F, new Color(132, 132, 132, var50).getRGB(), 2.0F);
             float var24 = var39 + 8.0F;
             float var25 = var41 + var51 - 1.0F;
@@ -306,7 +302,6 @@ public class CoolDowns extends AbstractHudElement {
                         },
                         3.0F
                      );
-                     Render2D.blur(var39, var41, 1.0F, 1.0F, 0.0F, 0.0F, var45);
                      Render2D.outline(var53 + 1.0F, var41 + var51 - 1.0F, var52, 9.0F, 0.05F, new Color(132, 132, 132, var31).getRGB(), 2.0F);
                      float var32 = var39 + 8.0F;
                      float var33 = var41 + var51 - 1.0F;
