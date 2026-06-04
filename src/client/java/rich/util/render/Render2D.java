@@ -29,6 +29,37 @@ public class Render2D {
    private static final float[] RADII_4 = new float[4];
    private static final float[] THICKNESS_8 = new float[8];
 
+   private static boolean scaleActive = false;
+   private static float scalePivotX = 0.0F;
+   private static float scalePivotY = 0.0F;
+   private static float scaleAmount = 1.0F;
+
+   public static void pushScale(float var0, float var1, float var2) {
+      scaleActive = true;
+      scalePivotX = var0;
+      scalePivotY = var1;
+      scaleAmount = var2;
+   }
+
+   public static void popScale() {
+      scaleActive = false;
+      scalePivotX = 0.0F;
+      scalePivotY = 0.0F;
+      scaleAmount = 1.0F;
+   }
+
+   private static float tx(float var0) {
+      return scaleActive ? scalePivotX + (var0 - scalePivotX) * scaleAmount : var0;
+   }
+
+   private static float ty(float var0) {
+      return scaleActive ? scalePivotY + (var0 - scalePivotY) * scaleAmount : var0;
+   }
+
+   private static float td(float var0) {
+      return scaleActive ? var0 * scaleAmount : var0;
+   }
+
    public static int getFixedScaledWidth() {
       Window var0 = MinecraftClient.getInstance().getWindow();
       return (int)Math.ceil(var0.getFramebufferWidth() / 2.0);
@@ -131,13 +162,13 @@ public class Render2D {
    public static void rect(float var0, float var1, float var2, float var3, int var4) {
       COLORS_4[0] = COLORS_4[1] = COLORS_4[2] = COLORS_4[3] = var4;
       RADII_4[0] = RADII_4[1] = RADII_4[2] = RADII_4[3] = 0.0F;
-      Initialization.getInstance().getManager().getRenderCore().getRectPipeline().drawRect(var0, var1, var2, var3, COLORS_4, RADII_4);
+      Initialization.getInstance().getManager().getRenderCore().getRectPipeline().drawRect(tx(var0), ty(var1), td(var2), td(var3), COLORS_4, RADII_4);
    }
 
    public static void rect(float var0, float var1, float var2, float var3, int var4, float var5) {
       COLORS_4[0] = COLORS_4[1] = COLORS_4[2] = COLORS_4[3] = var4;
       RADII_4[0] = RADII_4[1] = RADII_4[2] = RADII_4[3] = var5;
-      Initialization.getInstance().getManager().getRenderCore().getRectPipeline().drawRect(var0, var1, var2, var3, COLORS_4, RADII_4);
+      Initialization.getInstance().getManager().getRenderCore().getRectPipeline().drawRect(tx(var0), ty(var1), td(var2), td(var3), COLORS_4, RADII_4);
    }
 
    public static void rect(float var0, float var1, float var2, float var3, int var4, float var5, float var6, float var7, float var8) {
@@ -146,12 +177,12 @@ public class Render2D {
       RADII_4[1] = var6;
       RADII_4[2] = var7;
       RADII_4[3] = var8;
-      Initialization.getInstance().getManager().getRenderCore().getRectPipeline().drawRect(var0, var1, var2, var3, COLORS_4, RADII_4);
+      Initialization.getInstance().getManager().getRenderCore().getRectPipeline().drawRect(tx(var0), ty(var1), td(var2), td(var3), COLORS_4, RADII_4);
    }
 
    public static void gradientRect(float var0, float var1, float var2, float var3, int[] var4, float var5) {
       RADII_4[0] = RADII_4[1] = RADII_4[2] = RADII_4[3] = var5;
-      Initialization.getInstance().getManager().getRenderCore().getRectPipeline().drawRect(var0, var1, var2, var3, var4, RADII_4);
+      Initialization.getInstance().getManager().getRenderCore().getRectPipeline().drawRect(tx(var0), ty(var1), td(var2), td(var3), var4, RADII_4);
    }
 
    public static void gradientRect(float var0, float var1, float var2, float var3, int[] var4, float var5, float var6, float var7, float var8) {
@@ -159,7 +190,7 @@ public class Render2D {
       RADII_4[1] = var6;
       RADII_4[2] = var7;
       RADII_4[3] = var8;
-      Initialization.getInstance().getManager().getRenderCore().getRectPipeline().drawRect(var0, var1, var2, var3, var4, RADII_4);
+      Initialization.getInstance().getManager().getRenderCore().getRectPipeline().drawRect(tx(var0), ty(var1), td(var2), td(var3), var4, RADII_4);
    }
 
    public static void gradientRect9(
@@ -175,12 +206,12 @@ public class Render2D {
       COLORS_9[7] = var11;
       COLORS_9[8] = var12;
       RADII_4[0] = RADII_4[1] = RADII_4[2] = RADII_4[3] = var13;
-      Initialization.getInstance().getManager().getRenderCore().getRectPipeline().drawRect(var0, var1, var2, var3, COLORS_9, RADII_4);
+      Initialization.getInstance().getManager().getRenderCore().getRectPipeline().drawRect(tx(var0), ty(var1), td(var2), td(var3), COLORS_9, RADII_4);
    }
 
    public static void gradientRect9(float var0, float var1, float var2, float var3, int[] var4, float var5) {
       RADII_4[0] = RADII_4[1] = RADII_4[2] = RADII_4[3] = var5;
-      Initialization.getInstance().getManager().getRenderCore().getRectPipeline().drawRect(var0, var1, var2, var3, var4, RADII_4);
+      Initialization.getInstance().getManager().getRenderCore().getRectPipeline().drawRect(tx(var0), ty(var1), td(var2), td(var3), var4, RADII_4);
    }
 
    public static void gradientRect9(float var0, float var1, float var2, float var3, int[] var4, float var5, float var6, float var7, float var8) {
@@ -188,7 +219,7 @@ public class Render2D {
       RADII_4[1] = var6;
       RADII_4[2] = var7;
       RADII_4[3] = var8;
-      Initialization.getInstance().getManager().getRenderCore().getRectPipeline().drawRect(var0, var1, var2, var3, var4, RADII_4);
+      Initialization.getInstance().getManager().getRenderCore().getRectPipeline().drawRect(tx(var0), ty(var1), td(var2), td(var3), var4, RADII_4);
    }
 
    public static void gradientRect9(
@@ -218,12 +249,12 @@ public class Render2D {
       COLORS_9[7] = var11;
       COLORS_9[8] = var12;
       RADII_4[0] = RADII_4[1] = RADII_4[2] = RADII_4[3] = var13;
-      Initialization.getInstance().getManager().getRenderCore().getRectPipeline().drawRect(var0, var1, var2, var3, COLORS_9, RADII_4, var14);
+      Initialization.getInstance().getManager().getRenderCore().getRectPipeline().drawRect(tx(var0), ty(var1), td(var2), td(var3), COLORS_9, RADII_4, var14);
    }
 
    public static void gradientRect9(float var0, float var1, float var2, float var3, int[] var4, float var5, float var6) {
       RADII_4[0] = RADII_4[1] = RADII_4[2] = RADII_4[3] = var5;
-      Initialization.getInstance().getManager().getRenderCore().getRectPipeline().drawRect(var0, var1, var2, var3, var4, RADII_4, var6);
+      Initialization.getInstance().getManager().getRenderCore().getRectPipeline().drawRect(tx(var0), ty(var1), td(var2), td(var3), var4, RADII_4, var6);
    }
 
    public static void outline(float var0, float var1, float var2, float var3, float var4, int var5) {
@@ -236,7 +267,7 @@ public class Render2D {
       }
 
       RADII_4[0] = RADII_4[1] = RADII_4[2] = RADII_4[3] = 0.0F;
-      Initialization.getInstance().getManager().getRenderCore().getOutlinePipeline().drawOutline(var0, var1, var2, var3, COLORS_8, THICKNESS_8, RADII_4, 1.0F);
+      Initialization.getInstance().getManager().getRenderCore().getOutlinePipeline().drawOutline(tx(var0), ty(var1), td(var2), td(var3), COLORS_8, THICKNESS_8, RADII_4, 1.0F);
    }
 
    public static void outline(float var0, float var1, float var2, float var3, float var4, int var5, float var6) {
@@ -249,7 +280,7 @@ public class Render2D {
       }
 
       RADII_4[0] = RADII_4[1] = RADII_4[2] = RADII_4[3] = var6;
-      Initialization.getInstance().getManager().getRenderCore().getOutlinePipeline().drawOutline(var0, var1, var2, var3, COLORS_8, THICKNESS_8, RADII_4, 1.0F);
+      Initialization.getInstance().getManager().getRenderCore().getOutlinePipeline().drawOutline(tx(var0), ty(var1), td(var2), td(var3), COLORS_8, THICKNESS_8, RADII_4, 1.0F);
    }
 
    public static void outline(float var0, float var1, float var2, float var3, float var4, int var5, float var6, float var7, float var8, float var9) {
@@ -265,7 +296,7 @@ public class Render2D {
       RADII_4[1] = var7;
       RADII_4[2] = var8;
       RADII_4[3] = var9;
-      Initialization.getInstance().getManager().getRenderCore().getOutlinePipeline().drawOutline(var0, var1, var2, var3, COLORS_8, THICKNESS_8, RADII_4, 1.0F);
+      Initialization.getInstance().getManager().getRenderCore().getOutlinePipeline().drawOutline(tx(var0), ty(var1), td(var2), td(var3), COLORS_8, THICKNESS_8, RADII_4, 1.0F);
    }
 
    public static void gradientOutline(float var0, float var1, float var2, float var3, float var4, int[] var5, float var6) {
@@ -274,22 +305,22 @@ public class Render2D {
       }
 
       RADII_4[0] = RADII_4[1] = RADII_4[2] = RADII_4[3] = var6;
-      Initialization.getInstance().getManager().getRenderCore().getOutlinePipeline().drawOutline(var0, var1, var2, var3, var5, THICKNESS_8, RADII_4, 1.0F);
+      Initialization.getInstance().getManager().getRenderCore().getOutlinePipeline().drawOutline(tx(var0), ty(var1), td(var2), td(var3), var5, THICKNESS_8, RADII_4, 1.0F);
    }
 
    public static void blur(float var0, float var1, float var2, float var3, float var4, int var5) {
       float[] var6 = new float[]{0.0F, 0.0F, 0.0F, 0.0F};
-      Initialization.getInstance().getManager().getRenderCore().getBlurPipeline().drawBlur(var0, var1, var2, var3, var4, var6, var5);
+      Initialization.getInstance().getManager().getRenderCore().getBlurPipeline().drawBlur(tx(var0), ty(var1), td(var2), td(var3), var4, var6, var5);
    }
 
    public static void blur(float var0, float var1, float var2, float var3, float var4, float var5, int var6) {
       float[] var7 = new float[]{var5, var5, var5, var5};
-      Initialization.getInstance().getManager().getRenderCore().getBlurPipeline().drawBlur(var0, var1, var2, var3, var4, var7, var6);
+      Initialization.getInstance().getManager().getRenderCore().getBlurPipeline().drawBlur(tx(var0), ty(var1), td(var2), td(var3), var4, var7, var6);
    }
 
    public static void blur(float var0, float var1, float var2, float var3, float var4, float var5, float var6, float var7, float var8, int var9) {
       float[] var10 = new float[]{var5, var6, var7, var8};
-      Initialization.getInstance().getManager().getRenderCore().getBlurPipeline().drawBlur(var0, var1, var2, var3, var4, var10, var9);
+      Initialization.getInstance().getManager().getRenderCore().getBlurPipeline().drawBlur(tx(var0), ty(var1), td(var2), td(var3), var4, var10, var9);
    }
 
    public static void texture(Identifier var0, float var1, float var2, float var3, float var4, int var5) {
@@ -323,7 +354,7 @@ public class Render2D {
          .getManager()
          .getRenderCore()
          .getTexturePipeline()
-         .drawTexture(var0, var1, var2, var3, var4, var5, var6, var7, var8, var12, var13, var10);
+         .drawTexture(var0, tx(var1), ty(var2), td(var3), td(var4), var5, var6, var7, var8, var12, var13, var10);
    }
 
    public static void drawTexture(
@@ -390,12 +421,12 @@ public class Render2D {
       int var9 = (int)(var8 * 255.0F) << 24 | (int)(var5 * 255.0F) << 16 | (int)(var6 * 255.0F) << 8 | (int)(var7 * 255.0F);
       int[] var10 = new int[]{var9, var9, var9, var9};
       float[] var11 = new float[]{0.0F, 0.0F, 0.0F, 0.0F};
-      Initialization.getInstance().getManager().getRenderCore().getTexturePipeline().drawFramebufferTexture(var0, var1, var2, var3, var4, var10, var11, var8);
+      Initialization.getInstance().getManager().getRenderCore().getTexturePipeline().drawFramebufferTexture(var0, tx(var1), ty(var2), td(var3), td(var4), var10, var11, var8);
    }
 
    public static void glowOutline(float var0, float var1, float var2, float var3, float var4, int var5, float var6, float var7, float var8) {
       float[] var9 = new float[]{var6, var6, var6, var6};
-      Initialization.getInstance().getManager().getRenderCore().getGlowOutlinePipeline().drawGlowOutline(var0, var1, var2, var3, var5, var4, var9, var7, var8);
+      Initialization.getInstance().getManager().getRenderCore().getGlowOutlinePipeline().drawGlowOutline(tx(var0), ty(var1), td(var2), td(var3), var5, var4, var9, var7, var8);
    }
 
    public static void glowOutline(
@@ -406,7 +437,7 @@ public class Render2D {
          .getManager()
          .getRenderCore()
          .getGlowOutlinePipeline()
-         .drawGlowOutline(var0, var1, var2, var3, var5, var4, var12, var10, var11);
+         .drawGlowOutline(tx(var0), ty(var1), td(var2), td(var3), var5, var4, var12, var10, var11);
    }
 
    public static Matrix4f createProjection() {
