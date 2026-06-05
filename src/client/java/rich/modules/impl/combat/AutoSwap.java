@@ -3,12 +3,15 @@ package rich.modules.impl.combat;
 import java.util.List;
 import net.minecraft.client.gui.screen.ingame.InventoryScreen;
 import net.minecraft.network.packet.c2s.play.ClientCommandC2SPacket;
+import net.minecraft.network.packet.c2s.play.PlayerActionC2SPacket;
 import net.minecraft.screen.slot.SlotActionType;
 import net.minecraft.screen.slot.Slot;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
 import net.minecraft.util.collection.DefaultedList;
+import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.Direction;
 import net.minecraft.util.Identifier;
 import net.minecraft.registry.Registries;
 import rich.Initialization;
@@ -27,18 +30,19 @@ import rich.util.inventory.InventoryUtils;
 import rich.util.render.pipeline.WheelPipeline;
 
 public class AutoSwap extends ModuleStructure {
-   // Легитный свап: STOP_SPRINTING -> открываем инвентарь -> ждём -> свап -> ждём -> закрываем.
-   // КОРЕНЬ ПРОБЛЕМЫ: сервер трекает спринт по ClientCommandC2SPacket. setSprinting(false)
-   // меняет только клиентский флаг, а при открытом экране tickMovement не шлёт STOP_SPRINTING ->
-   // сервер думает что ты бежишь, и клик по инвентарю = "Inventory". Поэтому шлём STOP_SPRINTING явно
-   // И глушим AutoSprint через SUPPRESS_SPRINT, чтобы он не ре-включал спринт рядом с инвентарным действием.
-   // Всё разнесено по тикам, чтобы не ловилось как "multi action".
+   // ДВА пути свапа:
+   //  1) Предмет В ХОТБАРЕ -> чисто легитно: UpdateSelectedSlot (выбор слота) -> PlayerAction SWAP_ITEM_WITH_OFFHAND (F)
+   //     -> возврат слота. Это обычные пакеты, которые ванилла шлёт на бегу/в спринте. Детектить нечего.
+   //  2) Предмет В ГЛУБИНЕ инвентаря (ряды 9-35) -> перенос в офхенд требует инвентарной транзакции,
+   //     поэтому реально открываем инвентарь, шлём STOP_SPRINTING, полностью останавливаемся, clickSlot(SWAP), закрываем.
+   //     Авто-спринт на это окно глушится через SUPPRESS_SPRINT.
    public static volatile boolean SUPPRESS_SPRINT = false;
    private static final int OPEN_TICKS = 2;
    private static final int CLOSE_TICKS = 1;
    private static final int PHASE_IDLE = 0;
    private static final int PHASE_OPENING = 1;
    private static final int PHASE_CLOSING = 2;
+   private static final int PHASE_LEGIT = 3;
    public final BindSetting wheelBind = new BindSetting("Бинд колеса", "Клавиша открытия колеса");
    public final TextSetting slot1 = new TextSetting("Слот 1", "ID предмета");
    public final ButtonSetting pick1 = new ButtonSetting("Выбрать слот 1", "Открыть инвентарь")
@@ -60,6 +64,9 @@ public class AutoSwap extends ModuleStructure {
    private int swapPhase = PHASE_IDLE;
    private int phaseTimer = 0;
    private boolean sentSprintStop = false;
+   private int legitStep = -1;
+   private int legitSlot = -1;
+   private int legitSavedSlot = -1;
 
    public static AutoSwap getInstance() {
       return c.a(AutoSwap.class);
@@ -120,7 +127,6 @@ public class AutoSwap extends ModuleStructure {
       }
    }
 
-   // STOP_SPRINTING (1й тик) -> halt + ждём OPEN_TICKS -> swap -> ждём CLOSE_TICKS -> close.
    @EventHandler
    public void onTick(TickEvent var1) {
       if (mc.player == null || mc.interactionManager == null) {
@@ -128,6 +134,11 @@ public class AutoSwap extends ModuleStructure {
       }
 
       if (this.swapPhase == PHASE_IDLE) {
+         return;
+      }
+
+      if (this.swapPhase == PHASE_LEGIT) {
+         this.handleLegit();
          return;
       }
 
@@ -163,7 +174,6 @@ public class AutoSwap extends ModuleStructure {
       }
 
       if (this.swapPhase == PHASE_CLOSING) {
-         // держим игрока остановленным до самого закрытия.
          if (mc.currentScreen instanceof InventoryScreen) {
             this.haltMovement();
          }
@@ -173,9 +183,38 @@ public class AutoSwap extends ModuleStructure {
             return;
          }
 
-         // закрываем экран -> ClientPlayerEntity.closeHandledScreen() шлёт CloseHandledScreenC2SPacket.
          if (mc.currentScreen instanceof InventoryScreen) {
             mc.setScreen(null);
+         }
+
+         this.resetSwap();
+      }
+   }
+
+   // Легитный путь: выбрать слот -> F (swap with offhand) -> вернуть слот. По одному действию на тик, как человек.
+   private void handleLegit() {
+      if (this.legitStep == 0) {
+         this.legitSavedSlot = InventoryUtils.currentSlot();
+         InventoryUtils.selectSlotSilent(this.legitSlot);
+         mc.player.getInventory().setSelectedSlot(this.legitSlot);
+         this.legitStep = 1;
+         return;
+      }
+
+      if (this.legitStep == 1) {
+         if (mc.getNetworkHandler() != null) {
+            mc.getNetworkHandler()
+               .sendPacket(new PlayerActionC2SPacket(PlayerActionC2SPacket.Action.SWAP_ITEM_WITH_OFFHAND, BlockPos.ORIGIN, Direction.DOWN));
+         }
+
+         this.legitStep = 2;
+         return;
+      }
+
+      if (this.legitStep == 2) {
+         if (this.legitSavedSlot >= 0 && this.legitSavedSlot <= 8) {
+            InventoryUtils.selectSlotSilent(this.legitSavedSlot);
+            mc.player.getInventory().setSelectedSlot(this.legitSavedSlot);
          }
 
          this.resetSwap();
@@ -205,6 +244,9 @@ public class AutoSwap extends ModuleStructure {
       this.phaseTimer = 0;
       this.pendingSwapSlot = -1;
       this.sentSprintStop = false;
+      this.legitStep = -1;
+      this.legitSlot = -1;
+      this.legitSavedSlot = -1;
       SUPPRESS_SPRINT = false;
    }
 
@@ -213,9 +255,26 @@ public class AutoSwap extends ModuleStructure {
          return false;
       }
 
-      Slot var2 = InventoryUtils.findSlotAnywhere(var1.getItem());
-      if (var2 != null) {
-         this.pendingSwapSlot = var2.id;
+      Item var2 = var1.getItem();
+      // уже в офхенде - ничего делать не нужно.
+      if (mc.player.getOffHandStack().getItem() == var2) {
+         return true;
+      }
+
+      // 1) хотбар -> легитный select + F.
+      int var3 = InventoryUtils.findItemInHotbar(var2);
+      if (var3 != -1) {
+         this.legitSlot = var3;
+         this.legitStep = 0;
+         this.swapPhase = PHASE_LEGIT;
+         this.phaseTimer = 0;
+         return true;
+      }
+
+      // 2) глубина инвентаря -> защищённая транзакция через открытый экран.
+      Slot var4 = InventoryUtils.findSlotInInventory(var2);
+      if (var4 != null) {
+         this.pendingSwapSlot = var4.id;
          this.sentSprintStop = false;
          SUPPRESS_SPRINT = true;
          mc.setScreen(new InventoryScreen(mc.player));
