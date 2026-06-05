@@ -1,8 +1,8 @@
 package rich.modules.impl.misc;
 
 import rich.Initialization;
-import rich.modules.module.ModuleCategory;
 import rich.modules.module.ModuleStructure;
+import rich.modules.module.category.ModuleCategory;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -41,8 +41,7 @@ public class PanicMode extends ModuleStructure {
 
     public PanicMode() {
         super("PanicMode", "Скрывает все функции до перезахода на сервер", ModuleCategory.UTILITIES);
-        // Клавиша по умолчанию: HOME
-        this.setKey(268);
+        this.setKey(268); // HOME
         instance = this;
     }
 
@@ -73,8 +72,6 @@ public class PanicMode extends ModuleStructure {
 
     /**
      * Вызывается при заходе игрока на сервер (GameJoinS2CPacket).
-     * Если паника была активна — разблокируем GUI.
-     * Модули восстановятся только после открытия GUI.
      */
     public void onServerJoin() {
         if (panicActive && !rejoinedAfterPanic) {
@@ -84,7 +81,6 @@ public class PanicMode extends ModuleStructure {
 
     /**
      * Вызывается когда игрок открыл GUI после перезахода.
-     * Снимает паник-режим и восстанавливает сохранённые модули.
      */
     public void onGuiOpenedAfterPanic() {
         if (panicActive && rejoinedAfterPanic) {
@@ -97,15 +93,11 @@ public class PanicMode extends ModuleStructure {
         }
     }
 
-    /**
-     * @return true если GUI сейчас заблокирован
-     *         (паника активна, но игрок ещё не перезашёл)
-     */
+    /** @return true если GUI сейчас заблокирован */
     public boolean isGuiBlocked() {
         return panicActive && !rejoinedAfterPanic;
     }
 
-    /** @return true если паника активна */
     public boolean isPanicActive() {
         return panicActive;
     }
