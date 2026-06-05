@@ -3,32 +3,28 @@ package rich.modules.impl.render;
 import rich.modules.module.ModuleStructure;
 import rich.modules.module.category.ModuleCategory;
 import rich.modules.module.setting.implement.BooleanSetting;
-import rich.modules.module.setting.implement.ColorSetting;
 import rich.util.c;
 
 /**
- * Chams — рендер сквозь стены: тело, броня, предметы в руках.
+ * Chams — renders enemy players through walls with their real skin/armor/items texture.
  *
- * <p>RICH$EQUIPMENT_TARGET — флаг, который LivingEntityRendererMixin ставит в true
- * на время render() целевого игрока. Все миксины (броня, предметы)
- * читают этот флаг чтобы ограничить эффект только целевыми игроками.</p>
+ * <p>No color tint is applied — the player looks exactly like normal but is visible
+ * through walls (thanks to the NO_DEPTH_TEST pipeline in {@link rich.util.render.clientpipeline.ClientPipelines#CHAMS_ENTITY}).</p>
+ *
+ * <p>RICH$EQUIPMENT_TARGET — flag set by LivingEntityRendererMixin to true during
+ * render() of a target player. Armor and item mixins read this flag to scope
+ * the through-wall layer only to enemy players.</p>
  */
 public class Chams extends ModuleStructure {
 
-    // Set true by LivingEntityRendererMixin while rendering a Chams target player.
-    // All equipment mixins (armor, items) read this flag to scope the no-depth
-    // (through-wall) layer only to Chams targets.
+    /** Set true by LivingEntityRendererMixin while rendering a Chams target player. */
     public static volatile boolean RICH$EQUIPMENT_TARGET = false;
 
-    /** Цвет тинта сквозь стены (ARGB, полупрозрачный красный по умолчанию). */
-    public ColorSetting color = new ColorSetting("Color", "Through-wall tint color")
-            .value(0x80FF3333);
-
-    /** Показывать броню сквозь стены. */
+    /** Show armor through walls. */
     public BooleanSetting showArmor = new BooleanSetting("ShowArmor", "Show armor through walls")
             .setValue(true);
 
-    /** Показывать предметы в руках сквозь стены. */
+    /** Show held items through walls. */
     public BooleanSetting showItems = new BooleanSetting("ShowItems", "Show held items through walls")
             .setValue(true);
 
@@ -38,6 +34,6 @@ public class Chams extends ModuleStructure {
 
     public Chams() {
         super("Chams", "Render entity models through walls", ModuleCategory.VISUALS);
-        this.settings(this.color, this.showArmor, this.showItems);
+        this.settings(this.showArmor, this.showItems);
     }
 }
