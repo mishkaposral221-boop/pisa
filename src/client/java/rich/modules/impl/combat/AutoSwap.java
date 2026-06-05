@@ -30,8 +30,10 @@ public class AutoSwap extends ModuleStructure {
    // Легитный свап: STOP_SPRINTING -> открываем инвентарь -> ждём -> свап -> ждём -> закрываем.
    // КОРЕНЬ ПРОБЛЕМЫ: сервер трекает спринт по ClientCommandC2SPacket. setSprinting(false)
    // меняет только клиентский флаг, а при открытом экране tickMovement не шлёт STOP_SPRINTING ->
-   // сервер думает что ты бежишь, и клик по инвентарю = "Inventory". Поэтому шлём STOP_SPRINTING явно.
+   // сервер думает что ты бежишь, и клик по инвентарю = "Inventory". Поэтому шлём STOP_SPRINTING явно
+   // И глушим AutoSprint через SUPPRESS_SPRINT, чтобы он не ре-включал спринт рядом с инвентарным действием.
    // Всё разнесено по тикам, чтобы не ловилось как "multi action".
+   public static volatile boolean SUPPRESS_SPRINT = false;
    private static final int OPEN_TICKS = 2;
    private static final int CLOSE_TICKS = 1;
    private static final int PHASE_IDLE = 0;
@@ -203,6 +205,7 @@ public class AutoSwap extends ModuleStructure {
       this.phaseTimer = 0;
       this.pendingSwapSlot = -1;
       this.sentSprintStop = false;
+      SUPPRESS_SPRINT = false;
    }
 
    private boolean requestSwap(ItemStack var1) {
@@ -214,6 +217,7 @@ public class AutoSwap extends ModuleStructure {
       if (var2 != null) {
          this.pendingSwapSlot = var2.id;
          this.sentSprintStop = false;
+         SUPPRESS_SPRINT = true;
          mc.setScreen(new InventoryScreen(mc.player));
          this.haltMovement();
          this.swapPhase = PHASE_OPENING;
