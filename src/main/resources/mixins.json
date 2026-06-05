@@ -23,6 +23,7 @@
     "GameRendererMixin",
     "HandledScreenMixin",
     "InventoryAnimMixin",
+    "HeldItemChamsMixin",
     "HeldItemRendererMixin",
     "IClientWorld",
     "InGameHudMixin",
