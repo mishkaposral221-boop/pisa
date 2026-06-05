@@ -8,7 +8,9 @@ import net.minecraft.util.Identifier;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.ModifyArg;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import rich.modules.impl.render.Chams;
 import rich.util.render.clientpipeline.ClientPipelines;
 
@@ -18,28 +20,30 @@ import rich.util.render.clientpipeline.ClientPipelines;
 // LivingEntityRenderer.render. Armor is submitted within that same render() call by
 // EquipmentRenderer, so RICH$EQUIPMENT_TARGET is set and we can swap the armor layer too.
 //
-// Why the capture is back:
-//   The trailing Identifier argument of render() is the dye/overlay decal - it is NULL for normal
-//   armor. A previous commit used ONLY that argument, so normal armor got CHAMS_ENTITY.apply(null)
-//   and rendered NOTHING through walls. We instead use the BASE texture that layerTextures.apply()
-//   resolves for each layer.
+// EquipmentRenderer.render is called ONCE PER ARMOR SLOT (helmet / chestplate / leggings / boots),
+// and each slot resolves its base texture through layerTextures.apply(...). We capture that
+// resolved Identifier and feed it to CHAMS_ENTITY for the matching submitModel call.
 //
-//   The earlier capture attempt grabbed the FIRST apply() Identifier and reused it for every layer,
-//   which put the wrong texture on later pieces (the "model bug"). The fix is to OVERWRITE the
-//   captured texture on EVERY apply(): submitModel is always called right after its layer's
-//   layerTextures.apply(), so each piece gets its OWN base texture.
-//
-//   Because every piece now resolves its own correct base texture, leg armor (leggings / layer_2)
-//   no longer samples as solid black, so it is rendered with the chams layer just like the rest of
-//   the set instead of being skipped (which made the leggings invisible through walls).
+// IMPORTANT: rich$lastEquipTexture is an instance field that lives ACROSS render() calls. The
+// leggings slot (layer_2 / inner leg model) was rendering black because it could inherit the
+// PREVIOUS slot's texture if its own apply() result was not captured in time. We now clear the
+// captured texture at the HEAD of every render() call, so a slot can only ever use its OWN base
+// texture - and if it somehow resolves nothing, it falls back to the normal layer (visible) instead
+// of being drawn black/invisible.
 @Mixin(EquipmentRenderer.class)
 public class ArmorChamsMixin {
    private static final String RICH$RENDER = "render(Lnet/minecraft/client/render/entity/equipment/EquipmentModel$LayerType;Lnet/minecraft/registry/RegistryKey;Lnet/minecraft/client/model/Model;Ljava/lang/Object;Lnet/minecraft/item/ItemStack;Lnet/minecraft/client/util/math/MatrixStack;Lnet/minecraft/client/render/command/OrderedRenderCommandQueue;ILnet/minecraft/util/Identifier;II)V";
 
-   // Base armor texture for the layer about to be submitted. Overwritten on every apply() (no
-   // first-only guard) so each submitModel uses its own texture.
+   // Base armor texture for the layer about to be submitted. Reset on every render() call and
+   // overwritten on every apply() so each submitModel uses its own texture.
    @Unique
    private Identifier rich$lastEquipTexture;
+
+   @Inject(method = RICH$RENDER, at = @At("HEAD"))
+   private void rich$resetCapture(CallbackInfo ci) {
+      // New slot: forget the previous slot's texture so leggings can't be drawn with it.
+      this.rich$lastEquipTexture = null;
+   }
 
    @ModifyExpressionValue(
       method = RICH$RENDER,
