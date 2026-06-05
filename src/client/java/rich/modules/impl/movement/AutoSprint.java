@@ -6,6 +6,7 @@ import net.minecraft.network.packet.c2s.play.ClientCommandC2SPacket.Mode;
 import rich.events.api.EventHandler;
 import rich.events.impl.PacketEvent;
 import rich.events.impl.TickEvent;
+import rich.modules.impl.combat.AutoSwap;
 import rich.modules.impl.combat.Triggerbot;
 import rich.modules.module.ModuleStructure;
 import rich.modules.module.category.ModuleCategory;
@@ -67,6 +68,12 @@ public class AutoSprint extends ModuleStructure {
 
    @Native(type = Native.Type.VMProtectBeginMutation)
    private void processSprint() {
+      // Во время свапа из инвентаря НИКОГДА не ре-включаем спринт: иначе START_SPRINTING
+      // уйдёт рядом с инвентарным кликом/закрытием экрана и сервер посчитает это читами (Inventory).
+      if (AutoSwap.SUPPRESS_SPRINT) {
+         return;
+      }
+
       // Yield to the Triggerbot while it is dropping sprint to land a crit. Without this, holding W
       // (forwardSpeed > 0) makes us re-enable sprint the same tick the Triggerbot cleared it, so the
       // server never sees STOP_SPRINTING before the attack and the hit is not a crit. When the user
