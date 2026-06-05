@@ -20,14 +20,18 @@ import rich.util.render.clientpipeline.ClientPipelines;
 //
 // Why the capture is back:
 //   The trailing Identifier argument of render() is the dye/overlay decal - it is NULL for normal
-//   armor. The previous commit used ONLY that argument, so normal armor got CHAMS_ENTITY.apply(null)
-//   and rendered NOTHING through walls. We must instead use the BASE texture that layerTextures.apply()
+//   armor. A previous commit used ONLY that argument, so normal armor got CHAMS_ENTITY.apply(null)
+//   and rendered NOTHING through walls. We instead use the BASE texture that layerTextures.apply()
 //   resolves for each layer.
 //
 //   The earlier capture attempt grabbed the FIRST apply() Identifier and reused it for every layer,
 //   which put the wrong texture on later pieces (the "model bug"). The fix is to OVERWRITE the
 //   captured texture on EVERY apply(): submitModel is always called right after its layer's
 //   layerTextures.apply(), so each piece gets its OWN base texture.
+//
+//   Because every piece now resolves its own correct base texture, leg armor (leggings / layer_2)
+//   no longer samples as solid black, so it is rendered with the chams layer just like the rest of
+//   the set instead of being skipped (which made the leggings invisible through walls).
 @Mixin(EquipmentRenderer.class)
 public class ArmorChamsMixin {
    private static final String RICH$RENDER = "render(Lnet/minecraft/client/render/entity/equipment/EquipmentModel$LayerType;Lnet/minecraft/registry/RegistryKey;Lnet/minecraft/client/model/Model;Ljava/lang/Object;Lnet/minecraft/item/ItemStack;Lnet/minecraft/client/util/math/MatrixStack;Lnet/minecraft/client/render/command/OrderedRenderCommandQueue;ILnet/minecraft/util/Identifier;II)V";
@@ -62,12 +66,8 @@ public class ArmorChamsMixin {
       if (tex == null) {
          return original;
       }
-      // Leg armor (leggings / layer 2) samples as solid black under the chams pipeline; keep its
-      // original layer so it renders correctly instead of black.
-      String path = tex.getPath();
-      if (path != null && (path.contains("leggings") || path.contains("layer_2"))) {
-         return original;
-      }
+      // Every armor piece (helmet / chestplate / leggings / boots) gets its own per-layer base
+      // texture, so leggings render correctly through walls instead of black or invisible.
       return ClientPipelines.CHAMS_ENTITY.apply(tex);
    }
 }
