@@ -2,9 +2,6 @@ package rich.modules.impl.combat;
 
 import java.util.List;
 import net.minecraft.client.gui.screen.ingame.InventoryScreen;
-import net.minecraft.network.packet.Packet;
-import net.minecraft.network.packet.c2s.play.PlayerInputC2SPacket;
-import net.minecraft.network.packet.c2s.play.PlayerMoveC2SPacket;
 import net.minecraft.screen.slot.SlotActionType;
 import net.minecraft.screen.slot.Slot;
 import net.minecraft.item.Item;
@@ -17,9 +14,7 @@ import rich.Initialization;
 import rich.events.api.EventHandler;
 import rich.events.impl.ClickSlotEvent;
 import rich.events.impl.DrawEvent;
-import rich.events.impl.InputEvent;
 import rich.events.impl.KeyEvent;
-import rich.events.impl.PacketEvent;
 import rich.events.impl.TickEvent;
 import rich.modules.module.ModuleStructure;
 import rich.modules.module.category.ModuleCategory;
@@ -31,10 +26,14 @@ import rich.util.inventory.InventoryUtils;
 import rich.util.render.pipeline.WheelPipeline;
 
 public class AutoSwap extends ModuleStructure {
-   // Сколько тиков дропать пакеты движения (blink) + держать игрока замороженным
-   // перед swap-кликом, чтобы сервер не видел движения в момент инвентарного клика.
-   // Пакеты ДРОПАЮТСЯ (не досылаются) - всплеск досыла ловится как "multi action".
-   private static final int BLINK_TICKS = 4;
+   // Легитный свап: реально открываем инвентарь -> ждём (ванилла сама останавливает
+   // движение, пока экран открыт) -> свап -> ждём -> закрываем (ванилла шлёт CloseHandledScreen).
+   // Всё разнесено по тикам, чтобы не ловилось как "multi action".
+   private static final int OPEN_TICKS = 2;
+   private static final int CLOSE_TICKS = 1;
+   private static final int PHASE_IDLE = 0;
+   private static final int PHASE_OPENING = 1;
+   private static final int PHASE_CLOSING = 2;
    public final BindSetting wheelBind = new BindSetting("Бинд колеса", "Клавиша открытия колеса");
    public final TextSetting slot1 = new TextSetting("Слот 1", "ID предмета");
    public final ButtonSetting pick1 = new ButtonSetting("Выбрать слот 1", "Открыть инвентарь")
@@ -53,8 +52,8 @@ public class AutoSwap extends ModuleStructure {
    private int lastHover = -1;
    private int pickingForSlot = -1;
    private int pendingSwapSlot = -1;
-   private boolean blinkActive = false;
-   private int blinkPhase = 0;
+   private int swapPhase = PHASE_IDLE;
+   private int phaseTimer = 0;
 
    public static AutoSwap getInstance() {
       return c.a(AutoSwap.class);
@@ -115,65 +114,58 @@ public class AutoSwap extends ModuleStructure {
       }
    }
 
-   // Blink: пока активен, ДРОПАЕМ исходящие пакеты движения, чтобы сервер не получал
-   // апдейты позиции возле swap-клика. НИЧЕГО НЕ ДОСЫЛАЕМ.
-   // ClickSlot (swap) - отдельный пакет, его пропускаем.
-   @EventHandler
-   public void onPacket(PacketEvent var1) {
-      if (this.blinkActive && var1.isSend()) {
-         Packet<?> var2 = var1.getPacket();
-         if (var2 instanceof PlayerMoveC2SPacket || var2 instanceof PlayerInputC2SPacket) {
-            var1.cancel();
-         }
-      }
-   }
-
-   // Пока идёт blink - обнуляем ввод движения, чтобы клиент не разгонялся
-   // (реального смещения нет -> нечего ресинкать, нет рубербанда).
-   @EventHandler
-   public void onInput(InputEvent var1) {
-      if (mc.player != null && this.blinkActive) {
-         var1.inputNone();
-      }
-   }
-
+   // open -> (ждём OPEN_TICKS, ванилла сама останавливает движение) -> swap -> (ждём CLOSE_TICKS) -> close.
    @EventHandler
    public void onTick(TickEvent var1) {
       if (mc.player == null || mc.interactionManager == null) {
          return;
       }
 
-      if (!this.blinkActive) {
+      if (this.swapPhase == PHASE_IDLE) {
          return;
       }
 
-      this.haltMovement();
+      if (this.swapPhase == PHASE_OPENING) {
+         // инвентарь должен быть открыт; если юзер его закрыл - отменяем.
+         if (!(mc.currentScreen instanceof InventoryScreen)) {
+            this.resetSwap();
+            return;
+         }
 
-      if (this.blinkPhase > 0) {
-         this.blinkPhase--;
+         if (this.phaseTimer > 0) {
+            this.phaseTimer--;
+            return;
+         }
+
+         if (this.pendingSwapSlot >= 0) {
+            mc.interactionManager.clickSlot(mc.player.playerScreenHandler.syncId, this.pendingSwapSlot, 40, SlotActionType.SWAP, mc.player);
+            this.pendingSwapSlot = -1;
+         }
+
+         this.swapPhase = PHASE_CLOSING;
+         this.phaseTimer = CLOSE_TICKS;
          return;
       }
 
-      if (this.pendingSwapSlot >= 0) {
-         mc.interactionManager.clickSlot(mc.player.playerScreenHandler.syncId, this.pendingSwapSlot, 40, SlotActionType.SWAP, mc.player);
-         this.pendingSwapSlot = -1;
-      }
+      if (this.swapPhase == PHASE_CLOSING) {
+         if (this.phaseTimer > 0) {
+            this.phaseTimer--;
+            return;
+         }
 
-      this.stopBlink();
+         // закрываем экран -> ClientPlayerEntity.closeHandledScreen() шлёт CloseHandledScreenC2SPacket.
+         if (mc.currentScreen instanceof InventoryScreen) {
+            mc.setScreen(null);
+         }
+
+         this.resetSwap();
+      }
    }
 
-   private void haltMovement() {
-      if (mc.player != null) {
-         mc.player.setSprinting(false);
-         mc.player.setVelocity(0.0, mc.player.getVelocity().y, 0.0);
-      }
-   }
-
-   // Просто выключаем blink. Дропнутые move-пакеты НЕ досылаются -
-   // следующий обычный move-пакет сам ресинкнет позицию.
-   private void stopBlink() {
-      this.blinkActive = false;
-      this.blinkPhase = 0;
+   private void resetSwap() {
+      this.swapPhase = PHASE_IDLE;
+      this.phaseTimer = 0;
+      this.pendingSwapSlot = -1;
    }
 
    private boolean requestSwap(ItemStack var1) {
@@ -184,8 +176,9 @@ public class AutoSwap extends ModuleStructure {
       Slot var2 = InventoryUtils.findSlotAnywhere(var1.getItem());
       if (var2 != null) {
          this.pendingSwapSlot = var2.id;
-         this.blinkPhase = BLINK_TICKS;
-         this.blinkActive = true;
+         mc.setScreen(new InventoryScreen(mc.player));
+         this.swapPhase = PHASE_OPENING;
+         this.phaseTimer = OPEN_TICKS;
          return true;
       }
 
@@ -264,8 +257,11 @@ public class AutoSwap extends ModuleStructure {
    public void deactivate() {
       this.wheelOpen = false;
       this.pickingForSlot = -1;
-      this.pendingSwapSlot = -1;
-      this.stopBlink();
+      this.resetSwap();
+      if (mc.currentScreen instanceof InventoryScreen) {
+         mc.setScreen(null);
+      }
+
       this.setCursorUnlocked(false);
    }
 
