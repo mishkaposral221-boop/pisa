@@ -6,6 +6,7 @@ import net.minecraft.network.packet.c2s.play.ClientCommandC2SPacket.Mode;
 import rich.events.api.EventHandler;
 import rich.events.impl.PacketEvent;
 import rich.events.impl.TickEvent;
+import rich.modules.impl.combat.Triggerbot;
 import rich.modules.module.ModuleStructure;
 import rich.modules.module.category.ModuleCategory;
 import rich.modules.module.setting.implement.BooleanSetting;
@@ -66,6 +67,14 @@ public class AutoSprint extends ModuleStructure {
 
    @Native(type = Native.Type.VMProtectBeginMutation)
    private void processSprint() {
+      // Yield to the Triggerbot while it is dropping sprint to land a crit. Without this, holding W
+      // (forwardSpeed > 0) makes us re-enable sprint the same tick the Triggerbot cleared it, so the
+      // server never sees STOP_SPRINTING before the attack and the hit is not a crit. When the user
+      // turns on "Don't reset sprint" (noReset), we keep the old always-sprint behaviour instead.
+      if (!this.noReset.isValue() && Triggerbot.SUPPRESS_SPRINT) {
+         return;
+      }
+
       boolean var1 = mc.player.horizontalCollision && !mc.player.collidedSoftly;
       boolean var2 = mc.player.isSneaking() && !mc.player.isSwimming();
       boolean var3 = !var1 && mc.player.forwardSpeed > 0.0F;
