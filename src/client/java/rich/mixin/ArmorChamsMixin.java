@@ -9,76 +9,76 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.ModifyArg;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import rich.modules.impl.render.Chams;
 import rich.util.render.clientpipeline.ClientPipelines;
 
-// Armor through walls.
-//
-// Body chams swaps the entity RenderLayer to the no-depth CHAMS_ENTITY layer inside
-// LivingEntityRenderer.render. Armor is submitted within that same render() call by
-// EquipmentRenderer, so RICH$EQUIPMENT_TARGET is set and we can swap the armor layer too.
-//
-// EquipmentRenderer.render is called ONCE PER ARMOR SLOT (helmet / chestplate / leggings / boots),
-// and each slot resolves textures through layerTextures.apply(...). A single slot may resolve
-// MULTIPLE textures within one render() call: the base armor texture first, then optional
-// overlay/trim textures. We only want the BASE texture for CHAMS_ENTITY.
-//
-// IMPORTANT: leggings (layer_2 / inner leg model) were rendering BLACK because a later overlay/trim
-// apply() result overwrote the captured Identifier, and CHAMS_ENTITY then sampled that empty/wrong
-// texture. The fix: keep the FIRST apply() result per render() call (the base texture) and ignore the
-// rest. rich$lastEquipTexture is reset at the HEAD of every render() call, so each slot can only ever
-// use its OWN base texture - and if nothing is captured it falls back to the normal layer (visible)
-// instead of being drawn black.
+/**
+ * Renders other players' armor through walls (chams).
+ *
+ * <p>{@code EquipmentRenderer#render} draws each armor layer with
+ * {@code RenderLayers.armorCutoutNoCull(identifier)} and may additionally draw an
+ * enchantment glint ({@code armorEntityGlint()}) and an armor trim
+ * ({@code TexturedRenderLayers.getArmorTrims(...)}) on top. We swap ONLY the base
+ * armor layer to the no-depth {@link ClientPipelines#CHAMS_ENTITY} pipeline, using
+ * the texture resolved for THAT specific layer. The glint and trim submissions are
+ * intentionally left alone — previously swapping them with the (wrong) base texture
+ * is what made dyed/enchanted leggings render solid black.</p>
+ *
+ * <p>The base texture for each layer is resolved through {@code this.layerTextures.apply(key)}
+ * immediately before {@code armorCutoutNoCull} is called, so we capture the latest
+ * {@link Identifier} produced by any {@code Function#apply} in the method and use it for the
+ * very next layer swap. This guarantees the helmet / chestplate / leggings / boots each keep
+ * their own texture.</p>
+ */
 @Mixin(EquipmentRenderer.class)
 public class ArmorChamsMixin {
-   private static final String RICH$RENDER = "render(Lnet/minecraft/client/render/entity/equipment/EquipmentModel$LayerType;Lnet/minecraft/registry/RegistryKey;Lnet/minecraft/client/model/Model;Ljava/lang/Object;Lnet/minecraft/item/ItemStack;Lnet/minecraft/client/util/math/MatrixStack;Lnet/minecraft/client/render/command/OrderedRenderCommandQueue;ILnet/minecraft/util/Identifier;II)V";
 
-   // Base armor texture for the layer about to be submitted. Reset on every render() call and
-   // set ONLY from the first apply() so each submitModel uses its slot's base texture.
-   @Unique
-   private Identifier rich$lastEquipTexture;
+	private static final String RICH$RENDER = "render(Lnet/minecraft/client/render/entity/equipment/EquipmentModel$LayerType;Lnet/minecraft/registry/RegistryKey;Lnet/minecraft/client/model/Model;Ljava/lang/Object;Lnet/minecraft/item/ItemStack;Lnet/minecraft/client/util/math/MatrixStack;Lnet/minecraft/client/render/command/OrderedRenderCommandQueue;ILnet/minecraft/util/Identifier;II)V";
 
-   @Inject(method = RICH$RENDER, at = @At("HEAD"))
-   private void rich$resetCapture(CallbackInfo ci) {
-      // New slot: forget the previous slot's texture so leggings can't be drawn with it.
-      this.rich$lastEquipTexture = null;
-   }
+	@Unique
+	private Identifier rich$lastEquipTexture;
 
-   @ModifyExpressionValue(
-      method = RICH$RENDER,
-      at = @At(value = "INVOKE", target = "Ljava/util/function/Function;apply(Ljava/lang/Object;)Ljava/lang/Object;"),
-      require = 0
-   )
-   private Object rich$captureBaseTexture(Object result) {
-      // FIRST apply() per render() call wins: that is the slot's BASE texture
-      // (helmet / chestplate / leggings / boots). Later apply() results in the same call are
-      // overlay/trim lookups (e.g. the leggings layer_2 overlay) whose texture, when fed to
-      // CHAMS_ENTITY, sampled empty/black. Ignoring them keeps leggings on their real base texture.
-      if (result instanceof Identifier && this.rich$lastEquipTexture == null) {
-         this.rich$lastEquipTexture = (Identifier)result;
-      }
-      return result;
-   }
+	@Inject(method = RICH$RENDER, at = @At("HEAD"))
+	private void rich$resetCapture(CallbackInfo ci) {
+		this.rich$lastEquipTexture = null;
+	}
 
-   @ModifyArg(
-      method = RICH$RENDER,
-      at = @At(value = "INVOKE", target = "submitModel")
-   )
-   private RenderLayer rich$armorChamsLayer(RenderLayer original, @Local(argsOnly = true) Identifier textureArg) {
-      Chams chams = Chams.getInstance();
-      if (chams == null || !chams.isState() || !Chams.RICH$EQUIPMENT_TARGET) {
-         return original;
-      }
-      Identifier tex = this.rich$lastEquipTexture != null ? this.rich$lastEquipTexture : textureArg;
-      if (tex == null) {
-         // Nothing reliable to sample: keep the normal layer (visible with depth) rather than
-         // forcing a wrong texture that would render black.
-         return original;
-      }
-      // Every armor piece (helmet / chestplate / leggings / boots) gets its own per-layer base
-      // texture, so leggings render correctly through walls instead of black or invisible.
-      return ClientPipelines.CHAMS_ENTITY.apply(tex);
-   }
+	/**
+	 * Capture the texture resolved for the layer that is about to be submitted.
+	 * {@code this.layerTextures.apply(...)} (and {@code this.trimSprites.apply(...)}) are the only
+	 * {@code Function#apply} calls in render(); only the former returns an {@link Identifier},
+	 * so the trim sprite lookup is ignored. We keep the LATEST identifier (per-layer), not the first.
+	 */
+	@ModifyExpressionValue(
+		method = RICH$RENDER,
+		at = @At(value = "INVOKE", target = "Ljava/util/function/Function;apply(Ljava/lang/Object;)Ljava/lang/Object;")
+	)
+	private Object rich$captureBaseTexture(Object result) {
+		if (result instanceof Identifier) {
+			this.rich$lastEquipTexture = (Identifier) result;
+		}
+		return result;
+	}
+
+	/**
+	 * Swap ONLY the base armor layer to the no-depth chams pipeline, using this layer's own texture.
+	 * Glint ({@code armorEntityGlint()}) and trim ({@code getArmorTrims(...)}) are not targeted here,
+	 * so they keep their normal layers and no longer corrupt the leggings.
+	 */
+	@ModifyExpressionValue(
+		method = RICH$RENDER,
+		at = @At(value = "INVOKE", target = "Lnet/minecraft/client/render/RenderLayers;armorCutoutNoCull(Lnet/minecraft/util/Identifier;)Lnet/minecraft/client/render/RenderLayer;")
+	)
+	private RenderLayer rich$armorChamsLayer(RenderLayer original, @Local(argsOnly = true) Identifier textureId) {
+		Chams chams = Chams.getInstance();
+		if (chams == null || !chams.isState() || !Chams.RICH$EQUIPMENT_TARGET) {
+			return original;
+		}
+		Identifier tex = this.rich$lastEquipTexture != null ? this.rich$lastEquipTexture : textureId;
+		if (tex == null) {
+			return original;
+		}
+		return ClientPipelines.CHAMS_ENTITY.apply(tex);
+	}
 }
