@@ -14,6 +14,7 @@ import rich.Initialization;
 import rich.events.api.EventHandler;
 import rich.events.impl.ClickSlotEvent;
 import rich.events.impl.DrawEvent;
+import rich.events.impl.InputEvent;
 import rich.events.impl.KeyEvent;
 import rich.events.impl.TickEvent;
 import rich.modules.module.ModuleStructure;
@@ -26,6 +27,8 @@ import rich.util.inventory.InventoryUtils;
 import rich.util.render.pipeline.WheelPipeline;
 
 public class AutoSwap extends ModuleStructure {
+   // Сколько тиков держать игрока неподвижным перед свапом, чтобы сервер видел клик по инвентарю без движения.
+   private static final int STOP_TICKS = 2;
    public final BindSetting wheelBind = new BindSetting("Бинд колеса", "Клавиша открытия колеса");
    public final TextSetting slot1 = new TextSetting("Слот 1", "ID предмета");
    public final ButtonSetting pick1 = new ButtonSetting("Выбрать слот 1", "Открыть инвентарь")
@@ -44,6 +47,8 @@ public class AutoSwap extends ModuleStructure {
    private int lastHover = -1;
    private int pickingForSlot = -1;
    private int pendingSwapSlot = -1;
+   private int stopPhase = 0;
+   private int trailing = 0;
 
    public static AutoSwap getInstance() {
       return c.a(AutoSwap.class);
@@ -104,15 +109,49 @@ public class AutoSwap extends ModuleStructure {
       }
    }
 
-   // Instant, no-delay swap: a single clickSlot with the offhand SWAP button (40) straight on the
-   // player's own screen handler. Works for ANY slot - hotbar (36-44) and the deep inventory (9-35) -
-   // without opening a GUI and without any tick wait. Done on the next client tick only so the call
-   // runs on the client thread, which is effectively instant for the player.
+   // Обход кика "Inventory" при свапе во время движения.
+   // Свап инвентаря - это window-click (кнопка 40 SWAP), который в ванилле невозможен во время
+   // движения (открытый инвентарь останавливает игрока), поэтому античит считает это читом.
+   // Решение: перед свапом на несколько тиков полностью останавливаем игрока (обнуляем инпут,
+   // спринт и горизонтальную скорость) - и только потом кликаем, когда сервер уже видит нас стоящими.
    @EventHandler
    public void onTick(TickEvent var1) {
-      if (mc.player != null && mc.interactionManager != null && this.pendingSwapSlot >= 0) {
-         mc.interactionManager.clickSlot(mc.player.playerScreenHandler.syncId, this.pendingSwapSlot, 40, SlotActionType.SWAP, mc.player);
-         this.pendingSwapSlot = -1;
+      if (mc.player == null || mc.interactionManager == null) {
+         return;
+      }
+
+      if (this.pendingSwapSlot >= 0) {
+         this.haltMovement();
+         if (this.stopPhase > 0) {
+            this.stopPhase--;
+         } else {
+            mc.interactionManager.clickSlot(mc.player.playerScreenHandler.syncId, this.pendingSwapSlot, 40, SlotActionType.SWAP, mc.player);
+            this.pendingSwapSlot = -1;
+            this.trailing = 1;
+         }
+      } else if (this.trailing > 0) {
+         this.haltMovement();
+         this.trailing--;
+      }
+   }
+
+   // Пока идёт фаза остановки/свапа - гасим весь инпут движения, чтобы и физика, и пакет инпута
+   // показывали "стою на месте".
+   @EventHandler
+   public void onInput(InputEvent var1) {
+      if (mc.player != null && this.isSuppressing()) {
+         var1.inputNone();
+      }
+   }
+
+   private boolean isSuppressing() {
+      return this.pendingSwapSlot >= 0 || this.trailing > 0;
+   }
+
+   private void haltMovement() {
+      if (mc.player != null) {
+         mc.player.setSprinting(false);
+         mc.player.setVelocity(0.0, mc.player.getVelocity().y, 0.0);
       }
    }
 
@@ -124,6 +163,8 @@ public class AutoSwap extends ModuleStructure {
       Slot var2 = InventoryUtils.findSlotAnywhere(var1.getItem());
       if (var2 != null) {
          this.pendingSwapSlot = var2.id;
+         this.stopPhase = STOP_TICKS;
+         this.trailing = 0;
          return true;
       }
 
@@ -203,6 +244,8 @@ public class AutoSwap extends ModuleStructure {
       this.wheelOpen = false;
       this.pickingForSlot = -1;
       this.pendingSwapSlot = -1;
+      this.stopPhase = 0;
+      this.trailing = 0;
       this.setCursorUnlocked(false);
    }
 
