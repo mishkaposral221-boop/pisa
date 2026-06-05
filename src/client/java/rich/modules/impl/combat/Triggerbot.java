@@ -18,8 +18,8 @@ import rich.util.c;
 
 public class Triggerbot extends ModuleStructure {
     // Read by ClientPlayerEntityMixin. While true, the sprint INPUT is forced false so vanilla keeps
-    // us un-sprinted for this tick. Set to true ONLY on the exact tick we attack (1 tick = ~50ms),
-    // so sprint is suppressed for just that tick and immediately resumes afterwards.
+    // us un-sprinted for this tick only. Set to true ONLY on the exact tick we attack (~1 tick = ~50ms),
+    // so sprint is suppressed for just that tick and immediately resumes on the next tick.
     public static volatile boolean SUPPRESS_SPRINT = false;
 
     // Read by ClientPlayerEntityMixin. While true, the jump INPUT is forced false for this tick.
@@ -28,8 +28,13 @@ public class Triggerbot extends ModuleStructure {
     private static final Logger LOG = LoggerFactory.getLogger("Triggerbot");
     private String lastDiag = "";
 
-    public SliderSettings noCritCharge = new SliderSettings("Charge under debuff", "Min weapon charge to hit when crit is impossible (sphere). Lower = hit earlier but weaker").setValue(0.80F).range(0.3F, 1.0F);
-    public SliderSettings jumpCharge = new SliderSettings("Jump charge", "Min weapon charge before a held jump fires (perfect jump-crits). Lower = jump sooner").setValue(0.55F).range(0.3F, 1.0F);
+    public SliderSettings noCritCharge = new SliderSettings("Charge under debuff",
+            "Min weapon charge to hit when crit is impossible (sphere). Lower = hit earlier but weaker")
+            .setValue(0.80F).range(0.3F, 1.0F);
+
+    public SliderSettings jumpCharge = new SliderSettings("Jump charge",
+            "Min weapon charge before a held jump fires (perfect jump-crits). Lower = jump sooner")
+            .setValue(0.55F).range(0.3F, 1.0F);
 
     private int ticksOutOfWater = 10;
     private int ticksOnGround = 0;
@@ -84,6 +89,7 @@ public class Triggerbot extends ModuleStructure {
                 this.ticksOnGround = 0;
             }
 
+            // Track how long we've been cleanly non-sprinting (for logging only).
             if (!sprinting) {
                 if (this.cleanTicks < 100) this.cleanTicks++;
             } else {
@@ -104,20 +110,19 @@ public class Triggerbot extends ModuleStructure {
             float charge = this.charge();
 
             // -----------------------------------------------------------------
-            // SPRINT SUPPRESSION: only for exactly the 1 tick we attack.
+            // SPRINT SUPPRESSION: 1 TICK ONLY, RIGHT BEFORE THE ATTACK
             //
-            // Old behaviour: SUPPRESS_SPRINT = critPossible (= true for the
-            // entire jump, ~15 ticks / 750 ms).  The player felt the sprint
-            // "freeze" for a long time before every hit.
+            // Old behaviour: SUPPRESS_SPRINT = critPossible (true for the ENTIRE
+            // jump, ~15 ticks / 750 ms). The player felt the sprint freeze for a
+            // long time before every hit.
             //
-            // New behaviour: SUPPRESS_SPRINT stays false until we decide to
-            // attack THIS tick.  Right before calling attack() we set
-            // wantSuppress = true and mc.player.setSprinting(false).  The
-            // movement packet sent by vanilla later in the same tick carries
-            // sprint=false, so the server registers a no-sprint hit (crit).
-            // On the VERY NEXT tick wantSuppress returns to false (via the
-            // finally block) and vanilla re-starts sprint automatically if W
-            // is still held.
+            // New behaviour: SUPPRESS_SPRINT stays false until the exact tick we
+            // decide to attack. Right before attack() we set wantSuppress=true and
+            // mc.player.setSprinting(false). The movement packet vanilla sends
+            // later in this same tick carries sprint=false, so the server registers
+            // a no-sprint hit (crit). The very next tick wantSuppress returns to
+            // false (via the finally block) and sprint resumes immediately if W
+            // is still held. Total suppression time: ~50 ms (1 game tick).
             // -----------------------------------------------------------------
 
             // ---- IN WATER: crit impossible, normal hits. ----
@@ -129,7 +134,7 @@ public class Triggerbot extends ModuleStructure {
                 return;
             }
 
-            // ---- CRIT IMPOSSIBLE (blindness / levitation / vehicle / flying / climbing / just-left-water) ----
+            // ---- CRIT IMPOSSIBLE ----
             if (!critPossible) {
                 float need = this.noCritCharge.getValue();
                 if (charge >= need) {
@@ -143,24 +148,28 @@ public class Triggerbot extends ModuleStructure {
                 return;
             }
 
-            // ---- AIRBORNE: crit window - clear sprint for exactly this 1 tick then attack ----
+            // ---- AIRBORNE: crit window ----
+            // Clear sprint for exactly 1 tick, attack, sprint resumes next tick.
             if (!mc.player.isOnGround()) {
                 String blocker = this.critBlocker();
                 boolean perfectCrit = blocker == null;
                 if (perfectCrit && charge >= CRIT_CHARGE) {
-                    // Suppress sprint for this single tick only: movement packet sent
-                    // later in this tick will carry sprint=false -> server counts a crit.
+                    // Suppress sprint for THIS tick only: movement packet sent later
+                    // in this tick carries sprint=false -> server registers a crit.
                     if (sprinting) {
                         wantSuppress = true;
                         mc.player.setSprinting(false);
                     }
                     this.attack(target);
-                    LOG.info("[Triggerbot] CRIT air charge=" + fmt(charge) + " fall=" + fmt(mc.player.fallDistance)
+                    LOG.info("[Triggerbot] CRIT air charge=" + fmt(charge)
+                        + " fall=" + fmt(mc.player.fallDistance)
                         + " velY=" + fmt(mc.player.getVelocity().y) + " " + this.state());
                 } else {
                     String reason;
                     if (!perfectCrit) {
-                        reason = "no-perfectCrit:" + blocker + " (fall=" + fmt(mc.player.fallDistance) + " ticksOOW=" + this.ticksOutOfWater + ")";
+                        reason = "no-perfectCrit:" + blocker
+                            + " (fall=" + fmt(mc.player.fallDistance)
+                            + " ticksOOW=" + this.ticksOutOfWater + ")";
                     } else {
                         reason = "charge-too-low (" + fmt(charge) + " < " + CRIT_CHARGE + ")";
                     }
@@ -178,22 +187,25 @@ public class Triggerbot extends ModuleStructure {
                         + " (need " + fmt(this.jumpCharge.getValue()) + ") " + this.state());
                 } else {
                     this.diag("GROUND_HOLD", "GROUND hold-for-crit jump=" + this.isJumpHeld()
-                        + " velY=" + fmt(mc.player.getVelocity().y) + " charge=" + fmt(charge) + " " + this.state());
+                        + " velY=" + fmt(mc.player.getVelocity().y)
+                        + " charge=" + fmt(charge) + " " + this.state());
                 }
                 return;
             }
 
-            // Ground combo: suppress sprint for this 1 tick only, then attack.
+            // Ground combo: suppress sprint for 1 tick, attack, sprint resumes next tick.
             if (charge >= GROUND_ATTACK_CHARGE && this.ticksOnGround >= GROUND_COMBO_DELAY) {
                 if (sprinting) {
                     wantSuppress = true;
                     mc.player.setSprinting(false);
                 }
                 this.attack(target);
-                LOG.info("[Triggerbot] COMBO ground charge=" + fmt(charge) + " ticksGround=" + this.ticksOnGround
+                LOG.info("[Triggerbot] COMBO ground charge=" + fmt(charge)
+                    + " ticksGround=" + this.ticksOnGround
                     + " critPossible=" + critPossible + " " + this.state());
             } else if (charge < GROUND_ATTACK_CHARGE) {
-                this.diag("GROUND_CHARGE", "GROUND wait charge=" + fmt(charge) + " (need " + GROUND_ATTACK_CHARGE + ") " + this.state());
+                this.diag("GROUND_CHARGE", "GROUND wait charge=" + fmt(charge)
+                    + " (need " + GROUND_ATTACK_CHARGE + ") " + this.state());
             } else {
                 this.diag("GROUND_DELAY", "GROUND wait ticksOnGround=" + this.ticksOnGround
                     + " (need " + GROUND_COMBO_DELAY + ") " + this.state());
@@ -205,9 +217,11 @@ public class Triggerbot extends ModuleStructure {
     }
 
     private String state() {
-        int haste = mc.player.hasStatusEffect(StatusEffects.HASTE) && mc.player.getStatusEffect(StatusEffects.HASTE) != null
+        int haste = mc.player.hasStatusEffect(StatusEffects.HASTE)
+            && mc.player.getStatusEffect(StatusEffects.HASTE) != null
             ? mc.player.getStatusEffect(StatusEffects.HASTE).getAmplifier() + 1 : 0;
-        int fatigue = mc.player.hasStatusEffect(StatusEffects.MINING_FATIGUE) && mc.player.getStatusEffect(StatusEffects.MINING_FATIGUE) != null
+        int fatigue = mc.player.hasStatusEffect(StatusEffects.MINING_FATIGUE)
+            && mc.player.getStatusEffect(StatusEffects.MINING_FATIGUE) != null
             ? mc.player.getStatusEffect(StatusEffects.MINING_FATIGUE).getAmplifier() + 1 : 0;
         boolean blind = mc.player.hasStatusEffect(StatusEffects.BLINDNESS);
         return "[onGround=" + mc.player.isOnGround()
