@@ -110,7 +110,15 @@ public class Triggerbot extends ModuleStructure {
                 }
             }
 
-            boolean serverClean = this.cleanTicks >= CLEAN_TICKS_REQUIRED && !mc.player.isSprinting();
+            // The server's REAL sprint state. While holding W, AutoSprint re-enables the client sprint
+            // flag every tick and we clear it again -> cleanTicks keeps resetting to 0 even though the
+            // server already received STOP_SPRINTING (srvSpr=false). In that case the old cleanTicks-only
+            // gate wrongly blocked the crit. So when AutoSprint is active and confirms the server is NOT
+            // sprinting, treat us as clean immediately; otherwise fall back to the cleanTicks heuristic.
+            boolean autoSprintActive = AutoSprint.getInstance() != null && AutoSprint.getInstance().isState();
+            boolean serverConfirmedClean = autoSprintActive && !AutoSprint.isServerSprinting();
+            boolean serverClean = !mc.player.isSprinting()
+                && (this.cleanTicks >= CLEAN_TICKS_REQUIRED || serverConfirmedClean);
             float charge = this.charge();
 
             // ---- IN WATER: crit impossible, normal hits. ----
