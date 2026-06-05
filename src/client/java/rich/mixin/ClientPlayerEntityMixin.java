@@ -33,137 +33,146 @@ import rich.util.move.MoveUtil;
 
 @Mixin(ClientPlayerEntity.class)
 public abstract class ClientPlayerEntityMixin extends AbstractClientPlayerEntity {
-   @Final
-   @Shadow
-   protected MinecraftClient client;
-   @Shadow
-   public Input input;
+   @Final @Shadow protected MinecraftClient client;
+   @Shadow public Input input;
    private double prevX = 0.0;
    private double prevZ = 0.0;
    private float prevBodyYaw = 0.0F;
 
-   @Shadow
-   protected abstract void autoJump(float var1, float var2);
+   @Shadow protected abstract void autoJump(float dx, float dz);
+   @Shadow public abstract boolean isUsingItem();
 
-   @Shadow
-   public abstract boolean isUsingItem();
-
-   public ClientPlayerEntityMixin(ClientWorld var1, GameProfile var2) {
-      super(var1, var2);
+   public ClientPlayerEntityMixin(ClientWorld world, GameProfile profile) {
+      super(world, profile);
    }
 
    @Inject(method = "tick", at = @At("HEAD"))
-   public void tick(CallbackInfo var1) {
-      if (this.client.player != null && this.client.world != null) {
+   public void tick(CallbackInfo ci) {
+      if (client.player != null && client.world != null) {
          EventManager.callEvent(new TickEvent());
       }
    }
 
-   @Inject(method = "tickMovement", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/input/Input;tick()V", shift = Shift.AFTER))
-   private void onInputTick(CallbackInfo var1) {
-      if (IMinecraft.mc.player != null) {
-         // Triggerbot: drop the sprint INPUT for this tick so vanilla's own sprint
-         // logic releases sprint and sends a single, correctly-timed STOP_SPRINTING.
-         try {
-            if (Triggerbot.SUPPRESS_SPRINT
-               && Triggerbot.getInstance() != null
-               && Triggerbot.getInstance().isState()
-               && this.input != null
-               && this.input.playerInput != null
-               && this.input.playerInput.sprint()) {
-               PlayerInput var3 = this.input.playerInput;
-               this.input.playerInput = new PlayerInput(
-                  var3.forward(), var3.backward(), var3.left(), var3.right(), var3.jump(), var3.sneak(), false
+   @Inject(method = "tickMovement",
+           at = @At(value = "INVOKE", target = "Lnet/minecraft/client/input/Input;tick()V", shift = Shift.AFTER))
+   private void onInputTick(CallbackInfo ci) {
+      if (IMinecraft.mc.player == null) return;
+
+      // SUPPRESS_FORWARD: Triggerbot sets this TRUE for exactly 1 tick before a crit
+      // attack so the movement packet that leaves BEFORE the attack packet shows
+      // the player not moving forward / not sprinting.
+      // Flow:
+      //   Tick N  (onTick HEAD): crit ready -> set SUPPRESS_FORWARD=true, queue target
+      //   Tick N  (here)       : clear forward+sprint from PlayerInput, call setSprinting(false)
+      //   Tick N  (sendMvt)    : movement packet sent with W=false, sprint=false
+      //   Tick N+1 (onTick HEAD): fire the queued attack(), then SUPPRESS_FORWARD=false
+      try {
+         Triggerbot tb = Triggerbot.getInstance();
+         if (Triggerbot.SUPPRESS_FORWARD && tb != null && tb.isState()
+               && input != null && input.playerInput != null) {
+            PlayerInput pi = input.playerInput;
+            if (pi.forward() || pi.sprint()) {
+               input.playerInput = new PlayerInput(
+                  false, pi.backward(), pi.left(), pi.right(),
+                  pi.jump(), pi.sneak(), false
                );
             }
-         } catch (Throwable var4) {
-         }
-
-         // Triggerbot JUMP-CRIT SYNC: drop the jump INPUT for this tick while the bot is holding the
-         // jump back until the weapon is charged (so every jump lands a crit). Mirrors the sprint
-         // suppression above. We only clear jump when it is currently held; the player keeps full
-         // control whenever Triggerbot is off or no crit target is present.
-         try {
-            if (Triggerbot.SUPPRESS_JUMP
-               && Triggerbot.getInstance() != null
-               && Triggerbot.getInstance().isState()
-               && this.input != null
-               && this.input.playerInput != null
-               && this.input.playerInput.jump()) {
-               PlayerInput var5 = this.input.playerInput;
-               this.input.playerInput = new PlayerInput(
-                  var5.forward(), var5.backward(), var5.left(), var5.right(), false, var5.sneak(), var5.sprint()
-               );
+            // Explicit packet: tell the server to stop sprinting NOW
+            if (IMinecraft.mc.player.isSprinting()) {
+               IMinecraft.mc.player.setSprinting(false);
             }
-         } catch (Throwable var6) {
          }
+      } catch (Throwable ignored) {}
 
-         PlayerTravelEvent var2 = new PlayerTravelEvent(Vec3d.ZERO, false);
-         EventManager.callEvent(var2);
-      }
+      // SUPPRESS_SPRINT (legacy / other modules)
+      try {
+         Triggerbot tb = Triggerbot.getInstance();
+         if (Triggerbot.SUPPRESS_SPRINT && tb != null && tb.isState()
+               && input != null && input.playerInput != null
+               && input.playerInput.sprint()) {
+            PlayerInput pi = input.playerInput;
+            input.playerInput = new PlayerInput(
+               pi.forward(), pi.backward(), pi.left(), pi.right(),
+               pi.jump(), pi.sneak(), false
+            );
+         }
+      } catch (Throwable ignored) {}
+
+      // SUPPRESS_JUMP (crit gate)
+      try {
+         Triggerbot tb = Triggerbot.getInstance();
+         if (Triggerbot.SUPPRESS_JUMP && tb != null && tb.isState()
+               && input != null && input.playerInput != null
+               && input.playerInput.jump()) {
+            PlayerInput pi = input.playerInput;
+            input.playerInput = new PlayerInput(
+               pi.forward(), pi.backward(), pi.left(), pi.right(),
+               false, pi.sneak(), pi.sprint()
+            );
+         }
+      } catch (Throwable ignored) {}
+
+      EventManager.callEvent(new PlayerTravelEvent(Vec3d.ZERO, false));
    }
 
-   @Redirect(method = "applyMovementSpeedFactors", at = @At(value = "INVOKE", target = "Lnet/minecraft/util/math/Vec2f;multiply(F)Lnet/minecraft/util/math/Vec2f;", ordinal = 1))
-   private Vec2f cancelItemSlowdown(Vec2f var1, float var2) {
-      UsingItemEvent var3 = new UsingItemEvent((byte)1);
-      EventManager.callEvent(var3);
-      return var3.isCancelled() && this.isUsingItem() && !this.hasVehicle() ? var1.multiply(1.0F) : var1.multiply(var2);
+   @Redirect(method = "applyMovementSpeedFactors",
+             at = @At(value = "INVOKE",
+                      target = "Lnet/minecraft/util/math/Vec2f;multiply(F)Lnet/minecraft/util/math/Vec2f;",
+                      ordinal = 1))
+   private Vec2f cancelItemSlowdown(Vec2f vec, float factor) {
+      UsingItemEvent e = new UsingItemEvent((byte)1);
+      EventManager.callEvent(e);
+      return e.isCancelled() && isUsingItem() && !hasVehicle() ? vec.multiply(1.0F) : vec.multiply(factor);
    }
 
    @Inject(method = "closeHandledScreen", at = @At("HEAD"), cancellable = true)
-   private void closeHandledScreenHook(CallbackInfo var1) {
-      CloseScreenEvent var2 = new CloseScreenEvent(this.client.currentScreen);
-      EventManager.callEvent(var2);
-      if (var2.isCancelled()) {
-         var1.cancel();
-      }
+   private void closeHandledScreenHook(CallbackInfo ci) {
+      CloseScreenEvent e = new CloseScreenEvent(client.currentScreen);
+      EventManager.callEvent(e);
+      if (e.isCancelled()) ci.cancel();
    }
 
    @Inject(method = "pushOutOfBlocks", at = @At("HEAD"), cancellable = true)
-   public void pushOutOfBlocks(double var1, double var3, CallbackInfo var5) {
-      PushEvent var6 = new PushEvent(PushEvent.Type.BLOCK);
-      EventManager.callEvent(var6);
-      if (var6.isCancelled()) {
-         var5.cancel();
-      }
+   public void pushOutOfBlocks(double x, double z, CallbackInfo ci) {
+      PushEvent e = new PushEvent(PushEvent.Type.BLOCK);
+      EventManager.callEvent(e);
+      if (e.isCancelled()) ci.cancel();
    }
 
    @Inject(method = "move", at = @At("HEAD"), cancellable = true)
-   public void onMoveHook(MovementType var1, Vec3d var2, CallbackInfo var3) {
-      MoveEvent var4 = new MoveEvent(var2);
-      EventManager.callEvent(var4);
-      double var5 = this.getX();
-      double var7 = this.getZ();
-      super.move(var1, var4.getMovement());
-      this.autoJump((float)(this.getX() - var5), (float)(this.getZ() - var7));
-      var3.cancel();
+   public void onMoveHook(MovementType type, Vec3d movement, CallbackInfo ci) {
+      MoveEvent e = new MoveEvent(movement);
+      EventManager.callEvent(e);
+      double ox = getX(), oz = getZ();
+      super.move(type, e.getMovement());
+      autoJump((float)(getX() - ox), (float)(getZ() - oz));
+      ci.cancel();
    }
 
-   @ModifyExpressionValue(method = {"sendMovementPackets", "tick"}, at = @At(value = "INVOKE", target = "Lnet/minecraft/client/network/ClientPlayerEntity;getYaw()F"))
-   private float hookSilentRotationYaw(float var1) {
+   @ModifyExpressionValue(method = {"sendMovementPackets", "tick"},
+                          at = @At(value = "INVOKE", target = "Lnet/minecraft/client/network/ClientPlayerEntity;getYaw()F"))
+   private float hookSilentRotationYaw(float original) {
       if (IMinecraft.mc.player != null && AngleConnection.INSTANCE.getRotation() != null) {
-         float var2 = AngleConnection.INSTANCE.getRotation().getYaw();
-         float var3 = MoveUtil.calculateBodyYaw(
-            var2,
-            this.prevBodyYaw,
-            this.prevX,
-            this.prevZ,
-            IMinecraft.mc.player.getX(),
-            IMinecraft.mc.player.getZ(),
+         float yaw = AngleConnection.INSTANCE.getRotation().getYaw();
+         float body = MoveUtil.calculateBodyYaw(
+            yaw, prevBodyYaw, prevX, prevZ,
+            IMinecraft.mc.player.getX(), IMinecraft.mc.player.getZ(),
             IMinecraft.mc.player.handSwingProgress
          );
-         this.prevBodyYaw = var3;
-         this.prevX = IMinecraft.mc.player.getX();
-         this.prevZ = IMinecraft.mc.player.getZ();
-         IMinecraft.mc.player.setBodyYaw(var3);
-         return var2;
-      } else {
-         return var1;
+         prevBodyYaw = body;
+         prevX = IMinecraft.mc.player.getX();
+         prevZ = IMinecraft.mc.player.getZ();
+         IMinecraft.mc.player.setBodyYaw(body);
+         return yaw;
       }
+      return original;
    }
 
-   @ModifyExpressionValue(method = {"sendMovementPackets", "tick"}, at = @At(value = "INVOKE", target = "Lnet/minecraft/client/network/ClientPlayerEntity;getPitch()F"))
-   private float hookSilentRotationPitch(float var1) {
-      return AngleConnection.INSTANCE.getRotation() != null ? AngleConnection.INSTANCE.getRotation().getPitch() : var1;
+   @ModifyExpressionValue(method = {"sendMovementPackets", "tick"},
+                          at = @At(value = "INVOKE", target = "Lnet/minecraft/client/network/ClientPlayerEntity;getPitch()F"))
+   private float hookSilentRotationPitch(float original) {
+      return AngleConnection.INSTANCE.getRotation() != null
+         ? AngleConnection.INSTANCE.getRotation().getPitch()
+         : original;
    }
 }
