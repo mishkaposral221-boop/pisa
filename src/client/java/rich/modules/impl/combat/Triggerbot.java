@@ -6,6 +6,8 @@ import net.minecraft.entity.effect.StatusEffects;
 import net.minecraft.item.Item;
 import net.minecraft.registry.tag.ItemTags;
 import net.minecraft.util.Hand;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import rich.events.api.EventHandler;
 import rich.events.impl.TickEvent;
 import rich.modules.impl.movement.AutoSprint;
@@ -19,6 +21,12 @@ public class Triggerbot extends ModuleStructure {
     // emits the single, normal STOP_SPRINTING packet. (Sending our own caused a DUPLICATE packet that
     // the anti-cheat flagged as "badpackets".)
     public static volatile boolean SUPPRESS_SPRINT = false;
+
+    // Диагностическое логирование (пишется в latest.log и консоль). Помогает понять почему
+    // вместо крита иногда идёт комбо.
+    private static final Logger LOG = LoggerFactory.getLogger("Triggerbot");
+    // Ключ последней причины - чтобы не спамить одним и тем же состоянием каждый тик.
+    private String lastDiag = "";
 
     private int ticksOutOfWater = 10;
     private int ticksOnGround = 0;
@@ -47,6 +55,7 @@ public class Triggerbot extends ModuleStructure {
         this.ticksOutOfWater = 10;
         this.ticksOnGround = 0;
         this.cleanTicks = 0;
+        this.lastDiag = "";
     }
 
     @EventHandler
@@ -117,6 +126,7 @@ public class Triggerbot extends ModuleStructure {
             if (this.isInWater()) {
                 if (charge >= GROUND_ATTACK_CHARGE) {
                     this.attack(target);
+                    LOG.info("[Triggerbot] HIT water charge=" + fmt(charge) + " " + this.state());
                 }
                 return;
             }
@@ -125,8 +135,22 @@ public class Triggerbot extends ModuleStructure {
             // once sprint is confirmed off server-side. No waiting for a 'cleaner' fall - if a player
             // knocks us, we still crit on the very first descending tick. ----
             if (!mc.player.isOnGround()) {
-                if (this.isPerfectCrit() && charge >= CRIT_CHARGE && serverClean) {
+                boolean perfectCrit = this.isPerfectCrit();
+                if (perfectCrit && charge >= CRIT_CHARGE && serverClean) {
                     this.attack(target);
+                    LOG.info("[Triggerbot] CRIT air charge=" + fmt(charge) + " fall=" + fmt(mc.player.fallDistance)
+                        + " velY=" + fmt((float) mc.player.getVelocity().y) + " " + this.state());
+                } else {
+                    // Почему крит НЕ ушёл - главная диагностика.
+                    String reason;
+                    if (!perfectCrit) {
+                        reason = "no-perfectCrit (fall=" + fmt(mc.player.fallDistance) + " ticksOOW=" + this.ticksOutOfWater + ")";
+                    } else if (charge < CRIT_CHARGE) {
+                        reason = "charge-too-low (" + fmt(charge) + " < " + CRIT_CHARGE + ")";
+                    } else {
+                        reason = "not-serverClean (sprint=" + mc.player.isSprinting() + " cleanTicks=" + this.cleanTicks + ")";
+                    }
+                    this.diag("AIR_BLOCK:" + reason, "AIR no-crit blocked: " + reason + " " + this.state());
                 }
                 return;
             }
@@ -137,15 +161,50 @@ public class Triggerbot extends ModuleStructure {
             // attack cooldown and ruin the incoming jump-crit. This is exactly the 'combo while I was in
             // a jump' bug: we now wait for the air phase and crit instead.
             if (critPossible && (this.isJumpHeld() || mc.player.getVelocity().y > 0.0)) {
+                this.diag("GROUND_HOLD", "GROUND hold-for-crit jump=" + this.isJumpHeld()
+                    + " velY=" + fmt((float) mc.player.getVelocity().y) + " charge=" + fmt(charge) + " " + this.state());
                 return;
             }
             // Ground combo (non-crit). Only when sprint is confirmed off so we never emit a sprint-hit.
             if (charge >= GROUND_ATTACK_CHARGE && this.ticksOnGround >= GROUND_COMBO_DELAY && serverClean) {
                 this.attack(target);
+                LOG.info("[Triggerbot] COMBO ground charge=" + fmt(charge) + " ticksGround=" + this.ticksOnGround
+                    + " critPossible=" + critPossible + " " + this.state());
+            } else if (charge < GROUND_ATTACK_CHARGE) {
+                this.diag("GROUND_CHARGE", "GROUND wait charge=" + fmt(charge) + " (need " + GROUND_ATTACK_CHARGE + ") " + this.state());
+            } else if (!serverClean) {
+                this.diag("GROUND_NOTCLEAN", "GROUND wait not-serverClean sprint=" + mc.player.isSprinting()
+                    + " cleanTicks=" + this.cleanTicks + " " + this.state());
             }
         } finally {
             SUPPRESS_SPRINT = wantSuppress;
         }
+    }
+
+    // Состояние эффектов/движения для лога. haste/miningFatigue = уровень (0 = нет).
+    // NB: в ванилле Haste/Mining Fatigue НЕ влияют на скорость атаки - этот лог покажет это напрямую.
+    private String state() {
+        int haste = mc.player.hasStatusEffect(StatusEffects.HASTE) && mc.player.getStatusEffect(StatusEffects.HASTE) != null
+            ? mc.player.getStatusEffect(StatusEffects.HASTE).getAmplifier() + 1 : 0;
+        int fatigue = mc.player.hasStatusEffect(StatusEffects.MINING_FATIGUE) && mc.player.getStatusEffect(StatusEffects.MINING_FATIGUE) != null
+            ? mc.player.getStatusEffect(StatusEffects.MINING_FATIGUE).getAmplifier() + 1 : 0;
+        return "[onGround=" + mc.player.isOnGround()
+            + " sprint=" + mc.player.isSprinting()
+            + " cleanTicks=" + this.cleanTicks
+            + " attackSpeed=" + fmt((float) mc.player.getAttackCooldownProgressPerTick())
+            + " haste=" + haste
+            + " miningFatigue=" + fatigue + "]";
+    }
+
+    private void diag(String key, String full) {
+        if (!key.equals(this.lastDiag)) {
+            this.lastDiag = key;
+            LOG.info("[Triggerbot] " + full);
+        }
+    }
+
+    private static String fmt(float v) {
+        return String.format(java.util.Locale.US, "%.2f", v);
     }
 
     private float charge() {
