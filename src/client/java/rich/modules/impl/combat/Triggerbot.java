@@ -5,6 +5,7 @@ import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.effect.StatusEffects;
 import net.minecraft.item.Item;
 import net.minecraft.registry.tag.ItemTags;
+import net.minecraft.text.Text;
 import net.minecraft.util.Hand;
 import rich.events.api.EventHandler;
 import rich.events.impl.TickEvent;
@@ -79,12 +80,16 @@ public class Triggerbot extends ModuleStructure {
                 this.cleanTicks = 0;
             }
 
+            Entity target = mc.targetedEntity;
+            boolean hittable = this.canHit(target);
+
+            // On-screen debug so we can SEE why a crit does/doesn't fire.
+            this.debug(target);
+
             if (mc.player.isUsingItem() || !this.isWeaponInHand()) {
                 return;
             }
-
-            Entity target = mc.targetedEntity;
-            if (!this.canHit(target)) {
+            if (!hittable) {
                 return;
             }
 
@@ -133,6 +138,22 @@ public class Triggerbot extends ModuleStructure {
         }
     }
 
+    private void debug(Entity target) {
+        try {
+            String s = String.format(
+                "TB tgt=%s air=%s fall=%.2f chg=%.2f clean=%d spr=%s jump=%s",
+                (target != null && target instanceof LivingEntity),
+                !mc.player.isOnGround(),
+                mc.player.fallDistance,
+                this.charge(),
+                this.cleanTicks,
+                mc.player.isSprinting(),
+                this.isJumpHeld());
+            mc.player.sendMessage(Text.literal(s), true);
+        } catch (Throwable ignored) {
+        }
+    }
+
     private float charge() {
         return mc.player.getAttackCooldownProgress(0.0F);
     }
@@ -166,9 +187,11 @@ public class Triggerbot extends ModuleStructure {
         }
     }
 
+    // Mirror the SERVER crit rule (ServerPlayNetworkHandler): fallDistance>0, airborne, not climbing/
+    // in water, no blindness/levitation, no vehicle, not flying. NOTE: the server does NOT check
+    // velocity.y, so we must not require it either (that was skipping the first valid crit ticks).
     private boolean isPerfectCrit() {
-        return mc.player.fallDistance > 0.0
-            && mc.player.getVelocity().y < 0.0
+        return mc.player.fallDistance > 0.0F
             && this.ticksOutOfWater >= 3
             && !mc.player.isOnGround()
             && !mc.player.isClimbing()
