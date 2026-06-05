@@ -139,7 +139,7 @@ public class Triggerbot extends ModuleStructure {
                 if (perfectCrit && charge >= CRIT_CHARGE && serverClean) {
                     this.attack(target);
                     LOG.info("[Triggerbot] CRIT air charge=" + fmt(charge) + " fall=" + fmt(mc.player.fallDistance)
-                        + " velY=" + fmt((float) mc.player.getVelocity().y) + " " + this.state());
+                        + " velY=" + fmt(mc.player.getVelocity().y) + " " + this.state());
                 } else {
                     // Почему крит НЕ ушёл - главная диагностика.
                     String reason;
@@ -162,7 +162,7 @@ public class Triggerbot extends ModuleStructure {
             // a jump' bug: we now wait for the air phase and crit instead.
             if (critPossible && (this.isJumpHeld() || mc.player.getVelocity().y > 0.0)) {
                 this.diag("GROUND_HOLD", "GROUND hold-for-crit jump=" + this.isJumpHeld()
-                    + " velY=" + fmt((float) mc.player.getVelocity().y) + " charge=" + fmt(charge) + " " + this.state());
+                    + " velY=" + fmt(mc.player.getVelocity().y) + " charge=" + fmt(charge) + " " + this.state());
                 return;
             }
             // Ground combo (non-crit). Only when sprint is confirmed off so we never emit a sprint-hit.
@@ -191,7 +191,7 @@ public class Triggerbot extends ModuleStructure {
         return "[onGround=" + mc.player.isOnGround()
             + " sprint=" + mc.player.isSprinting()
             + " cleanTicks=" + this.cleanTicks
-            + " attackSpeed=" + fmt((float) mc.player.getAttackCooldownProgressPerTick())
+            + " attackSpeed=" + fmt(mc.player.getAttackCooldownProgressPerTick())
             + " haste=" + haste
             + " miningFatigue=" + fatigue + "]";
     }
@@ -203,7 +203,7 @@ public class Triggerbot extends ModuleStructure {
         }
     }
 
-    private static String fmt(float v) {
+    private static String fmt(double v) {
         return String.format(java.util.Locale.US, "%.2f", v);
     }
 
@@ -244,7 +244,7 @@ public class Triggerbot extends ModuleStructure {
     // in water, no blindness/levitation, no vehicle, not flying. NOTE: the server does NOT check
     // velocity.y, so we must not require it either (that was skipping the first valid crit ticks).
     private boolean isPerfectCrit() {
-        return mc.player.fallDistance > 0.0F
+        return mc.player.fallDistance > 0.0
             && this.ticksOutOfWater >= 3
             && !mc.player.isOnGround()
             && !mc.player.isClimbing()
