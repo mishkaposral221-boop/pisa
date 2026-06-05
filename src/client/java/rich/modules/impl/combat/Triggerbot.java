@@ -23,6 +23,11 @@ public class Triggerbot extends ModuleStructure {
     // the anti-cheat flagged as "badpackets".)
     public static volatile boolean SUPPRESS_SPRINT = false;
 
+    // Read by ClientPlayerEntityMixin. While true, the jump INPUT is forced false for this tick so the
+    // player's held jump does NOT fire yet. Used for jump-crit sync: we hold the jump back until the
+    // weapon is charged enough that the upcoming descent lands a crit, so every jump crits (no misses).
+    public static volatile boolean SUPPRESS_JUMP = false;
+
     // Диагностическое логирование (пишется в latest.log и консоль). Помогает понять почему
     // вместо крита иногда идёт комбо.
     private static final Logger LOG = LoggerFactory.getLogger("Triggerbot");
@@ -34,6 +39,15 @@ public class Triggerbot extends ModuleStructure {
     // requiring full charge made the bot skip ~every 4th jump-hit. Lower this = hit EARLIER (stop
     // missing jumps) at the cost of weaker per-hit damage. Tunable in the module menu.
     public SliderSettings noCritCharge = new SliderSettings("Charge under debuff", "Min weapon charge to hit when crit is impossible (sphere). Lower = hit earlier but weaker").setValue(0.80F).range(0.3F, 1.0F);
+
+    // Min weapon charge before a HELD jump is allowed to fire. Free-jumping (holding space) spams jumps
+    // faster than the weapon refills (12.5 ticks), so the crit drifts later every jump until a whole
+    // descent passes below 0.9 charge -> a MISSED crit (the server requires >0.9 for a crit, so we
+    // cannot just lower the crit threshold). Holding the jump back until charge >= this value makes
+    // every jump descend with a crit-ready weapon -> a crit on EVERY jump, no misses. During the ~6t
+    // ascent the weapon gains ~0.48 charge, so ~0.5 here yields a full-charge crit each jump. Lower =
+    // jump sooner (less on-ground stutter, risk of a slightly later crit); higher = more reliable.
+    public SliderSettings jumpCharge = new SliderSettings("Jump charge", "Min weapon charge before a held jump fires (perfect jump-crits). Lower = jump sooner").setValue(0.55F).range(0.3F, 1.0F);
 
     private int ticksOutOfWater = 10;
     private int ticksOnGround = 0;
@@ -53,13 +67,14 @@ public class Triggerbot extends ModuleStructure {
 
     public Triggerbot() {
         super("Triggerbot", "Auto-attack targeted entities", ModuleCategory.VISUALS);
-        this.settings(this.noCritCharge);
+        this.settings(this.noCritCharge, this.jumpCharge);
     }
 
     @Override
     public void deactivate() {
         super.deactivate();
         SUPPRESS_SPRINT = false;
+        SUPPRESS_JUMP = false;
         this.ticksOutOfWater = 10;
         this.ticksOnGround = 0;
         this.cleanTicks = 0;
@@ -69,6 +84,7 @@ public class Triggerbot extends ModuleStructure {
     @EventHandler
     public void onTick(TickEvent event) {
         boolean wantSuppress = false;
+        boolean wantSuppressJump = false;
         try {
             if (mc.player == null || mc.world == null || mc.currentScreen != null) {
                 this.ticksOnGround = 0;
@@ -191,8 +207,20 @@ public class Triggerbot extends ModuleStructure {
             // when a crit is impossible anyway (e.g. blindness), so under a debuff sphere we DON'T hold -
             // we fall through and deal normal combo damage instead of standing there waiting forever.
             if (critPossible && (this.isJumpHeld() || mc.player.getVelocity().y > 0.0)) {
-                this.diag("GROUND_HOLD", "GROUND hold-for-crit jump=" + this.isJumpHeld()
-                    + " velY=" + fmt(mc.player.getVelocity().y) + " charge=" + fmt(charge) + " " + this.state());
+                // JUMP-CRIT SYNC: while the player holds jump on the ground, do NOT let the jump fire
+                // until the weapon is charged enough that the upcoming descent lands a crit. Free jumping
+                // spams jumps faster than the weapon refills, so the crit drifts later every jump until a
+                // whole descent passes below 0.9 charge -> a missed crit. Gating the held jump until
+                // charge >= jumpCharge makes every jump descend crit-ready -> a crit on EVERY jump. We
+                // only gate the player's OWN held jump (never force a jump they didn't ask for).
+                if (mc.player.isOnGround() && this.isJumpHeld() && charge < this.jumpCharge.getValue()) {
+                    wantSuppressJump = true;
+                    this.diag("JUMP_GATE", "JUMP gated charge=" + fmt(charge)
+                        + " (need " + fmt(this.jumpCharge.getValue()) + ") " + this.state());
+                } else {
+                    this.diag("GROUND_HOLD", "GROUND hold-for-crit jump=" + this.isJumpHeld()
+                        + " velY=" + fmt(mc.player.getVelocity().y) + " charge=" + fmt(charge) + " " + this.state());
+                }
                 return;
             }
             // Ground combo (non-crit). Only when sprint is confirmed off so we never emit a sprint-hit.
@@ -208,6 +236,7 @@ public class Triggerbot extends ModuleStructure {
             }
         } finally {
             SUPPRESS_SPRINT = wantSuppress;
+            SUPPRESS_JUMP = wantSuppressJump;
         }
     }
 
@@ -266,7 +295,10 @@ public class Triggerbot extends ModuleStructure {
 
     private boolean isJumpHeld() {
         try {
-            return mc.player.input.playerInput.jump();
+            // Read the PHYSICAL jump key, NOT player.input.playerInput: while gating we rewrite
+            // playerInput.jump() to false, so reading playerInput here would flip to false the next
+            // tick and break the gate. The keybinding reflects the real key regardless of our rewrite.
+            return mc.options.jumpKey.isPressed();
         } catch (Throwable t) {
             return false;
         }
