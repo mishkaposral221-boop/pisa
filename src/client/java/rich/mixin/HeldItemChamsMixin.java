@@ -1,51 +1,36 @@
 package rich.mixin;
 
 import net.minecraft.client.render.RenderLayer;
-import net.minecraft.client.render.command.OrderedRenderCommandQueue;
-import net.minecraft.client.render.item.ItemRenderState;
 import net.minecraft.client.texture.SpriteAtlasTexture;
-import net.minecraft.client.util.math.MatrixStack;
 import org.spongepowered.asm.mixin.Mixin;
-import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
-import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+import org.spongepowered.asm.mixin.injection.ModifyVariable;
 import rich.modules.impl.render.Chams;
 import rich.util.render.clientpipeline.ClientPipelines;
 
 /**
  * Makes items held in other players' hands render through walls (chams).
  *
- * <p>{@link ItemRenderState.LayerRenderState#render} submits the item geometry to
- * {@code OrderedRenderCommandQueue#submitItem} using its {@code renderLayer} field. That
- * layer carries the depth-test state. While {@link Chams#RICH$EQUIPMENT_TARGET} is active
- * (set by {@code LivingEntityRendererMixin} around non-local player rendering), we swap the
- * layer for {@link ClientPipelines#CHAMS_ENTITY} bound to the block atlas, which uses the
- * same entity vertex format (lightmap + overlay) but {@code NO_DEPTH_TEST}, so the item is
- * visible through geometry.</p>
+ * <p>Items are submitted via {@code OrderedRenderCommandQueueImpl#submitItem(..., RenderLayer
+ * renderLayer, ItemRenderState.Glint glint)}; that {@code renderLayer} carries the depth-test
+ * state used when the queued item geometry is finally drawn. While {@link Chams#RICH$EQUIPMENT_TARGET}
+ * is active (set by {@code LivingEntityRendererMixin} only around non-local player rendering), we
+ * swap that layer for {@link ClientPipelines#CHAMS_ENTITY} bound to the block atlas. It uses the same
+ * entity vertex format (lightmap + overlay) but {@code NO_DEPTH_TEST}, so the item shows through walls.</p>
  *
- * <p>The field is rebuilt every frame by the item model update, so this per-frame overwrite
- * is transient. Special-model items (shields, tridents, banners, etc.) take the
- * {@code specialModelType} branch where {@code renderLayer} is null and are intentionally
- * left untouched.</p>
+ * <p>We target the queue implementation rather than the {@code ItemRenderState$LayerRenderState}
+ * inner class so the hook is on a stable, top-level consumption point. The flag is only true during
+ * other players' render, so the local player's own held item and all GUI item rendering are untouched.
+ * Special-model items (shields, tridents, banners) pass {@code renderLayer == null} and are skipped.</p>
  */
-@Mixin(ItemRenderState.LayerRenderState.class)
-public abstract class HeldItemChamsMixin {
+@Mixin(targets = "net.minecraft.client.render.command.OrderedRenderCommandQueueImpl")
+public class HeldItemChamsMixin {
 
-	@Shadow
-	private RenderLayer renderLayer;
-
-	@Inject(method = "render", at = @At("HEAD"))
-	private void rich$heldItemChams(
-		MatrixStack matrices,
-		OrderedRenderCommandQueue queue,
-		int light,
-		int overlay,
-		int i,
-		CallbackInfo ci
-	) {
-		if (this.renderLayer != null && Chams.RICH$EQUIPMENT_TARGET) {
-			this.renderLayer = ClientPipelines.CHAMS_ENTITY.apply(SpriteAtlasTexture.BLOCK_ATLAS_TEXTURE);
+	@ModifyVariable(method = "submitItem", at = @At("HEAD"), argsOnly = true)
+	private RenderLayer rich$heldItemChams(RenderLayer renderLayer) {
+		if (renderLayer != null && Chams.RICH$EQUIPMENT_TARGET) {
+			return ClientPipelines.CHAMS_ENTITY.apply(SpriteAtlasTexture.BLOCK_ATLAS_TEXTURE);
 		}
+		return renderLayer;
 	}
 }
