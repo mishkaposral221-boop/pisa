@@ -17,6 +17,7 @@ import rich.command.impl.GpsCommand;
 import rich.command.impl.HelpCommand;
 import rich.command.impl.IrcCommand;
 import rich.command.impl.PrefixCommand;
+import rich.command.impl.ProfilerCommand;
 import rich.events.api.EventHandler;
 import rich.events.api.EventManager;
 import rich.events.impl.ChatEvent;
@@ -47,6 +48,7 @@ public class CommandManager {
       this.registerCommand(new PrefixCommand());
       this.registerCommand(new GpsCommand());
       this.registerCommand(new IrcCommand());
+      this.registerCommand(new ProfilerCommand());
       EventManager.register(this);
       PrefixConfig var1 = PrefixConfig.getInstance();
       var1.load();

@@ -31,6 +31,7 @@ import rich.screens.menu.MainMenuScreen;
 import rich.update.UpdateChecker;
 import rich.util.config.ConfigSystem;
 import rich.util.config.impl.account.AccountConfig;
+import rich.util.profiler.FrameProfiler;
 import rich.util.render.font.FontRenderer;
 import rich.util.session.SessionChanger;
 import rich.util.window.WindowStyle;
@@ -69,6 +70,16 @@ public abstract class MinecraftClientMixin {
    @Inject(method = "<init>", at = @At("TAIL"))
    private void onInit(CallbackInfo var1) {
       SessionChanger.setSessionSetter(this::setSession);
+   }
+
+   @Inject(method = "render", at = @At("HEAD"))
+   private void richProfilerRenderStart(CallbackInfo var1) {
+      FrameProfiler.getInstance().beginFrame();
+   }
+
+   @Inject(method = "render", at = @At("TAIL"))
+   private void richProfilerRenderEnd(CallbackInfo var1) {
+      FrameProfiler.getInstance().frameEnd();
    }
 
    @Inject(method = "stop", at = @At("HEAD"))

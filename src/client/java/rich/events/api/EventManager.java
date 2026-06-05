@@ -9,6 +9,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import rich.events.api.events.Event;
 import rich.events.api.events.EventStoppable;
 import rich.events.api.types.Priority;
+import rich.util.profiler.FrameProfiler;
 
 public final class EventManager {
    private static final Map<Class<? extends Event>, List<EventManager.MethodData>> REGISTRY_MAP = new HashMap<>();
@@ -121,11 +122,18 @@ public final class EventManager {
    }
 
    private static void invoke(EventManager.MethodData var0, Event var1) {
+      FrameProfiler profiler = FrameProfiler.getInstance();
+      boolean prof = profiler.isEnabled();
+      long start = prof ? System.nanoTime() : 0L;
       try {
          var0.target().invoke(var0.source(), var1);
       } catch (IllegalAccessException | IllegalArgumentException | InvocationTargetException var3) {
          if (Boolean.getBoolean("rich.debug.events")) {
             System.err.println("Event invocation failed: " + var3.getClass().getSimpleName());
+         }
+      } finally {
+         if (prof) {
+            profiler.record(var0.source().getClass().getSimpleName() + "#" + var1.getClass().getSimpleName(), System.nanoTime() - start);
          }
       }
    }
