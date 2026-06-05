@@ -6,8 +6,12 @@ import net.minecraft.screen.slot.Slot;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
+import net.minecraft.network.packet.c2s.play.PlayerActionC2SPacket;
+import net.minecraft.network.packet.c2s.play.UpdateSelectedSlotC2SPacket;
 import net.minecraft.util.collection.DefaultedList;
 import net.minecraft.util.Identifier;
+import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.Direction;
 import net.minecraft.client.gui.screen.ingame.InventoryScreen;
 import net.minecraft.registry.Registries;
 import rich.Initialization;
@@ -124,7 +128,7 @@ public class AutoSwap extends ModuleStructure {
                   if (!var12.isEmpty()) {
                      int var13 = InventoryUtils.findItemInHotbar(var12.getItem());
                      if (var13 != -1) {
-                        InventoryUtils.swapOffhandWithSlot(36 + var13);
+                        this.offhandSwap(var13);
                         this.wheelOpen = false;
                         this.lastHover = -1;
                         this.setCursorUnlocked(false);
@@ -156,6 +160,34 @@ public class AutoSwap extends ModuleStructure {
                }
             }
          }
+      }
+   }
+
+   // Put the hotbar item at `hotbarSlot` (0-8) into the offhand using ONLY vanilla packets - exactly
+   // like pressing the "Swap item with offhand" (F) key: select the slot, fire SWAP_ITEM_WITH_OFFHAND,
+   // then restore the previous slot. This avoids inventory clickSlot packets while the GUI is closed
+   // (the classic anti-cheat flag that the old clickSlot(SWAP, 40) approach tripped).
+   private void offhandSwap(int hotbarSlot) {
+      if (mc.player == null || mc.getNetworkHandler() == null) {
+         return;
+      }
+      if (hotbarSlot < 0 || hotbarSlot > 8) {
+         return;
+      }
+
+      int prev = mc.player.getInventory().getSelectedSlot();
+      // 1. Select the target slot (mirror client + tell the server, like a normal scroll).
+      if (prev != hotbarSlot) {
+         mc.player.getInventory().setSelectedSlot(hotbarSlot);
+         mc.getNetworkHandler().sendPacket(new UpdateSelectedSlotC2SPacket(hotbarSlot));
+      }
+      // 2. Vanilla "swap item with offhand" action (identical to the F key).
+      mc.getNetworkHandler()
+         .sendPacket(new PlayerActionC2SPacket(PlayerActionC2SPacket.Action.SWAP_ITEM_WITH_OFFHAND, BlockPos.ORIGIN, Direction.DOWN));
+      // 3. Restore the previous slot so we keep holding our weapon.
+      if (prev != hotbarSlot) {
+         mc.player.getInventory().setSelectedSlot(prev);
+         mc.getNetworkHandler().sendPacket(new UpdateSelectedSlotC2SPacket(prev));
       }
    }
 
