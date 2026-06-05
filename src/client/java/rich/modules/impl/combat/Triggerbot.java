@@ -131,6 +131,24 @@ public class Triggerbot extends ModuleStructure {
                 return;
             }
 
+            // ---- CRIT IMPOSSIBLE (blindness / levitation / vehicle / flying / climbing / just-left-water):
+            // there is NO crit to wait for, so do not freeze holding for one and do not gate on sprint
+            // (a sprint-hit is perfectly legal here - it just deals knockback instead of a crit). Land a
+            // normal full-charge hit whenever possible, in the air OR on the ground. THIS is what makes
+            // the bot actually deal damage under a debuff sphere (Blindness + Mining Fatigue) instead of
+            // standing there doing nothing. ----
+            if (!critPossible) {
+                if (charge >= GROUND_ATTACK_CHARGE) {
+                    this.attack(target);
+                    LOG.info("[Triggerbot] HIT no-crit-possible charge=" + fmt(charge)
+                        + " blocker=" + this.critBlocker() + " " + this.state());
+                } else {
+                    this.diag("NOCRIT_WAIT", "no-crit-possible wait charge=" + fmt(charge)
+                        + " (need " + GROUND_ATTACK_CHARGE + ") blocker=" + this.critBlocker() + " " + this.state());
+                }
+                return;
+            }
+
             // ---- AIRBORNE: land the crit the INSTANT the window is valid (fallDistance>0 + charge),
             // once sprint is confirmed off server-side. No waiting for a 'cleaner' fall - if a player
             // knocks us, we still crit on the very first descending tick. ----
