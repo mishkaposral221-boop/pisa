@@ -13,6 +13,7 @@ import rich.events.impl.TickEvent;
 import rich.modules.impl.movement.AutoSprint;
 import rich.modules.module.ModuleStructure;
 import rich.modules.module.category.ModuleCategory;
+import rich.modules.module.setting.implement.SliderSettings;
 import rich.util.c;
 
 public class Triggerbot extends ModuleStructure {
@@ -27,6 +28,12 @@ public class Triggerbot extends ModuleStructure {
     private static final Logger LOG = LoggerFactory.getLogger("Triggerbot");
     // Ключ последней причины - чтобы не спамить одним и тем же состоянием каждый тик.
     private String lastDiag = "";
+
+    // Min weapon charge required to hit when a crit is IMPOSSIBLE (under a debuff sphere: blindness +
+    // slowed attack speed). Under the sphere the weapon does not refill to 1.00 between fast jumps, so
+    // requiring full charge made the bot skip ~every 4th jump-hit. Lower this = hit EARLIER (stop
+    // missing jumps) at the cost of weaker per-hit damage. Tunable in the module menu.
+    public SliderSettings noCritCharge = new SliderSettings("Charge under debuff", "Min weapon charge to hit when crit is impossible (sphere). Lower = hit earlier but weaker").setValue(0.80F).range(0.3F, 1.0F);
 
     private int ticksOutOfWater = 10;
     private int ticksOnGround = 0;
@@ -46,6 +53,7 @@ public class Triggerbot extends ModuleStructure {
 
     public Triggerbot() {
         super("Triggerbot", "Auto-attack targeted entities", ModuleCategory.VISUALS);
+        this.settings(this.noCritCharge);
     }
 
     @Override
@@ -134,17 +142,18 @@ public class Triggerbot extends ModuleStructure {
             // ---- CRIT IMPOSSIBLE (blindness / levitation / vehicle / flying / climbing / just-left-water):
             // there is NO crit to wait for, so do not freeze holding for one and do not gate on sprint
             // (a sprint-hit is perfectly legal here - it just deals knockback instead of a crit). Land a
-            // normal full-charge hit whenever possible, in the air OR on the ground. THIS is what makes
-            // the bot actually deal damage under a debuff sphere (Blindness + Mining Fatigue) instead of
-            // standing there doing nothing. ----
+            // hit as soon as charge reaches the configurable threshold, in the air OR on the ground. Under
+            // a slowed-attack debuff sphere the weapon can't refill to 1.00 between fast jumps, so a full
+            // charge requirement would skip ~every 4th jump-hit; noCritCharge lets us hit EARLIER. ----
             if (!critPossible) {
-                if (charge >= GROUND_ATTACK_CHARGE) {
+                float need = this.noCritCharge.getValue();
+                if (charge >= need) {
                     this.attack(target);
                     LOG.info("[Triggerbot] HIT no-crit-possible charge=" + fmt(charge)
-                        + " blocker=" + this.critBlocker() + " " + this.state());
+                        + " need=" + fmt(need) + " blocker=" + this.critBlocker() + " " + this.state());
                 } else {
                     this.diag("NOCRIT_WAIT", "no-crit-possible wait charge=" + fmt(charge)
-                        + " (need " + GROUND_ATTACK_CHARGE + ") blocker=" + this.critBlocker() + " " + this.state());
+                        + " (need " + fmt(need) + ") blocker=" + this.critBlocker() + " " + this.state());
                 }
                 return;
             }
