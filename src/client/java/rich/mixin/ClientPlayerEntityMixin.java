@@ -79,6 +79,25 @@ public abstract class ClientPlayerEntityMixin extends AbstractClientPlayerEntity
          } catch (Throwable var4) {
          }
 
+         // Triggerbot JUMP-CRIT SYNC: drop the jump INPUT for this tick while the bot is holding the
+         // jump back until the weapon is charged (so every jump lands a crit). Mirrors the sprint
+         // suppression above. We only clear jump when it is currently held; the player keeps full
+         // control whenever Triggerbot is off or no crit target is present.
+         try {
+            if (Triggerbot.SUPPRESS_JUMP
+               && Triggerbot.getInstance() != null
+               && Triggerbot.getInstance().isState()
+               && this.input != null
+               && this.input.playerInput != null
+               && this.input.playerInput.jump()) {
+               PlayerInput var5 = this.input.playerInput;
+               this.input.playerInput = new PlayerInput(
+                  var5.forward(), var5.backward(), var5.left(), var5.right(), false, var5.sneak(), var5.sprint()
+               );
+            }
+         } catch (Throwable var6) {
+         }
+
          PlayerTravelEvent var2 = new PlayerTravelEvent(Vec3d.ZERO, false);
          EventManager.callEvent(var2);
       }
