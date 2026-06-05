@@ -2,6 +2,7 @@ package rich.modules.impl.combat;
 
 import java.util.List;
 import net.minecraft.client.gui.screen.ingame.InventoryScreen;
+import net.minecraft.network.packet.c2s.play.ClientCommandC2SPacket;
 import net.minecraft.screen.slot.SlotActionType;
 import net.minecraft.screen.slot.Slot;
 import net.minecraft.item.Item;
@@ -26,9 +27,10 @@ import rich.util.inventory.InventoryUtils;
 import rich.util.render.pipeline.WheelPipeline;
 
 public class AutoSwap extends ModuleStructure {
-   // Легитный свап: реально открываем инвентарь -> ждём -> свап -> ждём -> закрываем.
-   // Пока инвентарь открыт - ПРИНУДИТЕЛЬНО гасим скорость/спринт, чтобы игрок
-   // не продолжал скользить по инерции (ванилла глушит только ввод, но не импульс).
+   // Легитный свап: STOP_SPRINTING -> открываем инвентарь -> ждём -> свап -> ждём -> закрываем.
+   // КОРЕНЬ ПРОБЛЕМЫ: сервер трекает спринт по ClientCommandC2SPacket. setSprinting(false)
+   // меняет только клиентский флаг, а при открытом экране tickMovement не шлёт STOP_SPRINTING ->
+   // сервер думает что ты бежишь, и клик по инвентарю = "Inventory". Поэтому шлём STOP_SPRINTING явно.
    // Всё разнесено по тикам, чтобы не ловилось как "multi action".
    private static final int OPEN_TICKS = 2;
    private static final int CLOSE_TICKS = 1;
@@ -55,6 +57,7 @@ public class AutoSwap extends ModuleStructure {
    private int pendingSwapSlot = -1;
    private int swapPhase = PHASE_IDLE;
    private int phaseTimer = 0;
+   private boolean sentSprintStop = false;
 
    public static AutoSwap getInstance() {
       return c.a(AutoSwap.class);
@@ -115,7 +118,7 @@ public class AutoSwap extends ModuleStructure {
       }
    }
 
-   // open -> (ждём OPEN_TICKS, всё время гасим инерцию) -> swap -> (ждём CLOSE_TICKS) -> close.
+   // STOP_SPRINTING (1й тик) -> halt + ждём OPEN_TICKS -> swap -> ждём CLOSE_TICKS -> close.
    @EventHandler
    public void onTick(TickEvent var1) {
       if (mc.player == null || mc.interactionManager == null) {
@@ -131,6 +134,12 @@ public class AutoSwap extends ModuleStructure {
          if (!(mc.currentScreen instanceof InventoryScreen)) {
             this.resetSwap();
             return;
+         }
+
+         // первым тиком явно говорим серверу, что мы перестали спринтовать.
+         if (!this.sentSprintStop) {
+            this.stopServerSprint();
+            this.sentSprintStop = true;
          }
 
          // полная остановка пока инвентарь открыт.
@@ -171,6 +180,14 @@ public class AutoSwap extends ModuleStructure {
       }
    }
 
+   // Явно сообщаем серверу STOP_SPRINTING (этот пакет трекает AutoSprint).
+   private void stopServerSprint() {
+      if (mc.player != null && mc.getNetworkHandler() != null) {
+         mc.player.setSprinting(false);
+         mc.getNetworkHandler().sendPacket(new ClientCommandC2SPacket(mc.player, ClientCommandC2SPacket.Mode.STOP_SPRINTING));
+      }
+   }
+
    // Полная остановка: сброс спринта и обнуление горизонтальной скорости (инерции).
    private void haltMovement() {
       if (mc.player != null) {
@@ -185,6 +202,7 @@ public class AutoSwap extends ModuleStructure {
       this.swapPhase = PHASE_IDLE;
       this.phaseTimer = 0;
       this.pendingSwapSlot = -1;
+      this.sentSprintStop = false;
    }
 
    private boolean requestSwap(ItemStack var1) {
@@ -195,6 +213,7 @@ public class AutoSwap extends ModuleStructure {
       Slot var2 = InventoryUtils.findSlotAnywhere(var1.getItem());
       if (var2 != null) {
          this.pendingSwapSlot = var2.id;
+         this.sentSprintStop = false;
          mc.setScreen(new InventoryScreen(mc.player));
          this.haltMovement();
          this.swapPhase = PHASE_OPENING;
