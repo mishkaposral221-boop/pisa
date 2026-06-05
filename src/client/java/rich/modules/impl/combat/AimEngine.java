@@ -31,6 +31,8 @@ public class AimEngine {
     private double prevTargetZ;
     private boolean hasPrevTarget = false;
     private int aimReactionTicks = 0;
+    private float yawRemainder = 0.0f;
+    private float pitchRemainder = 0.0f;
 
     public AimEngine(AimAssist config) {
         this.config = config;
@@ -45,6 +47,8 @@ public class AimEngine {
             this.aimPointTicks = 0;
             this.hasPrevTarget = false;
             this.firstFrame = true;
+            this.yawRemainder = 0.0f;
+            this.pitchRemainder = 0.0f;
             return;
         }
         if (client.currentScreen != null) {
@@ -62,7 +66,10 @@ public class AimEngine {
         this.lastPlayerYaw = player.getYaw();
         this.lastPlayerPitch = player.getPitch();
         float mouseDelta = Math.abs(this.rawTickYawDelta) + Math.abs(this.rawTickPitchDelta);
-        if (mouseDelta < 0.005f) {
+        // Нет движения мыши - нет ассиста. Никакого автономного доводчика.
+        if (mouseDelta < 0.01f) {
+            this.yawRemainder = 0.0f;
+            this.pitchRemainder = 0.0f;
             return;
         }
         Vec3d eyePos = player.getEyePos();
@@ -95,6 +102,8 @@ public class AimEngine {
             this.hasPrevTarget = false;
             this.aimReactionTicks = 0;
             this.aimPointTicks = 0;
+            this.yawRemainder = 0.0f;
+            this.pitchRemainder = 0.0f;
             return;
         }
         if (!this.canSeeTarget(client, (PlayerEntity)player, target)) {
@@ -120,7 +129,7 @@ public class AimEngine {
         if (this.hasPrevTarget) {
             double velX = targetX - this.prevTargetX;
             double velZ = targetZ - this.prevTargetZ;
-            float predFactor = MathHelper.clamp((float)(dist * 0.55f), (float)0.75f, (float)3.4f);
+            float predFactor = MathHelper.clamp((float)(dist * 0.4f), (float)0.5f, (float)2.0f);
             targetX += velX * (double)predFactor;
             targetZ += velZ * (double)predFactor;
         }
@@ -137,9 +146,8 @@ public class AimEngine {
         wantYaw = MathHelper.wrapDegrees((float)(wantYaw - player.getYaw()));
         wantPitch -= player.getPitch();
         float sens = (float)((Double)client.options.getMouseSensitivity().getValue()).doubleValue() * 0.6f + 0.2f;
-        // Real Minecraft rotation quantum (GCD): one mouse-pixel = (sens*0.6+0.2)^3 * 8.0 * 0.15 = sens^3 * 1.2.
-        // Snapping our pull to THIS grid keeps the total yaw/pitch delta a clean multiple of the player's
-        // own sensitivity step, so server-side GCD/rotation checks can't tell the assist apart from the mouse.
+        // Реальный квант поворота Minecraft (GCD): один пиксель мыши = (sens*0.6+0.2)^3 * 1.2.
+        // Снап нашей тяги на ЭТУ сетку делает итоговую дельту чистым кратным шагу игрока.
         float step = sens * sens * sens * 1.2f;
         float deadzone = Math.max((float)Math.toDegrees(Math.atan2(halfW, dist)) * 0.15f, 0.25f);
         float totalAngle = (float)Math.sqrt(wantYaw * wantYaw + wantPitch * wantPitch);
@@ -149,31 +157,35 @@ public class AimEngine {
             this.aimPointTicks = 0;
             return;
         }
-        if (this.aimRandom.nextFloat() < 0.04f) {
+        if (this.aimRandom.nextFloat() < 0.05f) {
             return;
         }
         float applyYaw = 0.0f;
         float applyPitch = 0.0f;
+        // Ассист работает ТОЛЬКО когда игрок сам ведёт мышь К цели. Иначе - почти ноль.
+        boolean movingToward = this.rawTickYawDelta * wantYaw + this.rawTickPitchDelta * wantPitch > 0.0f;
         if (totalAngle > deadzone) {
-            boolean movingToward = this.rawTickYawDelta * wantYaw + this.rawTickPitchDelta * wantPitch > 0.0f;
-            float t = Math.min((totalAngle - deadzone) / 15.0f, 1.0f);
-            float strength = movingToward ? 0.58f + t * 0.52f : 0.22f + t * 0.24f;
-            float maxPull = movingToward ? 5.6f + t * 7.4f : 1.8f + t * 2.3f;
-            float moveScale = movingToward ? MathHelper.clamp((float)(mouseDelta * 0.95f), (float)0.34f, (float)1.0f) : 0.4f;
-            // Independent yaw/pitch jitter: correlated noise on both axes is itself a detectable signature.
+            float t = Math.min((totalAngle - deadzone) / 18.0f, 1.0f);
+            float strength = movingToward ? 0.34f + t * 0.26f : 0.05f;
+            float maxPull = movingToward ? 2.6f + t * 1.8f : 0.6f;
+            float moveScale = movingToward ? MathHelper.clamp((float)(mouseDelta * 0.8f), (float)0.2f, (float)1.0f) : 0.25f;
+            // Независимый джиттер по осям: коррелированный шум сам по себе сигнатура.
             float jitterYaw = (this.aimRandom.nextFloat() - 0.5f) * 0.16f;
             float jitterPitch = (this.aimRandom.nextFloat() - 0.5f) * 0.10f;
-            float undershoot = this.aimRandom.nextFloat() < 0.16f ? 0.75f + this.aimRandom.nextFloat() * 0.2f : 1.0f;
+            // Лёгкий постоянный недолёт: живой игрок никогда не сидит идеально в центре.
+            float undershoot = this.aimRandom.nextFloat() < 0.22f ? 0.7f + this.aimRandom.nextFloat() * 0.2f : 0.94f;
             float rawYawPull = MathHelper.clamp((float)(wantYaw * strength * moveScale * undershoot + jitterYaw), (float)(-maxPull), (float)maxPull);
             float rawPitchPull = MathHelper.clamp((float)(wantPitch * strength * moveScale * 0.6f * undershoot + jitterPitch), (float)(-maxPull * 0.6f), (float)(maxPull * 0.6f));
-            applyYaw = Math.abs(rawYawPull) > step ? (float)Math.round(rawYawPull / step) * step : 0.0f;
-            applyPitch = Math.abs(rawPitchPull) > step ? (float)Math.round(rawPitchPull / step) * step : 0.0f;
-        } else if (totalAngle > deadzone * 0.4f) {
-            float microStr = 0.2f;
-            float rawYawPull = wantYaw * microStr;
-            float rawPitchPull = wantPitch * microStr * 0.4f;
-            applyYaw = Math.abs(rawYawPull) > step ? (float)Math.round(rawYawPull / step) * step : 0.0f;
-            applyPitch = Math.abs(rawPitchPull) > step ? (float)Math.round(rawPitchPull / step) * step : 0.0f;
+            // Снап к GCD-сетке с накоплением остатка: грид-чистота без системного смещения.
+            float desiredYaw = rawYawPull + this.yawRemainder;
+            float desiredPitch = rawPitchPull + this.pitchRemainder;
+            applyYaw = (float)Math.round(desiredYaw / step) * step;
+            applyPitch = (float)Math.round(desiredPitch / step) * step;
+            this.yawRemainder = MathHelper.clamp((float)(desiredYaw - applyYaw), (float)(-step * 4.0f), (float)(step * 4.0f));
+            this.pitchRemainder = MathHelper.clamp((float)(desiredPitch - applyPitch), (float)(-step * 4.0f), (float)(step * 4.0f));
+        } else {
+            this.yawRemainder = 0.0f;
+            this.pitchRemainder = 0.0f;
         }
         if (applyYaw != 0.0f || applyPitch != 0.0f) {
             float newYaw = player.getYaw() + applyYaw;
