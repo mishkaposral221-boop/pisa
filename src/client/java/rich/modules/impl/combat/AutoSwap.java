@@ -20,6 +20,7 @@ import rich.modules.module.ModuleStructure;
 import rich.modules.module.category.ModuleCategory;
 import rich.modules.module.setting.implement.BindSetting;
 import rich.modules.module.setting.implement.ButtonSetting;
+import rich.modules.module.setting.implement.SliderSettings;
 import rich.modules.module.setting.implement.TextSetting;
 import rich.util.c;
 import rich.util.inventory.InventoryUtils;
@@ -39,11 +40,13 @@ public class AutoSwap extends ModuleStructure {
    public final ButtonSetting pick3 = new ButtonSetting("Выбрать слот 3", "Открыть инвентарь")
       .setButtonName("Выбрать")
       .setRunnable(() -> this.openPickerFor(2));
+   public final SliderSettings openDelay = new SliderSettings("Задержка открытия", "Тиков от открытия инвентаря до свапа").range(0, 40).setValue(8.0F);
+   public final SliderSettings closeDelay = new SliderSettings("Задержка закрытия", "Тиков от свапа до закрытия инвентаря").range(0, 40).setValue(6.0F);
    private boolean wheelOpen = false;
    private boolean cursorUnlocked = false;
    private int lastHover = -1;
    private int pickingForSlot = -1;
-   private int swapHotbarSlot = -1;
+   private int swapSlotId = -1;
    private int swapStage = 0;
    private int swapTicks = 0;
 
@@ -53,7 +56,7 @@ public class AutoSwap extends ModuleStructure {
 
    public AutoSwap() {
       super("AutoSwap", "Свап предметов", ModuleCategory.UTILITIES);
-      this.settings(this.wheelBind, this.slot1, this.pick1, this.slot2, this.pick2, this.slot3, this.pick3);
+      this.settings(this.wheelBind, this.slot1, this.pick1, this.slot2, this.pick2, this.slot3, this.pick3, this.openDelay, this.closeDelay);
       this.slot1.setText("minecraft:totem_of_undying");
       this.slot2.setText("minecraft:golden_apple");
       this.slot3.setText("minecraft:shield");
@@ -106,11 +109,10 @@ public class AutoSwap extends ModuleStructure {
       }
    }
 
-   // Driven step-by-step so the swap looks like a real player using their inventory:
-   // open the inventory GUI, wait a beat, swap the chosen hotbar item into the offhand
-   // through the OPEN player screen handler (one vanilla clickSlot, not raw packets),
-   // then close it. Spreading the open/click/close across ticks avoids the "multi action"
-   // kick that the old same-tick packet offhand-swap tripped.
+   // Swap looks like a real inventory session: open the inventory GUI, wait, then swap the chosen
+   // item (from ANYWHERE in the inventory, not just the hotbar) into the offhand via ONE vanilla
+   // clickSlot SWAP through the open player screen handler, then close it. Delays are tunable so
+   // the open/click/close pacing can be made human enough to satisfy the server anti-cheat.
    @EventHandler
    public void onTick(TickEvent var1) {
       if (mc.player == null || mc.interactionManager == null || this.swapStage == 0) {
@@ -127,10 +129,9 @@ public class AutoSwap extends ModuleStructure {
             this.swapStage = 2;
             break;
          case 2:
-            if (++this.swapTicks >= 2) {
-               if (mc.currentScreen instanceof InventoryScreen && this.swapHotbarSlot >= 0 && this.swapHotbarSlot <= 8) {
-                  int var2 = 36 + this.swapHotbarSlot;
-                  mc.interactionManager.clickSlot(mc.player.playerScreenHandler.syncId, var2, 40, SlotActionType.SWAP, mc.player);
+            if (++this.swapTicks >= this.openDelay.getInt()) {
+               if (mc.currentScreen instanceof InventoryScreen && this.swapSlotId >= 0) {
+                  mc.interactionManager.clickSlot(mc.player.playerScreenHandler.syncId, this.swapSlotId, 40, SlotActionType.SWAP, mc.player);
                }
 
                this.swapTicks = 0;
@@ -138,7 +139,7 @@ public class AutoSwap extends ModuleStructure {
             }
             break;
          case 3:
-            if (++this.swapTicks >= 2) {
+            if (++this.swapTicks >= this.closeDelay.getInt()) {
                if (mc.currentScreen instanceof InventoryScreen) {
                   mc.setScreen(null);
                }
@@ -152,15 +153,15 @@ public class AutoSwap extends ModuleStructure {
    }
 
    private void requestSwap(int var1) {
-      if (var1 >= 0 && var1 <= 8 && this.swapStage == 0) {
-         this.swapHotbarSlot = var1;
+      if (var1 >= 0 && this.swapStage == 0) {
+         this.swapSlotId = var1;
          this.swapTicks = 0;
          this.swapStage = 1;
       }
    }
 
    private void resetSwap() {
-      this.swapHotbarSlot = -1;
+      this.swapSlotId = -1;
       this.swapTicks = 0;
       this.swapStage = 0;
    }
@@ -185,9 +186,9 @@ public class AutoSwap extends ModuleStructure {
                   this.lastHover = var11;
                   ItemStack var12 = this.getStackForIndex(var11);
                   if (!var12.isEmpty()) {
-                     int var13 = InventoryUtils.findItemInHotbar(var12.getItem());
-                     if (var13 != -1) {
-                        this.requestSwap(var13);
+                     Slot var13 = InventoryUtils.findSlotAnywhere(var12.getItem());
+                     if (var13 != null) {
+                        this.requestSwap(var13.id);
                         this.wheelOpen = false;
                         this.lastHover = -1;
                         this.setCursorUnlocked(false);
