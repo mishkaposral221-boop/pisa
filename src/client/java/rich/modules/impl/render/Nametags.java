@@ -30,6 +30,8 @@ public class Nametags extends ModuleStructure {
     private final Vector4f reusablePos = new Vector4f();
     private final float[] reuseScreen = new float[2];
     private final ArrayList<ItemStack> armorItems = new ArrayList<>(6);
+    // Переиспользуемый список кандидатов — чтобы не аллоцировать каждый кадр (меньше давления на GC).
+    private final ArrayList<PlayerEntity> candidates = new ArrayList<>();
 
     public Nametags() {
         super("Nametags", "Display player names above heads", ModuleCategory.VISUALS);
@@ -56,7 +58,8 @@ public class Nametags extends ModuleStructure {
     // worldToScreen использует захваченные матрицы мира (фикс тряски)
     private boolean worldToScreen(double wx, double wy, double wz, float sw, float sh) {
         Vec3d cam = Render3D.lastCameraPos;
-        if (cam == null) {
+        // null-safe: до первого рендера мира матрицы могут быть null — выходим, а не ловим NPE каждый кадр
+        if (cam == null || Render3D.lastWorldSpaceMatrix == null || Render3D.lastProjMat == null) {
             return false;
         }
         float dx = (float)(wx - cam.x);
@@ -88,19 +91,34 @@ public class Nametags extends ModuleStructure {
         float maxDist2 = maxDist * maxDist;
         boolean armorOn = this.showArmor();
         float armorMax = this.armorDistance.getValue();
+        // LOD: полный ряд (рука + броня) только совсем вблизи; дальше — только предмет в руке.
+        float armorFullDist = armorMax * 0.5f;
         int tagsLeft = (int)this.maxTags.getValue();
         int armorLeft = (int)this.armorBudget.getValue();
+
+        // Собираем игроков в пределах дистанции и сортируем по близости — бюджет тратится на самых ближних.
+        this.candidates.clear();
         for (PlayerEntity entity : mc.world.getPlayers()) {
-            if (tagsLeft <= 0) {
-                break;
-            }
             if (entity == mc.player || entity.isSpectator()) {
                 continue;
             }
-            double dist2 = mc.player.squaredDistanceTo(entity);
-            if (dist2 > maxDist2) {
+            if (mc.player.squaredDistanceTo(entity) > maxDist2) {
                 continue;
             }
+            this.candidates.add(entity);
+        }
+        if (this.candidates.isEmpty()) {
+            return;
+        }
+        final PlayerEntity self = mc.player;
+        this.candidates.sort((a, b) -> Double.compare(self.squaredDistanceTo(a), self.squaredDistanceTo(b)));
+
+        for (int idx = 0; idx < this.candidates.size(); idx++) {
+            if (tagsLeft <= 0) {
+                break;
+            }
+            PlayerEntity entity = this.candidates.get(idx);
+            double dist2 = self.squaredDistanceTo(entity);
             Vec3d p = entity.getLerpedPos(td);
             double headY = p.y + (double)entity.getHeight() + 0.4;
             if (!this.worldToScreen(p.x, headY, p.z, sw, sh)) {
@@ -116,7 +134,8 @@ public class Nametags extends ModuleStructure {
             float distance = (float)Math.sqrt(dist2);
             float scale = Math.max(0.75f, Math.min(1.1f, 1.1f - distance * 0.010f));
             boolean drawArmor = armorOn && distance <= armorMax && armorLeft > 0;
-            if (this.renderTag(g, entity, cx, cy, scale, distance, drawArmor)) {
+            boolean armorFull = distance <= armorFullDist;
+            if (this.renderTag(g, entity, cx, cy, scale, drawArmor, armorFull)) {
                 armorLeft--;
             }
             tagsLeft--;
@@ -125,7 +144,7 @@ public class Nametags extends ModuleStructure {
 
     // Тег: имя + число HP (цвет по здоровью) + тонкая полоска, и ряд иконок экипировки сверху.
     // Возвращает true, если был отрисован ряд иконок (для учёта бюджета на кадр).
-    private boolean renderTag(DrawContext g, PlayerEntity player, float cx, float cy, float scale, float distance, boolean drawArmor) {
+    private boolean renderTag(DrawContext g, PlayerEntity player, float cx, float cy, float scale, boolean drawArmor, boolean armorFull) {
         float health = player.getHealth();
         float maxHp = Math.max(1.0f, player.getMaxHealth());
         String name = player.getName().getString();
@@ -173,41 +192,45 @@ public class Nametags extends ModuleStructure {
             Render2D.rect(barX, barY, Math.max(barH, barW * hpPct), barH, hpColor, barRadius);
         }
 
-        // ряд иконок: предмет в руке + броня, над таблеткой
+        // ряд иконок: предмет в руке (+ броня только вблизи), над таблеткой
         boolean drewArmor = false;
         if (drawArmor) {
             this.armorItems.clear();
             ItemStack mainHand = player.getEquippedStack(EquipmentSlot.MAINHAND);
-            ItemStack offHand = player.getEquippedStack(EquipmentSlot.OFFHAND);
-            ItemStack helmet = player.getEquippedStack(EquipmentSlot.HEAD);
-            ItemStack chest = player.getEquippedStack(EquipmentSlot.CHEST);
-            ItemStack legs = player.getEquippedStack(EquipmentSlot.LEGS);
-            ItemStack boots = player.getEquippedStack(EquipmentSlot.FEET);
             if (!mainHand.isEmpty()) this.armorItems.add(mainHand);
-            if (!offHand.isEmpty()) this.armorItems.add(offHand);
-            if (!helmet.isEmpty()) this.armorItems.add(helmet);
-            if (!chest.isEmpty()) this.armorItems.add(chest);
-            if (!legs.isEmpty()) this.armorItems.add(legs);
-            if (!boots.isEmpty()) this.armorItems.add(boots);
-            if (!this.armorItems.isEmpty()) {
+            if (armorFull) {
+                ItemStack offHand = player.getEquippedStack(EquipmentSlot.OFFHAND);
+                ItemStack helmet = player.getEquippedStack(EquipmentSlot.HEAD);
+                ItemStack chest = player.getEquippedStack(EquipmentSlot.CHEST);
+                ItemStack legs = player.getEquippedStack(EquipmentSlot.LEGS);
+                ItemStack boots = player.getEquippedStack(EquipmentSlot.FEET);
+                if (!offHand.isEmpty()) this.armorItems.add(offHand);
+                if (!helmet.isEmpty()) this.armorItems.add(helmet);
+                if (!chest.isEmpty()) this.armorItems.add(chest);
+                if (!legs.isEmpty()) this.armorItems.add(legs);
+                if (!boots.isEmpty()) this.armorItems.add(boots);
+            }
+            int n = this.armorItems.size();
+            if (n > 0) {
                 drewArmor = true;
                 float itemScale = scale * 0.8f;
                 float itemSize = 16.0f * itemScale;
                 float spacing = itemSize + 1.0f;
-                float totalW = (float)this.armorItems.size() * spacing - 1.0f;
+                float totalW = (float)n * spacing - 1.0f;
                 float startX = cx - totalW / 2.0f;
                 float itemY = panelY - itemSize - 1.5f * scale;
-                for (int i = 0; i < this.armorItems.size(); i++) {
-                    ItemStack item = this.armorItems.get(i);
-                    float itemX = startX + (float)i * spacing;
-                    try {
-                        g.getMatrices().pushMatrix();
-                        g.getMatrices().translate(itemX, itemY);
-                        g.getMatrices().scale(itemScale, itemScale);
-                        g.drawItem(item, 0, 0);
-                        g.getMatrices().popMatrix();
-                    } catch (Exception ignored) {
+                // Один push/pop на весь ряд вместо push/pop на каждый предмет.
+                try {
+                    g.getMatrices().pushMatrix();
+                    g.getMatrices().translate(startX, itemY);
+                    g.getMatrices().scale(itemScale, itemScale);
+                    float step = spacing / itemScale; // шаг в масштабированном пространстве
+                    for (int i = 0; i < n; i++) {
+                        g.drawItem(this.armorItems.get(i), 0, 0);
+                        g.getMatrices().translate(step, 0.0f);
                     }
+                    g.getMatrices().popMatrix();
+                } catch (Exception ignored) {
                 }
             }
         }
