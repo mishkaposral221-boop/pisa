@@ -37,8 +37,12 @@ public class AimEngine {
     private long lastAimTick = -1L;
     private float tickAimYaw = 0.0f;
     private float tickAimPitch = 0.0f;
-    private static final float MAX_TICK_YAW = 22.0f;
-    private static final float MAX_TICK_PITCH = 12.0f;
+    // База пер-тик капа. Реальный кап РЕ-РАНДОМИЗИРУЕТСЯ каждый тик (ниже): фиксированный
+    // потолок 22/12 сам по себе сигнатура бота - человеческая скорость флика плавает от тика к тику.
+    private static final float BASE_TICK_YAW = 13.0f;
+    private static final float BASE_TICK_PITCH = 7.5f;
+    private float tickYawCap = 15.0f;
+    private float tickPitchCap = 9.0f;
 
     public AimEngine(AimAssist config) {
         this.config = config;
@@ -174,6 +178,9 @@ public class AimEngine {
             this.lastAimTick = curTick;
             this.tickAimYaw = 0.0f;
             this.tickAimPitch = 0.0f;
+            // Ре-рандомизируем потолок угловой скорости каждый тик: 13..18 yaw, 7.5..10.5 pitch.
+            this.tickYawCap = BASE_TICK_YAW + this.aimRandom.nextFloat() * 5.0f;
+            this.tickPitchCap = BASE_TICK_PITCH + this.aimRandom.nextFloat() * 3.0f;
         }
         float applyYaw = 0.0f;
         float applyPitch = 0.0f;
@@ -182,8 +189,8 @@ public class AimEngine {
         if (totalAngle > deadzone) {
             float t = Math.min((totalAngle - deadzone) / 18.0f, 1.0f);
             // Сила высокая (цепкая тяга внутри тика), но только по движению игрока.
-            float strength = movingToward ? 0.55f + t * 0.4f : 0.06f;
-            float maxPull = movingToward ? 4.5f + t * 5.5f : 0.7f;
+            float strength = movingToward ? 0.5f + t * 0.35f : 0.05f;
+            float maxPull = movingToward ? 3.5f + t * 4.0f : 0.6f;
             float moveScale = movingToward ? MathHelper.clamp((float)(mouseDelta * 0.9f), (float)0.3f, (float)1.0f) : 0.25f;
             float jitterYaw = (this.aimRandom.nextFloat() - 0.5f) * 0.16f;
             float jitterPitch = (this.aimRandom.nextFloat() - 0.5f) * 0.10f;
@@ -199,9 +206,9 @@ public class AimEngine {
             }
             float rawYawPull = MathHelper.clamp((float)(wantYaw * strength * moveScale * overshoot + jitterYaw), (float)(-maxPull), (float)maxPull);
             float rawPitchPull = MathHelper.clamp((float)(wantPitch * strength * moveScale * 0.6f * overshoot + jitterPitch), (float)(-maxPull * 0.6f), (float)(maxPull * 0.6f));
-            // ТИК-БЮДЖЕТ: оставшийся лимит поворота ассиста за этот тик (человеческая угловая скорость).
-            float yawBudget = Math.max(0.0f, MAX_TICK_YAW - Math.abs(this.tickAimYaw));
-            float pitchBudget = Math.max(0.0f, MAX_TICK_PITCH - Math.abs(this.tickAimPitch));
+            // ТИК-БЮДЖЕТ: оставшийся лимит поворота ассиста за этот тик (рандомизированный потолок).
+            float yawBudget = Math.max(0.0f, this.tickYawCap - Math.abs(this.tickAimYaw));
+            float pitchBudget = Math.max(0.0f, this.tickPitchCap - Math.abs(this.tickAimPitch));
             rawYawPull = MathHelper.clamp((float)rawYawPull, (float)(-yawBudget), (float)yawBudget);
             rawPitchPull = MathHelper.clamp((float)rawPitchPull, (float)(-pitchBudget), (float)pitchBudget);
             // Снап к GCD-сетке с накоплением остатка (грид-чистота последним шагом).
