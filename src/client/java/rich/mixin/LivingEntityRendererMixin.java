@@ -142,6 +142,33 @@ public abstract class LivingEntityRendererMixin<S extends LivingEntityRenderStat
    )
    private int modifyMixColor(int var1, @Local(argsOnly = true) S var2) {
       Integer var3 = RICH$STATE_ENTITY_ID.get(var2);
+
+      // --- Chams body tint -------------------------------------------------
+      // When RICH$EQUIPMENT_TARGET is true we are inside the render() call of a
+      // chams target.  Apply the configured color as a vertex-color multiplier
+      // so the body skin is tinted with the chosen hue and alpha through walls.
+      Chams chams = Chams.getInstance();
+      if (Chams.RICH$EQUIPMENT_TARGET && chams != null && chams.isState()) {
+         int chamsTint = chams.color.getColor(); // ARGB from ColorSetting
+         // Blend chams tint with the base mix color (var1) so we don't lose
+         // any existing hurt-flash or custom tint from vanilla.
+         // Formula: result = baseCh * tintCh / 255  (per-channel multiply)
+         int bA = var1 >> 24 & 0xFF;
+         int bR = var1 >> 16 & 0xFF;
+         int bG = var1 >> 8  & 0xFF;
+         int bB = var1        & 0xFF;
+         int tA = chamsTint >> 24 & 0xFF;
+         int tR = chamsTint >> 16 & 0xFF;
+         int tG = chamsTint >> 8  & 0xFF;
+         int tB = chamsTint        & 0xFF;
+         int rA = bA * tA / 255;
+         int rR = bR * tR / 255;
+         int rG = bG * tG / 255;
+         int rB = bB * tB / 255;
+         return (rA << 24) | (rR << 16) | (rG << 8) | rB;
+      }
+
+      // --- HitEffect tint --------------------------------------------------
       HitEffect var4 = HitEffect.getInstance();
       if (var3 != null && var4 != null && var4.shouldTintEntity(var3)) {
          int var5 = var4.getEntityTintColor();
