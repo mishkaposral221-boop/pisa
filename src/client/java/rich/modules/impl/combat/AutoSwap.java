@@ -1,6 +1,10 @@
 package rich.modules.impl.combat;
 
 import java.util.List;
+import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
+import net.minecraft.client.gui.screen.ingame.InventoryScreen;
+import net.minecraft.client.option.KeyBinding;
+import net.minecraft.client.util.InputUtil;
 import net.minecraft.screen.slot.SlotActionType;
 import net.minecraft.screen.slot.Slot;
 import net.minecraft.item.Item;
@@ -8,7 +12,6 @@ import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
 import net.minecraft.util.collection.DefaultedList;
 import net.minecraft.util.Identifier;
-import net.minecraft.client.gui.screen.ingame.InventoryScreen;
 import net.minecraft.registry.Registries;
 import rich.Initialization;
 import rich.events.api.EventHandler;
@@ -20,6 +23,7 @@ import rich.modules.module.ModuleStructure;
 import rich.modules.module.category.ModuleCategory;
 import rich.modules.module.setting.implement.BindSetting;
 import rich.modules.module.setting.implement.ButtonSetting;
+import rich.modules.module.setting.implement.SelectSetting;
 import rich.modules.module.setting.implement.SliderSettings;
 import rich.modules.module.setting.implement.TextSetting;
 import rich.util.c;
@@ -28,6 +32,7 @@ import rich.util.render.pipeline.WheelPipeline;
 
 public class AutoSwap extends ModuleStructure {
    public final BindSetting wheelBind = new BindSetting("Бинд колеса", "Клавиша открытия колеса");
+   public final SelectSetting mode = new SelectSetting("Метод свапа", "F = имитация нажатия (без инвентарных пакетов, только из хотбара); Инвентарь = свап из любого слота").value("F", "Инвентарь");
    public final TextSetting slot1 = new TextSetting("Слот 1", "ID предмета");
    public final ButtonSetting pick1 = new ButtonSetting("Выбрать слот 1", "Открыть инвентарь")
       .setButtonName("Выбрать")
@@ -40,15 +45,18 @@ public class AutoSwap extends ModuleStructure {
    public final ButtonSetting pick3 = new ButtonSetting("Выбрать слот 3", "Открыть инвентарь")
       .setButtonName("Выбрать")
       .setRunnable(() -> this.openPickerFor(2));
-   public final SliderSettings openDelay = new SliderSettings("Задержка открытия", "Тиков от открытия инвентаря до свапа").range(0, 40).setValue(8.0F);
-   public final SliderSettings closeDelay = new SliderSettings("Задержка закрытия", "Тиков от свапа до закрытия инвентаря").range(0, 40).setValue(6.0F);
+   public final SliderSettings openDelay = new SliderSettings("Задержка открытия", "Тиков от открытия инвентаря до свапа (режим Инвентарь)").range(0, 40).setValue(8.0F);
+   public final SliderSettings closeDelay = new SliderSettings("Задержка закрытия", "Тиков от свапа до закрытия инвентаря (режим Инвентарь)").range(0, 40).setValue(6.0F);
    private boolean wheelOpen = false;
    private boolean cursorUnlocked = false;
    private int lastHover = -1;
    private int pickingForSlot = -1;
-   private int swapSlotId = -1;
+   private boolean swapViaInv = false;
    private int swapStage = 0;
    private int swapTicks = 0;
+   private int swapSlotId = -1;
+   private int swapHotbar = -1;
+   private int swapPrevSlot = -1;
 
    public static AutoSwap getInstance() {
       return c.a(AutoSwap.class);
@@ -56,7 +64,7 @@ public class AutoSwap extends ModuleStructure {
 
    public AutoSwap() {
       super("AutoSwap", "Свап предметов", ModuleCategory.UTILITIES);
-      this.settings(this.wheelBind, this.slot1, this.pick1, this.slot2, this.pick2, this.slot3, this.pick3, this.openDelay, this.closeDelay);
+      this.settings(this.wheelBind, this.mode, this.slot1, this.pick1, this.slot2, this.pick2, this.slot3, this.pick3, this.openDelay, this.closeDelay);
       this.slot1.setText("minecraft:totem_of_undying");
       this.slot2.setText("minecraft:golden_apple");
       this.slot3.setText("minecraft:shield");
@@ -109,13 +117,60 @@ public class AutoSwap extends ModuleStructure {
       }
    }
 
-   // Swap looks like a real inventory session: open the inventory GUI, wait, then swap the chosen
-   // item (from ANYWHERE in the inventory, not just the hotbar) into the offhand via ONE vanilla
-   // clickSlot SWAP through the open player screen handler, then close it. Delays are tunable so
-   // the open/click/close pacing can be made human enough to satisfy the server anti-cheat.
+   // Two ways to put the chosen item into the offhand:
+   //  * "F"        -> imitate the vanilla swap-hands key press (KeyBinding.onKeyPressed). The game itself
+   //                  emits the SWAP_ITEM_WITH_OFFHAND PlayerAction - no inventory click packets at all,
+   //                  so the "(Inventory)" check never fires. Slot select/restore is done with
+   //                  setSelectedSlot (vanilla auto-syncs it like a normal scroll). Hotbar items only.
+   //                  Each step lives on its own tick so it never looks like a "multi action".
+   //  * "Inventory"-> open the inventory GUI and do a single clickSlot SWAP (works for any slot, but
+   //                  uses an inventory packet that the server may flag).
    @EventHandler
    public void onTick(TickEvent var1) {
-      if (mc.player == null || mc.interactionManager == null || this.swapStage == 0) {
+      if (mc.player == null || this.swapStage == 0) {
+         return;
+      }
+
+      if (this.swapViaInv) {
+         this.tickInventorySwap();
+      } else {
+         this.tickKeySwap();
+      }
+   }
+
+   private void tickKeySwap() {
+      switch (this.swapStage) {
+         case 1:
+            if (this.swapHotbar >= 0 && this.swapHotbar <= 8) {
+               mc.player.getInventory().setSelectedSlot(this.swapHotbar);
+            }
+
+            this.swapTicks = 0;
+            this.swapStage = 2;
+            break;
+         case 2:
+            if (++this.swapTicks >= 1) {
+               this.pressSwapHands();
+               this.swapTicks = 0;
+               this.swapStage = 3;
+            }
+            break;
+         case 3:
+            if (++this.swapTicks >= 1) {
+               if (this.swapPrevSlot >= 0 && this.swapPrevSlot <= 8) {
+                  mc.player.getInventory().setSelectedSlot(this.swapPrevSlot);
+               }
+
+               this.resetSwap();
+            }
+            break;
+         default:
+            this.resetSwap();
+      }
+   }
+
+   private void tickInventorySwap() {
+      if (mc.interactionManager == null) {
          return;
       }
 
@@ -152,18 +207,49 @@ public class AutoSwap extends ModuleStructure {
       }
    }
 
-   private void requestSwap(int var1) {
-      if (var1 >= 0 && this.swapStage == 0) {
-         this.swapSlotId = var1;
-         this.swapTicks = 0;
-         this.swapStage = 1;
+   private void pressSwapHands() {
+      if (mc.options != null) {
+         InputUtil.Key var1 = KeyBindingHelper.getBoundKeyOf(mc.options.swapHandsKey);
+         KeyBinding.onKeyPressed(var1);
       }
    }
 
+   private boolean requestSwap(ItemStack var1) {
+      if (mc.player == null || this.swapStage != 0 || var1.isEmpty()) {
+         return false;
+      }
+
+      if (this.mode.isSelected("Инвентарь")) {
+         Slot var2 = InventoryUtils.findSlotAnywhere(var1.getItem());
+         if (var2 != null) {
+            this.swapViaInv = true;
+            this.swapSlotId = var2.id;
+            this.swapTicks = 0;
+            this.swapStage = 1;
+            return true;
+         }
+      } else {
+         int var3 = InventoryUtils.findItemInHotbar(var1.getItem());
+         if (var3 != -1) {
+            this.swapViaInv = false;
+            this.swapHotbar = var3;
+            this.swapPrevSlot = mc.player.getInventory().getSelectedSlot();
+            this.swapTicks = 0;
+            this.swapStage = 1;
+            return true;
+         }
+      }
+
+      return false;
+   }
+
    private void resetSwap() {
-      this.swapSlotId = -1;
-      this.swapTicks = 0;
+      this.swapViaInv = false;
       this.swapStage = 0;
+      this.swapTicks = 0;
+      this.swapSlotId = -1;
+      this.swapHotbar = -1;
+      this.swapPrevSlot = -1;
    }
 
    @EventHandler
@@ -185,15 +271,11 @@ public class AutoSwap extends ModuleStructure {
                if (var11 != -1 && var11 != this.lastHover) {
                   this.lastHover = var11;
                   ItemStack var12 = this.getStackForIndex(var11);
-                  if (!var12.isEmpty()) {
-                     Slot var13 = InventoryUtils.findSlotAnywhere(var12.getItem());
-                     if (var13 != null) {
-                        this.requestSwap(var13.id);
-                        this.wheelOpen = false;
-                        this.lastHover = -1;
-                        this.setCursorUnlocked(false);
-                        return;
-                     }
+                  if (!var12.isEmpty() && this.requestSwap(var12)) {
+                     this.wheelOpen = false;
+                     this.lastHover = -1;
+                     this.setCursorUnlocked(false);
+                     return;
                   }
                }
 
