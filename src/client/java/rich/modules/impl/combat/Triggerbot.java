@@ -14,44 +14,26 @@ import rich.modules.module.setting.implement.SelectSetting;
 import rich.util.c;
 
 public class Triggerbot extends ModuleStructure {
-    // Read by ClientPlayerEntityMixin: when true, the sprint INPUT is suppressed
-    // for this tick so vanilla drops sprint and sends STOP_SPRINTING before a crit.
+    // Read by ClientPlayerEntityMixin: when true the sprint INPUT is suppressed this tick so vanilla
+    // drops sprint and sends STOP_SPRINTING. Vanilla NEVER scores a crit while sprinting, so the bot
+    // must already be non-sprinting (packet sent on an EARLIER tick) when the attack packet goes out.
     public static volatile boolean SUPPRESS_SPRINT = false;
 
-    // ---- The only user-facing control is the server preset. ----
-    // IMPORTANT: vanilla NEVER scores a critical hit while the player is sprinting (it becomes a
-    // plain knockback hit instead). In duels you are sprinting almost all the time, which is why
-    // crits "didn't pass" on BOTH servers. So both modes now drop sprint one tick before the crit
-    // and swing on the next tick - this is exactly what a manual crit (w-tap) does.
-    //
-    // The remaining difference between the presets:
-    //   FunTime   - lenient server: also auto-combos charged ground hits for maximum pressure.
-    //   HolyWorld - strict anticheat: crit-only, no auto ground combo, so its stricter timing
-    //               checks never flag the bot for an unnatural combo.
     public static final String MODE_FUNTIME = "FunTime";
     public static final String MODE_HOLYWORLD = "HolyWorld";
     public SelectSetting mode = new SelectSetting("Mode", "Server preset").value(MODE_FUNTIME, MODE_HOLYWORLD);
 
-    // Deferred crit: tick N suppress sprint (STOP goes out), tick N+1 attack.
-    private boolean pendingCrit = false;
     // Ticks since last water contact (server only counts crits once out of water).
     private int ticksOutOfWater = 10;
     // How long we have been STUCK on the ground (jump held but unable to leave) waiting for a crit.
     private int groundHoldTicks = 0;
-    // Safety: if we are genuinely stuck on the ground (e.g. a 2-block ceiling) we fall back to a
-    // ground hit after this many stuck ticks so the bot never freezes.
     private static final int GROUND_HOLD_LIMIT = 8;
 
-    // How many consecutive ticks we have actually been standing on the ground. A ground combo is
-    // only allowed once this passes GROUND_COMBO_DELAY. During bunny-hopping the player only
-    // touches the ground for a tick or two between jumps, and on those ticks the jump key can be
-    // momentarily released - which previously let an unwanted combo slip in "over time" in PvP.
+    // Consecutive ticks actually standing on the ground - a ground combo is only allowed once this
+    // passes GROUND_COMBO_DELAY so a momentary landing between crit jumps can't sneak a combo in.
     private int ticksOnGround = 0;
     private static final int GROUND_COMBO_DELAY = 3;
 
-    // Fixed tuning that used to be sliders (the user asked to keep only the mode selector):
-    //   - ground hits always swing at a full cooldown bar for max damage + knockback;
-    //   - vanilla only counts a CRITICAL hit when the bar is > 0.9, so that is the crit threshold.
     private static final float GROUND_ATTACK_CHARGE = 1.0F;
     private static final float CRIT_CHARGE = 0.9F;
 
@@ -78,7 +60,6 @@ public class Triggerbot extends ModuleStructure {
     public void deactivate() {
         super.deactivate();
         SUPPRESS_SPRINT = false;
-        this.pendingCrit = false;
         this.ticksOutOfWater = 10;
         this.groundHoldTicks = 0;
         this.ticksOnGround = 0;
@@ -89,35 +70,23 @@ public class Triggerbot extends ModuleStructure {
         boolean wantSuppress = false;
         try {
             if (mc.player == null || mc.world == null || mc.currentScreen != null) {
-                this.pendingCrit = false;
                 this.groundHoldTicks = 0;
                 this.ticksOnGround = 0;
                 return;
             }
 
-            if (mc.player.isTouchingWater() || mc.player.isSubmergedInWater() || mc.player.isSwimming()) {
+            if (this.isInWater()) {
                 this.ticksOutOfWater = 0;
             } else if (this.ticksOutOfWater < 100) {
                 this.ticksOutOfWater++;
             }
 
-            // Track how long we have continuously stood on the ground.
             if (mc.player.isOnGround()) {
                 if (this.ticksOnGround < 100) {
                     this.ticksOnGround++;
                 }
             } else {
                 this.ticksOnGround = 0;
-            }
-
-            // Deferred crit hit: STOP_SPRINTING was sent last tick -> hit now (not sprinting).
-            if (this.pendingCrit) {
-                this.pendingCrit = false;
-                Entity pt = mc.targetedEntity;
-                if (this.canHit(pt) && this.charge() >= CRIT_CHARGE) {
-                    this.attack(pt);
-                }
-                return;
             }
 
             if (mc.player.isUsingItem() || !this.isWeaponInHand()) {
@@ -133,34 +102,45 @@ public class Triggerbot extends ModuleStructure {
 
             float charge = this.charge();
 
-            // ---- AIRBORNE: strike the crit as soon as the bar is actually crit-capable. ----
+            // ---- IN WATER ----
+            // A crit is impossible in water, so the old airborne crit path (which required being out
+            // of water) meant the bot NEVER swung while floating. Just land normal hits at full charge.
+            if (this.isInWater()) {
+                this.groundHoldTicks = 0;
+                if (charge >= GROUND_ATTACK_CHARGE) {
+                    this.attack(target);
+                }
+                return;
+            }
+
+            // ---- AIRBORNE ----
             if (!mc.player.isOnGround()) {
                 this.groundHoldTicks = 0;
-                if (!this.isPerfectCrit()) {
-                    // Rising toward the apex (or not a valid crit yet): HOLD and let the bar fill.
-                    return;
+                if (this.critAchievable()) {
+                    // Proactively drop sprint for the WHOLE airborne window. The STOP_SPRINTING packet
+                    // flushes at the END of this tick, so by the time we actually swing (a LATER tick)
+                    // the server already sees us as not sprinting and COUNTS the crit. This is exactly
+                    // what a manual w-tap crit does, and is why crits "didn't register" before.
+                    boolean droppedThisTick = false;
+                    if (this.useSprintReset() && this.canResetSprint()) {
+                        wantSuppress = true;
+                        if (mc.player.isSprinting()) {
+                            mc.player.setSprinting(false);
+                            droppedThisTick = true;
+                        }
+                    }
+                    // Never swing on the same tick we dropped sprint (the stop packet hasn't gone out
+                    // yet). Once we are genuinely non-sprinting it is a clean, registered crit.
+                    if (!droppedThisTick && this.isPerfectCrit() && charge >= CRIT_CHARGE && !mc.player.isSprinting()) {
+                        this.attack(target);
+                    }
                 }
-                if (charge < CRIT_CHARGE) {
-                    // Descending but the bar is not crit-capable yet (e.g. Mining Fatigue): wait.
-                    return;
-                }
-                if (this.useSprintReset() && mc.player.isSprinting() && this.canResetSprint()) {
-                    // Drop sprint this tick, attack next tick so the server counts the crit.
-                    wantSuppress = true;
-                    this.pendingCrit = true;
-                    return;
-                }
-                // Already not sprinting -> the crit is clean, swing immediately.
-                this.attack(target);
                 return;
             }
 
             // ---- ON GROUND ----
-            // If a crit is coming (jump held while a crit is physically possible), HOLD the charged
-            // hit so the combo never eats the crit.
             boolean critComing = this.critAchievable() && this.isJumpHeld();
             if (critComing) {
-                // Only count ticks where we are genuinely STUCK on the ground (not rising).
                 if (mc.player.getVelocity().y <= 0.0) {
                     this.groundHoldTicks++;
                 } else {
@@ -169,14 +149,10 @@ public class Triggerbot extends ModuleStructure {
                 if (this.groundHoldTicks <= GROUND_HOLD_LIMIT) {
                     return; // hold for the upcoming crit
                 }
-                // Genuinely stuck -> stop starving and allow a ground hit.
             } else {
                 this.groundHoldTicks = 0;
             }
 
-            // Ground combo at full charge for max damage + knockback. FunTime only, and only after
-            // we have been grounded for a few ticks, so a momentary landing between crit jumps can
-            // never sneak an unwanted combo in mid-fight.
             if (this.allowGroundCombo() && charge >= GROUND_ATTACK_CHARGE && this.ticksOnGround >= GROUND_COMBO_DELAY) {
                 this.attack(target);
             }
@@ -185,9 +161,6 @@ public class Triggerbot extends ModuleStructure {
         }
     }
 
-    // The cooldown bar already accounts for the weapon's attack speed and any attribute modifiers
-    // (Haste-style buffs AND Mining-Fatigue-style debuffs), so using it as THE timing signal makes
-    // the bot adapt to every situation automatically.
     private float charge() {
         return mc.player.getAttackCooldownProgress(0.0F);
     }
@@ -207,6 +180,10 @@ public class Triggerbot extends ModuleStructure {
         return item.getRegistryEntry().isIn(ItemTags.SWORDS)
             || item.getRegistryEntry().isIn(ItemTags.AXES)
             || item.getRegistryEntry().isIn(ItemTags.MELEE_WEAPON_ENCHANTABLE);
+    }
+
+    private boolean isInWater() {
+        return mc.player.isTouchingWater() || mc.player.isSubmergedInWater() || mc.player.isSwimming();
     }
 
     private boolean isJumpHeld() {
@@ -231,7 +208,7 @@ public class Triggerbot extends ModuleStructure {
             && !mc.player.getAbilities().flying;
     }
 
-    // Whether a crit is even physically possible right now (so we should wait for it).
+    // Whether a crit is even physically possible right now (so we should wait for it / suppress sprint).
     private boolean critAchievable() {
         return this.ticksOutOfWater >= 3
             && !mc.player.isTouchingWater()
@@ -242,7 +219,7 @@ public class Triggerbot extends ModuleStructure {
     }
 
     private boolean canResetSprint() {
-        if (mc.player.isTouchingWater() || mc.player.isSubmergedInWater() || mc.player.isSwimming()) {
+        if (this.isInWater()) {
             return false;
         }
         return !mc.player.isGliding();
