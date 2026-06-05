@@ -37,7 +37,9 @@ public class TargetHud extends AbstractHudElement {
    public void tick() {
       if (this.mc.player != null && this.mc.world != null) {
          LivingEntity var1 = null;
-         if (this.mc.targetedEntity instanceof LivingEntity var2 && (!var2.isInvisible() || this.hasArmor(var2))) {
+         // Pick up ANY living target, including invisible ones - the health is read directly off the
+         // entity (just like the nametags), so there is no reason to skip invisible players here.
+         if (this.mc.targetedEntity instanceof LivingEntity var2) {
             var1 = var2;
          }
 
@@ -69,16 +71,13 @@ public class TargetHud extends AbstractHudElement {
       return Math.round(var1 / var2) * var2;
    }
 
+   // Always report the real health - nametags show it for invisible players, so the TargetHud should too.
    private float getHealth(LivingEntity var1) {
-      return var1.isInvisible() && !this.hasArmor(var1) && !Network.isSpookyTime() && !Network.isCopyTime() ? var1.getMaxHealth() : var1.getHealth();
+      return var1.getHealth();
    }
 
    private String getHealthString(float var1) {
-      if (this.lastTarget != null && this.lastTarget.isInvisible() && !this.hasArmor(this.lastTarget) && !Network.isSpookyTime() && !Network.isCopyTime()) {
-         return "??";
-      } else {
-         return String.valueOf(Math.round(var1));
-      }
+      return String.valueOf(Math.round(var1));
    }
 
    @Override
@@ -152,7 +151,7 @@ public class TargetHud extends AbstractHudElement {
       float var9 = this.getHealth(this.lastTarget);
       float var10 = this.lastTarget.getMaxHealth();
       float var11 = this.lastTarget.getAbsorptionAmount();
-      boolean var12 = this.lastTarget.isInvisible() && !Network.isSpookyTime() && !Network.isCopyTime();
+      boolean var12 = false;
       float var13;
       if (var12) {
          var13 = var10;
