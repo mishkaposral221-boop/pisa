@@ -21,6 +21,7 @@ import rich.events.impl.ChatEvent;
 import rich.events.impl.EntityStatusEvent;
 import rich.events.impl.GameLeftEvent;
 import rich.events.impl.WorldChangeEvent;
+import rich.modules.impl.misc.PanicMode;
 import rich.modules.impl.render.Particles;
 
 @Mixin(ClientPlayNetworkHandler.class)
@@ -59,6 +60,19 @@ public abstract class ClientPlayNetworkHandlerMixin implements IMinecraft {
    @Inject(method = "onGameJoin", at = @At("RETURN"))
    private void onGameJoin(GameJoinS2CPacket var1, CallbackInfo var2) {
       EventManager.callEvent(WorldChangeEvent.get());
+   }
+
+   /**
+    * Panic Mode: уведомляем о перезаходе на сервер.
+    * GameJoinS2CPacket отправляется ТОЛЬКО при реальном конекте к серверу
+    * (НЕ при смене измерения / respawn — те используют PlayerRespawnS2CPacket).
+    */
+   @Inject(method = "onGameJoin", at = @At("RETURN"))
+   private void onGameJoinPanicMode(GameJoinS2CPacket var1, CallbackInfo var2) {
+      PanicMode panicMode = PanicMode.getInstance();
+      if (panicMode != null) {
+         panicMode.onServerJoin();
+      }
    }
 
    @Inject(method = "onPlayerRespawn", at = @At("RETURN"))
