@@ -10,7 +10,6 @@ import rich.events.api.EventHandler;
 import rich.events.impl.TickEvent;
 import rich.modules.module.ModuleStructure;
 import rich.modules.module.category.ModuleCategory;
-import rich.modules.module.setting.implement.SelectSetting;
 import rich.util.c;
 
 public class Triggerbot extends ModuleStructure {
@@ -18,10 +17,6 @@ public class Triggerbot extends ModuleStructure {
     // drops sprint and sends STOP_SPRINTING. Vanilla NEVER scores a crit while sprinting, so the bot
     // must already be non-sprinting (packet sent on an EARLIER tick) when the attack packet goes out.
     public static volatile boolean SUPPRESS_SPRINT = false;
-
-    public static final String MODE_FUNTIME = "FunTime";
-    public static final String MODE_HOLYWORLD = "HolyWorld";
-    public SelectSetting mode = new SelectSetting("Mode", "Server preset").value(MODE_FUNTIME, MODE_HOLYWORLD);
 
     // Ticks since last water contact (server only counts crits once out of water).
     private int ticksOutOfWater = 10;
@@ -43,17 +38,8 @@ public class Triggerbot extends ModuleStructure {
 
     public Triggerbot() {
         super("Triggerbot", "Auto-attack targeted entities", ModuleCategory.VISUALS);
-        this.settings(this.mode);
-    }
-
-    // Both presets must drop sprint before a crit - vanilla never crits while sprinting.
-    private boolean useSprintReset() {
-        return true;
-    }
-
-    // Only FunTime adds the aggressive auto ground combo; HolyWorld stays crit-only.
-    private boolean allowGroundCombo() {
-        return this.mode.isSelected(MODE_FUNTIME);
+        // No more HolyWorld/FunTime split - the FunTime behaviour (sprint-reset crits + ground combo)
+        // is used everywhere because it simply works better.
     }
 
     @Override
@@ -103,8 +89,8 @@ public class Triggerbot extends ModuleStructure {
             float charge = this.charge();
 
             // ---- IN WATER ----
-            // A crit is impossible in water, so the old airborne crit path (which required being out
-            // of water) meant the bot NEVER swung while floating. Just land normal hits at full charge.
+            // A crit is impossible in water, so just land normal hits at full charge instead of
+            // standing there doing nothing.
             if (this.isInWater()) {
                 this.groundHoldTicks = 0;
                 if (charge >= GROUND_ATTACK_CHARGE) {
@@ -117,20 +103,16 @@ public class Triggerbot extends ModuleStructure {
             if (!mc.player.isOnGround()) {
                 this.groundHoldTicks = 0;
                 if (this.critAchievable()) {
-                    // Proactively drop sprint for the WHOLE airborne window. The STOP_SPRINTING packet
-                    // flushes at the END of this tick, so by the time we actually swing (a LATER tick)
-                    // the server already sees us as not sprinting and COUNTS the crit. This is exactly
-                    // what a manual w-tap crit does, and is why crits "didn't register" before.
                     boolean droppedThisTick = false;
-                    if (this.useSprintReset() && this.canResetSprint()) {
+                    if (this.canResetSprint()) {
                         wantSuppress = true;
                         if (mc.player.isSprinting()) {
                             mc.player.setSprinting(false);
                             droppedThisTick = true;
                         }
                     }
-                    // Never swing on the same tick we dropped sprint (the stop packet hasn't gone out
-                    // yet). Once we are genuinely non-sprinting it is a clean, registered crit.
+                    // Once we are genuinely non-sprinting (sprint was dropped on an earlier tick, e.g.
+                    // the grounded pre-drop below) this is a clean, server-registered crit.
                     if (!droppedThisTick && this.isPerfectCrit() && charge >= CRIT_CHARGE && !mc.player.isSprinting()) {
                         this.attack(target);
                     }
@@ -141,6 +123,15 @@ public class Triggerbot extends ModuleStructure {
             // ---- ON GROUND ----
             boolean critComing = this.critAchievable() && this.isJumpHeld();
             if (critComing) {
+                // Drop sprint NOW, while still grounded, so the very first airborne tick is already
+                // non-sprinting. Without this, holding W (sprint) means the first falling tick is still
+                // sprinting and vanilla refuses the crit - that was the "holding W never crits" bug.
+                if (this.canResetSprint()) {
+                    wantSuppress = true;
+                    if (mc.player.isSprinting()) {
+                        mc.player.setSprinting(false);
+                    }
+                }
                 if (mc.player.getVelocity().y <= 0.0) {
                     this.groundHoldTicks++;
                 } else {
@@ -153,7 +144,8 @@ public class Triggerbot extends ModuleStructure {
                 this.groundHoldTicks = 0;
             }
 
-            if (this.allowGroundCombo() && charge >= GROUND_ATTACK_CHARGE && this.ticksOnGround >= GROUND_COMBO_DELAY) {
+            // Ground combo (always on now - no mode split).
+            if (charge >= GROUND_ATTACK_CHARGE && this.ticksOnGround >= GROUND_COMBO_DELAY) {
                 this.attack(target);
             }
         } finally {
