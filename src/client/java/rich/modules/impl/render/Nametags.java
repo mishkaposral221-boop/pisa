@@ -108,6 +108,11 @@ public class Nametags extends ModuleStructure {
             }
             float cx = this.reuseScreen[0];
             float cy = this.reuseScreen[1];
+            // off-screen cull: тег целиком за краем экрана — пропускаем дорогой рендер (font + drawItem) и не тратим на него бюджет
+            float screenMargin = 140.0f;
+            if (cx < -screenMargin || cx > sw + screenMargin || cy < -screenMargin || cy > sh + screenMargin) {
+                continue;
+            }
             float distance = (float)Math.sqrt(dist2);
             float scale = Math.max(0.75f, Math.min(1.1f, 1.1f - distance * 0.010f));
             boolean drawArmor = armorOn && distance <= armorMax && armorLeft > 0;
