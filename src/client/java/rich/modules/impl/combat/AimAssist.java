@@ -4,7 +4,6 @@ import java.util.Random;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.entity.Entity;
-import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
@@ -63,14 +62,31 @@ public class AimAssist extends ModuleStructure {
         Entity best = null;
         double bestScore = Double.MAX_VALUE;
         for (Entity entity : client.world.getEntities()) {
-            double score;
-            double[] diff;
-            double angleDist;
-            double dist;
-            LivingEntity living;
-            if (entity == player || !(entity instanceof LivingEntity) || !(living = (LivingEntity)entity).isAlive() || (dist = (double)player.distanceTo(entity)) > (double)this.maxDistance() || dist < 0.5 || (angleDist = Math.sqrt((diff = this.getAngleDiff((PlayerEntity)player, entity.getEyePos()))[0] * diff[0] + diff[1] * diff[1])) > (double)this.fov() || !((score = dist + angleDist * 0.1) < bestScore)) continue;
-            bestScore = score;
-            best = entity;
+            // Only ever aim at other players - never animals, items, armor stands, etc.
+            if (entity == player || !(entity instanceof PlayerEntity)) {
+                continue;
+            }
+            PlayerEntity targetPlayer = (PlayerEntity)entity;
+            if (!targetPlayer.isAlive() || targetPlayer.isSpectator()) {
+                continue;
+            }
+            double dist = player.distanceTo(entity);
+            if (dist > (double)this.maxDistance() || dist < 0.5) {
+                continue;
+            }
+            double[] diff = this.getAngleDiff((PlayerEntity)player, entity.getEyePos());
+            double angleDist = Math.sqrt(diff[0] * diff[0] + diff[1] * diff[1]);
+            if (angleDist > (double)this.fov()) {
+                continue;
+            }
+            // Prefer the target that needs the SMALLEST turn (angle dominant, distance only a tiny
+            // tie-breaker). This stops the aim from locking a closer player BEHIND you and swinging
+            // the long way round (the "it does a 360 instead of 40 degrees" problem).
+            double score = angleDist + dist * 0.1;
+            if (score < bestScore) {
+                bestScore = score;
+                best = entity;
+            }
         }
         return best;
     }
