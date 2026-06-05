@@ -4,7 +4,6 @@ import net.minecraft.entity.Entity;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.effect.StatusEffects;
 import net.minecraft.item.Item;
-import net.minecraft.network.packet.c2s.play.ClientCommandC2SPacket;
 import net.minecraft.registry.tag.ItemTags;
 import net.minecraft.util.Hand;
 import rich.events.api.EventHandler;
@@ -14,22 +13,23 @@ import rich.modules.module.category.ModuleCategory;
 import rich.util.c;
 
 public class Triggerbot extends ModuleStructure {
-    // Still read by ClientPlayerEntityMixin: drops the sprint INPUT for this tick so vanilla does not
-    // immediately re-start sprint while we are setting up / landing a crit (important when W is held).
+    // Read by ClientPlayerEntityMixin. While true, the sprint INPUT is forced false so vanilla keeps
+    // us un-sprinted. We do NOT send any sprint packet ourselves - vanilla's own sendMovementPackets
+    // emits the single, normal STOP_SPRINTING packet. (Sending our own caused a DUPLICATE packet that
+    // the anti-cheat flagged as "badpackets".)
     public static volatile boolean SUPPRESS_SPRINT = false;
 
-    // Ticks since last water contact (server only counts crits once out of water).
     private int ticksOutOfWater = 10;
-    // How long we have been waiting on the ground (jump held) for an upcoming crit.
-    private int groundHoldTicks = 0;
-    private static final int GROUND_HOLD_LIMIT = 8;
-
-    // Consecutive ticks actually standing on the ground.
     private int ticksOnGround = 0;
-    private static final int GROUND_COMBO_DELAY = 3;
+    // Consecutive ticks we have been cleanly non-sprinting (=> the server already got STOP_SPRINTING).
+    private int cleanTicks = 0;
 
+    private static final int GROUND_COMBO_DELAY = 3;
     private static final float GROUND_ATTACK_CHARGE = 1.0F;
     private static final float CRIT_CHARGE = 0.9F;
+    // Only attack after being non-sprinting for at least this many ticks, guaranteeing the vanilla
+    // STOP_SPRINTING packet reached the server BEFORE our attack packet -> server counts the crit.
+    private static final int CLEAN_TICKS_REQUIRED = 1;
 
     public static Triggerbot getInstance() {
         return c.a(Triggerbot.class);
@@ -37,8 +37,6 @@ public class Triggerbot extends ModuleStructure {
 
     public Triggerbot() {
         super("Triggerbot", "Auto-attack targeted entities", ModuleCategory.VISUALS);
-        // No HolyWorld/FunTime split - the FunTime behaviour (sprint-reset crits + ground combo) is
-        // used everywhere because it simply works better.
     }
 
     @Override
@@ -46,8 +44,8 @@ public class Triggerbot extends ModuleStructure {
         super.deactivate();
         SUPPRESS_SPRINT = false;
         this.ticksOutOfWater = 10;
-        this.groundHoldTicks = 0;
         this.ticksOnGround = 0;
+        this.cleanTicks = 0;
     }
 
     @EventHandler
@@ -55,10 +53,12 @@ public class Triggerbot extends ModuleStructure {
         boolean wantSuppress = false;
         try {
             if (mc.player == null || mc.world == null || mc.currentScreen != null) {
-                this.groundHoldTicks = 0;
                 this.ticksOnGround = 0;
+                this.cleanTicks = 0;
                 return;
             }
+
+            boolean sprinting = mc.player.isSprinting();
 
             if (this.isInWater()) {
                 this.ticksOutOfWater = 0;
@@ -67,73 +67,65 @@ public class Triggerbot extends ModuleStructure {
             }
 
             if (mc.player.isOnGround()) {
-                if (this.ticksOnGround < 100) {
-                    this.ticksOnGround++;
-                }
+                if (this.ticksOnGround < 100) this.ticksOnGround++;
             } else {
                 this.ticksOnGround = 0;
             }
 
+            // Track how long we've been cleanly non-sprinting.
+            if (!sprinting) {
+                if (this.cleanTicks < 100) this.cleanTicks++;
+            } else {
+                this.cleanTicks = 0;
+            }
+
             if (mc.player.isUsingItem() || !this.isWeaponInHand()) {
-                this.groundHoldTicks = 0;
                 return;
             }
 
             Entity target = mc.targetedEntity;
             if (!this.canHit(target)) {
-                this.groundHoldTicks = 0;
                 return;
             }
 
+            boolean critPossible = this.critAchievable();
+
+            // Drop sprint the VANILLA way (no custom packet): clear the client sprint flag and keep the
+            // sprint INPUT suppressed (SUPPRESS_SPRINT) so vanilla does not re-start it during
+            // tickMovement; vanilla's own sendMovementPackets then sends ONE normal STOP_SPRINTING.
+            if (critPossible) {
+                wantSuppress = true;
+                if (sprinting) {
+                    mc.player.setSprinting(false);
+                }
+            }
+
+            boolean serverClean = this.cleanTicks >= CLEAN_TICKS_REQUIRED && !mc.player.isSprinting();
             float charge = this.charge();
 
-            // ---- IN WATER ----
-            // A crit is impossible in water, so just land normal hits at full charge.
+            // ---- IN WATER: crit impossible, normal hits. ----
             if (this.isInWater()) {
-                this.groundHoldTicks = 0;
                 if (charge >= GROUND_ATTACK_CHARGE) {
                     this.attack(target);
                 }
                 return;
             }
 
-            // ---- AIRBORNE ----
+            // ---- AIRBORNE: land the crit, but only once sprint is confirmed off server-side. ----
             if (!mc.player.isOnGround()) {
-                this.groundHoldTicks = 0;
-                if (this.critAchievable()) {
-                    wantSuppress = true;
-                    if (this.isPerfectCrit() && charge >= CRIT_CHARGE) {
-                        // Tell the SERVER we stopped sprinting THIS tick, BEFORE the attack packet.
-                        // setSprinting(false) alone only flushes STOP_SPRINTING at end-of-tick (after
-                        // the attack), so with W held the server still saw us sprinting and refused the
-                        // crit. Sending the packet here fixes "holding W never crits".
-                        this.stopSprintHard();
-                        this.attack(target);
-                    }
+                if (this.isPerfectCrit() && charge >= CRIT_CHARGE && serverClean) {
+                    this.attack(target);
                 }
                 return;
             }
 
             // ---- ON GROUND ----
-            boolean critComing = this.critAchievable() && this.isJumpHeld();
-            if (critComing) {
-                // Drop sprint now, while still grounded, so the first airborne tick is already clean.
-                wantSuppress = true;
-                this.stopSprintHard();
-                if (mc.player.getVelocity().y <= 0.0) {
-                    this.groundHoldTicks++;
-                } else {
-                    this.groundHoldTicks = 0;
-                }
-                if (this.groundHoldTicks <= GROUND_HOLD_LIMIT) {
-                    return; // wait for the upcoming crit
-                }
-            } else {
-                this.groundHoldTicks = 0;
+            // If a jump-crit is coming (jump held), keep sprint suppressed and wait for the air phase.
+            if (critPossible && this.isJumpHeld()) {
+                return;
             }
-
-            // Ground combo (always on now - no mode split).
-            if (charge >= GROUND_ATTACK_CHARGE && this.ticksOnGround >= GROUND_COMBO_DELAY) {
+            // Ground combo (non-crit). Only when sprint is confirmed off so we never emit a sprint-hit.
+            if (charge >= GROUND_ATTACK_CHARGE && this.ticksOnGround >= GROUND_COMBO_DELAY && serverClean) {
                 this.attack(target);
             }
         } finally {
@@ -148,24 +140,6 @@ public class Triggerbot extends ModuleStructure {
     private void attack(Entity target) {
         mc.interactionManager.attackEntity(mc.player, target);
         mc.player.swingHand(Hand.MAIN_HAND);
-    }
-
-    // Stop sprinting on the client AND notify the server immediately, so a crit attack sent later in
-    // this same tick is processed server-side as a non-sprinting (=> critical) hit.
-    private void stopSprintHard() {
-        if (mc.player == null || !this.canResetSprint()) {
-            return;
-        }
-        if (mc.player.isSprinting()) {
-            mc.player.setSprinting(false);
-            try {
-                if (mc.getNetworkHandler() != null) {
-                    mc.getNetworkHandler().sendPacket(
-                        new ClientCommandC2SPacket(mc.player, ClientCommandC2SPacket.Mode.STOP_SPRINTING));
-                }
-            } catch (Throwable ignored) {
-            }
-        }
     }
 
     private boolean canHit(Entity e) {
@@ -192,7 +166,6 @@ public class Triggerbot extends ModuleStructure {
         }
     }
 
-    // A clean vanilla crit the server will actually count.
     private boolean isPerfectCrit() {
         return mc.player.fallDistance > 0.0
             && mc.player.getVelocity().y < 0.0
@@ -206,7 +179,6 @@ public class Triggerbot extends ModuleStructure {
             && !mc.player.getAbilities().flying;
     }
 
-    // Whether a crit is even physically possible right now (so we should wait for it / suppress sprint).
     private boolean critAchievable() {
         return this.ticksOutOfWater >= 3
             && !mc.player.isTouchingWater()
@@ -214,12 +186,5 @@ public class Triggerbot extends ModuleStructure {
             && !mc.player.hasStatusEffect(StatusEffects.LEVITATION)
             && !mc.player.hasVehicle()
             && !mc.player.getAbilities().flying;
-    }
-
-    private boolean canResetSprint() {
-        if (this.isInWater()) {
-            return false;
-        }
-        return !mc.player.isGliding();
     }
 }
