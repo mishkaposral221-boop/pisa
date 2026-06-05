@@ -6,12 +6,8 @@ import net.minecraft.screen.slot.Slot;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
-import net.minecraft.network.packet.c2s.play.PlayerActionC2SPacket;
-import net.minecraft.network.packet.c2s.play.UpdateSelectedSlotC2SPacket;
 import net.minecraft.util.collection.DefaultedList;
 import net.minecraft.util.Identifier;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Direction;
 import net.minecraft.client.gui.screen.ingame.InventoryScreen;
 import net.minecraft.registry.Registries;
 import rich.Initialization;
@@ -19,6 +15,7 @@ import rich.events.api.EventHandler;
 import rich.events.impl.ClickSlotEvent;
 import rich.events.impl.DrawEvent;
 import rich.events.impl.KeyEvent;
+import rich.events.impl.TickEvent;
 import rich.modules.module.ModuleStructure;
 import rich.modules.module.category.ModuleCategory;
 import rich.modules.module.setting.implement.BindSetting;
@@ -46,6 +43,9 @@ public class AutoSwap extends ModuleStructure {
    private boolean cursorUnlocked = false;
    private int lastHover = -1;
    private int pickingForSlot = -1;
+   private int swapHotbarSlot = -1;
+   private int swapStage = 0;
+   private int swapTicks = 0;
 
    public static AutoSwap getInstance() {
       return c.a(AutoSwap.class);
@@ -106,6 +106,65 @@ public class AutoSwap extends ModuleStructure {
       }
    }
 
+   // Driven step-by-step so the swap looks like a real player using their inventory:
+   // open the inventory GUI, wait a beat, swap the chosen hotbar item into the offhand
+   // through the OPEN player screen handler (one vanilla clickSlot, not raw packets),
+   // then close it. Spreading the open/click/close across ticks avoids the "multi action"
+   // kick that the old same-tick packet offhand-swap tripped.
+   @EventHandler
+   public void onTick(TickEvent var1) {
+      if (mc.player == null || mc.interactionManager == null || this.swapStage == 0) {
+         return;
+      }
+
+      switch (this.swapStage) {
+         case 1:
+            if (!(mc.currentScreen instanceof InventoryScreen)) {
+               mc.setScreen(new InventoryScreen(mc.player));
+            }
+
+            this.swapTicks = 0;
+            this.swapStage = 2;
+            break;
+         case 2:
+            if (++this.swapTicks >= 2) {
+               if (mc.currentScreen instanceof InventoryScreen && this.swapHotbarSlot >= 0 && this.swapHotbarSlot <= 8) {
+                  int var2 = 36 + this.swapHotbarSlot;
+                  mc.interactionManager.clickSlot(mc.player.playerScreenHandler.syncId, var2, 40, SlotActionType.SWAP, mc.player);
+               }
+
+               this.swapTicks = 0;
+               this.swapStage = 3;
+            }
+            break;
+         case 3:
+            if (++this.swapTicks >= 2) {
+               if (mc.currentScreen instanceof InventoryScreen) {
+                  mc.setScreen(null);
+               }
+
+               this.resetSwap();
+            }
+            break;
+         default:
+            this.resetSwap();
+      }
+   }
+
+   private void requestSwap(int var1) {
+      if (var1 >= 0 && var1 <= 8 && this.swapStage == 0) {
+         this.swapHotbarSlot = var1;
+         this.swapTicks = 0;
+         this.swapStage = 1;
+      }
+   }
+
+   private void resetSwap() {
+      this.swapHotbarSlot = -1;
+      this.swapTicks = 0;
+      this.swapStage = 0;
+   }
+
    @EventHandler
    public void onDraw(DrawEvent var1) {
       if (mc.player != null) {
@@ -128,7 +187,7 @@ public class AutoSwap extends ModuleStructure {
                   if (!var12.isEmpty()) {
                      int var13 = InventoryUtils.findItemInHotbar(var12.getItem());
                      if (var13 != -1) {
-                        this.offhandSwap(var13);
+                        this.requestSwap(var13);
                         this.wheelOpen = false;
                         this.lastHover = -1;
                         this.setCursorUnlocked(false);
@@ -163,34 +222,6 @@ public class AutoSwap extends ModuleStructure {
       }
    }
 
-   // Put the hotbar item at `hotbarSlot` (0-8) into the offhand using ONLY vanilla packets - exactly
-   // like pressing the "Swap item with offhand" (F) key: select the slot, fire SWAP_ITEM_WITH_OFFHAND,
-   // then restore the previous slot. This avoids inventory clickSlot packets while the GUI is closed
-   // (the classic anti-cheat flag that the old clickSlot(SWAP, 40) approach tripped).
-   private void offhandSwap(int hotbarSlot) {
-      if (mc.player == null || mc.getNetworkHandler() == null) {
-         return;
-      }
-      if (hotbarSlot < 0 || hotbarSlot > 8) {
-         return;
-      }
-
-      int prev = mc.player.getInventory().getSelectedSlot();
-      // 1. Select the target slot (mirror client + tell the server, like a normal scroll).
-      if (prev != hotbarSlot) {
-         mc.player.getInventory().setSelectedSlot(hotbarSlot);
-         mc.getNetworkHandler().sendPacket(new UpdateSelectedSlotC2SPacket(hotbarSlot));
-      }
-      // 2. Vanilla "swap item with offhand" action (identical to the F key).
-      mc.getNetworkHandler()
-         .sendPacket(new PlayerActionC2SPacket(PlayerActionC2SPacket.Action.SWAP_ITEM_WITH_OFFHAND, BlockPos.ORIGIN, Direction.DOWN));
-      // 3. Restore the previous slot so we keep holding our weapon.
-      if (prev != hotbarSlot) {
-         mc.player.getInventory().setSelectedSlot(prev);
-         mc.getNetworkHandler().sendPacket(new UpdateSelectedSlotC2SPacket(prev));
-      }
-   }
-
    private void setCursorUnlocked(boolean var1) {
       if (mc.mouse != null) {
          if (var1 && !this.cursorUnlocked) {
@@ -210,6 +241,7 @@ public class AutoSwap extends ModuleStructure {
    public void deactivate() {
       this.wheelOpen = false;
       this.pickingForSlot = -1;
+      this.resetSwap();
       this.setCursorUnlocked(false);
    }
 
