@@ -33,6 +33,12 @@ public class AimEngine {
     private int aimReactionTicks = 0;
     private float yawRemainder = 0.0f;
     private float pitchRemainder = 0.0f;
+    // Попер-ТИК кап угловой скорости: сумма вклада ассиста за один тик ограничена (FPS-независимо).
+    private long lastAimTick = -1L;
+    private float tickAimYaw = 0.0f;
+    private float tickAimPitch = 0.0f;
+    private static final float MAX_TICK_YAW = 22.0f;
+    private static final float MAX_TICK_PITCH = 12.0f;
 
     public AimEngine(AimAssist config) {
         this.config = config;
@@ -49,6 +55,9 @@ public class AimEngine {
             this.firstFrame = true;
             this.yawRemainder = 0.0f;
             this.pitchRemainder = 0.0f;
+            this.tickAimYaw = 0.0f;
+            this.tickAimPitch = 0.0f;
+            this.lastAimTick = -1L;
             return;
         }
         if (client.currentScreen != null) {
@@ -147,7 +156,6 @@ public class AimEngine {
         wantPitch -= player.getPitch();
         float sens = (float)((Double)client.options.getMouseSensitivity().getValue()).doubleValue() * 0.6f + 0.2f;
         // Реальный квант поворота Minecraft (GCD): один пиксель мыши = (sens*0.6+0.2)^3 * 1.2.
-        // Снап нашей тяги на ЭТУ сетку делает итоговую дельту чистым кратным шагу игрока.
         float step = sens * sens * sens * 1.2f;
         float deadzone = Math.max((float)Math.toDegrees(Math.atan2(halfW, dist)) * 0.15f, 0.25f);
         float totalAngle = (float)Math.sqrt(wantYaw * wantYaw + wantPitch * wantPitch);
@@ -160,30 +168,51 @@ public class AimEngine {
         if (this.aimRandom.nextFloat() < 0.04f) {
             return;
         }
+        // Сброс тик-бюджета на границе тика (world.getTime() инкрементируется каждый тик).
+        long curTick = client.world.getTime();
+        if (curTick != this.lastAimTick) {
+            this.lastAimTick = curTick;
+            this.tickAimYaw = 0.0f;
+            this.tickAimPitch = 0.0f;
+        }
         float applyYaw = 0.0f;
         float applyPitch = 0.0f;
         // Ассист работает ТОЛЬКО когда игрок сам ведёт мышь К цели. Иначе - почти ноль.
         boolean movingToward = this.rawTickYawDelta * wantYaw + this.rawTickPitchDelta * wantPitch > 0.0f;
         if (totalAngle > deadzone) {
             float t = Math.min((totalAngle - deadzone) / 18.0f, 1.0f);
-            // МЕГА-сильная тяга, но ТОЛЬКО по движению игрока (нет автономного лока).
+            // Сила высокая (цепкая тяга внутри тика), но только по движению игрока.
             float strength = movingToward ? 0.55f + t * 0.4f : 0.06f;
             float maxPull = movingToward ? 4.5f + t * 5.5f : 0.7f;
             float moveScale = movingToward ? MathHelper.clamp((float)(mouseDelta * 0.9f), (float)0.3f, (float)1.0f) : 0.25f;
-            // Независимый джиттер по осям: коррелированный шум сам по себе сигнатура.
             float jitterYaw = (this.aimRandom.nextFloat() - 0.5f) * 0.16f;
             float jitterPitch = (this.aimRandom.nextFloat() - 0.5f) * 0.10f;
-            // Лёгкий недолёт: живой игрок никогда не сидит идеально в центре.
-            float undershoot = this.aimRandom.nextFloat() < 0.18f ? 0.78f + this.aimRandom.nextFloat() * 0.18f : 0.97f;
-            float rawYawPull = MathHelper.clamp((float)(wantYaw * strength * moveScale * undershoot + jitterYaw), (float)(-maxPull), (float)maxPull);
-            float rawPitchPull = MathHelper.clamp((float)(wantPitch * strength * moveScale * 0.6f * undershoot + jitterPitch), (float)(-maxPull * 0.6f), (float)(maxPull * 0.6f));
-            // Снап к GCD-сетке с накоплением остатка: грид-чистота без системного смещения.
+            // Иногда перелёт, иногда недолёт - убираем идеальное приземление на цель.
+            float r = this.aimRandom.nextFloat();
+            float overshoot;
+            if (r < 0.14f) {
+                overshoot = 1.04f + this.aimRandom.nextFloat() * 0.12f;
+            } else if (r < 0.32f) {
+                overshoot = 0.72f + this.aimRandom.nextFloat() * 0.18f;
+            } else {
+                overshoot = 0.95f;
+            }
+            float rawYawPull = MathHelper.clamp((float)(wantYaw * strength * moveScale * overshoot + jitterYaw), (float)(-maxPull), (float)maxPull);
+            float rawPitchPull = MathHelper.clamp((float)(wantPitch * strength * moveScale * 0.6f * overshoot + jitterPitch), (float)(-maxPull * 0.6f), (float)(maxPull * 0.6f));
+            // ТИК-БЮДЖЕТ: оставшийся лимит поворота ассиста за этот тик (человеческая угловая скорость).
+            float yawBudget = Math.max(0.0f, MAX_TICK_YAW - Math.abs(this.tickAimYaw));
+            float pitchBudget = Math.max(0.0f, MAX_TICK_PITCH - Math.abs(this.tickAimPitch));
+            rawYawPull = MathHelper.clamp((float)rawYawPull, (float)(-yawBudget), (float)yawBudget);
+            rawPitchPull = MathHelper.clamp((float)rawPitchPull, (float)(-pitchBudget), (float)pitchBudget);
+            // Снап к GCD-сетке с накоплением остатка (грид-чистота последним шагом).
             float desiredYaw = rawYawPull + this.yawRemainder;
             float desiredPitch = rawPitchPull + this.pitchRemainder;
             applyYaw = (float)Math.round(desiredYaw / step) * step;
             applyPitch = (float)Math.round(desiredPitch / step) * step;
             this.yawRemainder = MathHelper.clamp((float)(desiredYaw - applyYaw), (float)(-step * 4.0f), (float)(step * 4.0f));
             this.pitchRemainder = MathHelper.clamp((float)(desiredPitch - applyPitch), (float)(-step * 4.0f), (float)(step * 4.0f));
+            this.tickAimYaw += applyYaw;
+            this.tickAimPitch += applyPitch;
         } else {
             this.yawRemainder = 0.0f;
             this.pitchRemainder = 0.0f;
