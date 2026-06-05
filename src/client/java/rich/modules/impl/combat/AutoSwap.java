@@ -26,8 +26,9 @@ import rich.util.inventory.InventoryUtils;
 import rich.util.render.pipeline.WheelPipeline;
 
 public class AutoSwap extends ModuleStructure {
-   // Легитный свап: реально открываем инвентарь -> ждём (ванилла сама останавливает
-   // движение, пока экран открыт) -> свап -> ждём -> закрываем (ванилла шлёт CloseHandledScreen).
+   // Легитный свап: реально открываем инвентарь -> ждём -> свап -> ждём -> закрываем.
+   // Пока инвентарь открыт - ПРИНУДИТЕЛЬНО гасим скорость/спринт, чтобы игрок
+   // не продолжал скользить по инерции (ванилла глушит только ввод, но не импульс).
    // Всё разнесено по тикам, чтобы не ловилось как "multi action".
    private static final int OPEN_TICKS = 2;
    private static final int CLOSE_TICKS = 1;
@@ -114,7 +115,7 @@ public class AutoSwap extends ModuleStructure {
       }
    }
 
-   // open -> (ждём OPEN_TICKS, ванилла сама останавливает движение) -> swap -> (ждём CLOSE_TICKS) -> close.
+   // open -> (ждём OPEN_TICKS, всё время гасим инерцию) -> swap -> (ждём CLOSE_TICKS) -> close.
    @EventHandler
    public void onTick(TickEvent var1) {
       if (mc.player == null || mc.interactionManager == null) {
@@ -132,6 +133,9 @@ public class AutoSwap extends ModuleStructure {
             return;
          }
 
+         // полная остановка пока инвентарь открыт.
+         this.haltMovement();
+
          if (this.phaseTimer > 0) {
             this.phaseTimer--;
             return;
@@ -148,6 +152,11 @@ public class AutoSwap extends ModuleStructure {
       }
 
       if (this.swapPhase == PHASE_CLOSING) {
+         // держим игрока остановленным до самого закрытия.
+         if (mc.currentScreen instanceof InventoryScreen) {
+            this.haltMovement();
+         }
+
          if (this.phaseTimer > 0) {
             this.phaseTimer--;
             return;
@@ -159,6 +168,16 @@ public class AutoSwap extends ModuleStructure {
          }
 
          this.resetSwap();
+      }
+   }
+
+   // Полная остановка: сброс спринта и обнуление горизонтальной скорости (инерции).
+   private void haltMovement() {
+      if (mc.player != null) {
+         mc.player.setSprinting(false);
+         mc.player.setVelocity(0.0, mc.player.getVelocity().y, 0.0);
+         mc.player.forwardSpeed = 0.0F;
+         mc.player.sidewaysSpeed = 0.0F;
       }
    }
 
@@ -177,6 +196,7 @@ public class AutoSwap extends ModuleStructure {
       if (var2 != null) {
          this.pendingSwapSlot = var2.id;
          mc.setScreen(new InventoryScreen(mc.player));
+         this.haltMovement();
          this.swapPhase = PHASE_OPENING;
          this.phaseTimer = OPEN_TICKS;
          return true;
