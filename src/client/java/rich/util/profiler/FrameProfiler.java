@@ -15,6 +15,7 @@ import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import net.minecraft.client.MinecraftClient;
 
 /**
  * Lightweight per-frame CPU profiler for the client.
@@ -31,6 +32,8 @@ import java.util.concurrent.ConcurrentHashMap;
  *   <li>{@link #frameEnd()} is called once per rendered frame. It computes frame
  *       time / FPS, detects spikes, folds the per-frame section totals into rolling
  *       aggregates and clears the per-frame counters.</li>
+ *   <li>Frames rendered while the OS window is unfocused are discarded: MC's
+ *       inactivity limiter throttles those to ~10 FPS and they are not real drops.</li>
  *   <li>Hot-path work is allocation free; reports allocate.</li>
  *   <li>Disabled by default; when disabled begin/end/record are cheap no-ops.</li>
  * </ul>
@@ -88,6 +91,11 @@ public final class FrameProfiler {
    private long windowFrameCount = 0L;
    private long worstFrameNanos = 0L;
 
+   // throttle detection: frames rendered while the OS window is unfocused are
+   // throttled by MC's inactivity FPS limiter (~10 FPS) and must NOT pollute stats.
+   private boolean frameFocused = true;
+   private long skippedUnfocusedFrames = 0L;
+
    // window bookkeeping
    private long windowStartMs = 0L;
    private long lastDumpMs = 0L;
@@ -122,6 +130,7 @@ public final class FrameProfiler {
       this.windowFrameCount = 0L;
       this.worstFrameNanos = 0L;
       this.lastFrameEndNano = 0L;
+      this.skippedUnfocusedFrames = 0L;
       long now = System.currentTimeMillis();
       this.windowStartMs = now;
       this.lastDumpMs = now;
@@ -184,6 +193,13 @@ public final class FrameProfiler {
          return;
       }
       this.renderStartNano = System.nanoTime();
+      boolean focused = true;
+      try {
+         MinecraftClient mc = MinecraftClient.getInstance();
+         focused = mc != null && mc.isWindowFocused();
+      } catch (Throwable ignored) {
+      }
+      this.frameFocused = focused;
    }
 
    /** Called at render() TAIL: rolls up the frame. */
@@ -192,6 +208,16 @@ public final class FrameProfiler {
          return;
       }
       long now = System.nanoTime();
+      if (!this.frameFocused) {
+         // Window unfocused -> MC throttles to ~10 FPS via the inactivity limiter.
+         // These flat ~100ms frames are not real drops; discard them so they do not
+         // dominate the spike log / skew averages.
+         this.clearFrameAccumulators();
+         this.lastFrameEndNano = now;
+         this.renderStartNano = 0L;
+         this.skippedUnfocusedFrames++;
+         return;
+      }
       if (this.renderStartNano > 0L) {
          this.record("Frame/render(total)", now - this.renderStartNano);
       }
@@ -247,6 +273,16 @@ public final class FrameProfiler {
       }
    }
 
+   /** Zero the per-frame accumulators without folding them into the rolling totals. */
+   private void clearFrameAccumulators() {
+      for (Section s : this.sections.values()) {
+         synchronized (s) {
+            s.frameNanos = 0L;
+            s.frameCalls = 0;
+         }
+      }
+   }
+
    private double averageFrameMs() {
       if (this.frameTimeCount == 0) {
          return 0.0;
@@ -290,8 +326,8 @@ public final class FrameProfiler {
       }
       double avgMs = this.averageFrameMs();
       double fps = avgMs > 0.0 ? 1000.0 / avgMs : 0.0;
-      out.add(String.format("FPS avg=%.1f  кадр avg=%.2fms p95=%.2fms худший=%.1fms  кадров=%d",
-            fps, avgMs, this.percentileFrameMs(95), this.worstFrameNanos / 1_000_000.0, this.windowFrameCount));
+      out.add(String.format("FPS avg=%.1f  кадр avg=%.2fms p95=%.2fms худший=%.1fms  кадров=%d (пропущено неактивных=%d)",
+            fps, avgMs, this.percentileFrameMs(95), this.worstFrameNanos / 1_000_000.0, this.windowFrameCount, this.skippedUnfocusedFrames));
       List<Section> list = this.sortedSections();
       long denom = this.windowFrameCount > 0L ? this.windowFrameCount : 1L;
       int i = 0;
@@ -328,6 +364,7 @@ public final class FrameProfiler {
       sb.append(String.format("FPS avg=%.1f  кадр: avg=%.2fms p95=%.2fms p99=%.2fms худший=%.1fms\n",
             fps, avgMs, this.percentileFrameMs(95), this.percentileFrameMs(99), this.worstFrameNanos / 1_000_000.0));
       sb.append(String.format("Память: %dMB / %dMB   GC за окно: count=%d time=%dms\n", used, max, gcc, gct));
+      sb.append(String.format("Пропущено кадров (окно неактивно / лимит FPS): %d\n", this.skippedUnfocusedFrames));
       sb.append("-- Топ секций по суммарному CPU за окно (инклюзивно) --\n");
 
       List<Section> list = this.sortedSections();

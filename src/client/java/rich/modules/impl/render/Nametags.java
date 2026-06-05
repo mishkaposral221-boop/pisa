@@ -19,10 +19,13 @@ import rich.util.render.Render3D;
 import rich.util.render.font.Fonts;
 
 public class Nametags extends ModuleStructure {
-    // \u041f\u043e\u043a\u0430\u0437\u044b\u0432\u0430\u0442\u044c \u0440\u044f\u0434 \u0438\u043a\u043e\u043d\u043e\u043a (\u043f\u0440\u0435\u0434\u043c\u0435\u0442 \u0432 \u0440\u0443\u043a\u0435 + \u0431\u0440\u043e\u043d\u044f) \u043d\u0430\u0434 \u0442\u0435\u0433\u043e\u043c. \u0420\u0438\u0441\u0443\u0435\u0442\u0441\u044f \u0442\u043e\u043b\u044c\u043a\u043e \u0432\u0431\u043b\u0438\u0437\u0438, \u0447\u0442\u043e\u0431\u044b \u043d\u0435 \u0441\u044a\u0435\u0434\u0430\u0442\u044c FPS.
+    // Показывать ряд иконок (предмет в руке + броня) над тегом. Рисуется только вблизи, чтобы не съедать FPS.
     public BooleanSetting showArmor = new BooleanSetting("ShowArmor", "Draw held item + armor icons over the tag (close range only; turn off if FPS drops)").setValue(true);
     public SliderSettings renderDistance = new SliderSettings("Distance", "Max distance to draw tags (blocks)").range(8.0F, 64.0F).setValue(40.0F);
     public SliderSettings armorDistance = new SliderSettings("ArmorDistance", "Max distance to draw the icon row (blocks)").range(8.0F, 48.0F).setValue(24.0F);
+    // Жёсткие лимиты на кадр (защита FPS в толпе): сколько тегов и сколько рядов иконок рисуем максимум.
+    public SliderSettings maxTags = new SliderSettings("MaxTags", "Hard cap on tags drawn per frame (protects FPS in crowds)").range(5.0F, 100.0F).setValue(40.0F);
+    public SliderSettings armorBudget = new SliderSettings("ArmorBudget", "Max players that get the equipment icon row per frame (drawItem is expensive)").range(0.0F, 20.0F).setValue(10.0F);
 
     private final Vector4f reusablePos = new Vector4f();
     private final float[] reuseScreen = new float[2];
@@ -30,7 +33,7 @@ public class Nametags extends ModuleStructure {
 
     public Nametags() {
         super("Nametags", "Display player names above heads", ModuleCategory.VISUALS);
-        this.settings(this.showArmor, this.renderDistance, this.armorDistance);
+        this.settings(this.showArmor, this.renderDistance, this.armorDistance, this.maxTags, this.armorBudget);
     }
 
     public static Nametags getInstance() {
@@ -50,7 +53,7 @@ public class Nametags extends ModuleStructure {
         }
     }
 
-    // worldToScreen \u0438\u0441\u043f\u043e\u043b\u044c\u0437\u0443\u0435\u0442 \u0437\u0430\u0445\u0432\u0430\u0447\u0435\u043d\u043d\u044b\u0435 \u043c\u0430\u0442\u0440\u0438\u0446\u044b \u043c\u0438\u0440\u0430 (\u0444\u0438\u043a\u0441 \u0442\u0440\u044f\u0441\u043a\u0438)
+    // worldToScreen использует захваченные матрицы мира (фикс тряски)
     private boolean worldToScreen(double wx, double wy, double wz, float sw, float sh) {
         Vec3d cam = Render3D.lastCameraPos;
         if (cam == null) {
@@ -85,7 +88,12 @@ public class Nametags extends ModuleStructure {
         float maxDist2 = maxDist * maxDist;
         boolean armorOn = this.showArmor();
         float armorMax = this.armorDistance.getValue();
+        int tagsLeft = (int)this.maxTags.getValue();
+        int armorLeft = (int)this.armorBudget.getValue();
         for (PlayerEntity entity : mc.world.getPlayers()) {
+            if (tagsLeft <= 0) {
+                break;
+            }
             if (entity == mc.player || entity.isSpectator()) {
                 continue;
             }
@@ -102,12 +110,17 @@ public class Nametags extends ModuleStructure {
             float cy = this.reuseScreen[1];
             float distance = (float)Math.sqrt(dist2);
             float scale = Math.max(0.75f, Math.min(1.1f, 1.1f - distance * 0.010f));
-            this.renderTag(g, entity, cx, cy, scale, distance, armorOn, armorMax);
+            boolean drawArmor = armorOn && distance <= armorMax && armorLeft > 0;
+            if (this.renderTag(g, entity, cx, cy, scale, distance, drawArmor)) {
+                armorLeft--;
+            }
+            tagsLeft--;
         }
     }
 
-    // \u0422\u0435\u0433: \u0438\u043c\u044f + \u0447\u0438\u0441\u043b\u043e HP (\u0446\u0432\u0435\u0442 \u043f\u043e \u0437\u0434\u043e\u0440\u043e\u0432\u044c\u044e) + \u0442\u043e\u043d\u043a\u0430\u044f \u043f\u043e\u043b\u043e\u0441\u043a\u0430, \u0438 \u0440\u044f\u0434 \u0438\u043a\u043e\u043d\u043e\u043a \u044d\u043a\u0438\u043f\u0438\u0440\u043e\u0432\u043a\u0438 \u0441\u0432\u0435\u0440\u0445\u0443.
-    private void renderTag(DrawContext g, PlayerEntity player, float cx, float cy, float scale, float distance, boolean armorOn, float armorMax) {
+    // Тег: имя + число HP (цвет по здоровью) + тонкая полоска, и ряд иконок экипировки сверху.
+    // Возвращает true, если был отрисован ряд иконок (для учёта бюджета на кадр).
+    private boolean renderTag(DrawContext g, PlayerEntity player, float cx, float cy, float scale, float distance, boolean drawArmor) {
         float health = player.getHealth();
         float maxHp = Math.max(1.0f, player.getMaxHealth());
         String name = player.getName().getString();
@@ -133,10 +146,10 @@ public class Nametags extends ModuleStructure {
         float panelY = cy - panelH;
         float radius = Math.max(2.0f, 3.0f * scale);
 
-        // \u043f\u043e\u043b\u0443\u043f\u0440\u043e\u0437\u0440\u0430\u0447\u043d\u0430\u044f \u0442\u0430\u0431\u043b\u0435\u0442\u043a\u0430
+        // полупрозрачная таблетка
         Render2D.rect(panelX, panelY, panelW, panelH, 0x99101015, radius);
 
-        // \u0438\u043c\u044f + \u0447\u0438\u0441\u043b\u043e HP \u0432 \u043e\u0434\u043d\u0443 \u0441\u0442\u0440\u043e\u043a\u0443
+        // имя + число HP в одну строку
         float tx = panelX + padX;
         float ty = panelY + padY;
         Fonts.BOLD.draw(name, tx + 0.4f, ty + 0.4f, fontSize, 0xC0000000);
@@ -145,7 +158,7 @@ public class Nametags extends ModuleStructure {
         Fonts.BOLD.draw(hpStr, hx + 0.4f, ty + 0.4f, fontSize, 0xC0000000);
         Fonts.BOLD.draw(hpStr, hx, ty, fontSize, hpColor);
 
-        // \u0442\u043e\u043d\u043a\u0430\u044f \u043f\u043e\u043b\u043e\u0441\u043a\u0430 HP
+        // тонкая полоска HP
         float barX = panelX + padX;
         float barY = ty + textH + barGap;
         float barW = panelW - padX * 2.0f;
@@ -155,8 +168,9 @@ public class Nametags extends ModuleStructure {
             Render2D.rect(barX, barY, Math.max(barH, barW * hpPct), barH, hpColor, barRadius);
         }
 
-        // \u0440\u044f\u0434 \u0438\u043a\u043e\u043d\u043e\u043a: \u043f\u0440\u0435\u0434\u043c\u0435\u0442 \u0432 \u0440\u0443\u043a\u0435 + \u0431\u0440\u043e\u043d\u044f, \u043d\u0430\u0434 \u0442\u0430\u0431\u043b\u0435\u0442\u043a\u043e\u0439
-        if (armorOn && distance <= armorMax) {
+        // ряд иконок: предмет в руке + броня, над таблеткой
+        boolean drewArmor = false;
+        if (drawArmor) {
             this.armorItems.clear();
             ItemStack mainHand = player.getEquippedStack(EquipmentSlot.MAINHAND);
             ItemStack offHand = player.getEquippedStack(EquipmentSlot.OFFHAND);
@@ -171,6 +185,7 @@ public class Nametags extends ModuleStructure {
             if (!legs.isEmpty()) this.armorItems.add(legs);
             if (!boots.isEmpty()) this.armorItems.add(boots);
             if (!this.armorItems.isEmpty()) {
+                drewArmor = true;
                 float itemScale = scale * 0.8f;
                 float itemSize = 16.0f * itemScale;
                 float spacing = itemSize + 1.0f;
@@ -191,5 +206,6 @@ public class Nametags extends ModuleStructure {
                 }
             }
         }
+        return drewArmor;
     }
 }
