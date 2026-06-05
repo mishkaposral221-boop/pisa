@@ -17,6 +17,7 @@ import rich.Initialization;
 import rich.events.api.EventHandler;
 import rich.events.impl.ClickSlotEvent;
 import rich.events.impl.DrawEvent;
+import rich.events.impl.InputEvent;
 import rich.events.impl.KeyEvent;
 import rich.events.impl.PacketEvent;
 import rich.events.impl.TickEvent;
@@ -30,11 +31,10 @@ import rich.util.inventory.InventoryUtils;
 import rich.util.render.pipeline.WheelPipeline;
 
 public class AutoSwap extends ModuleStructure {
-   // Сколько тиков дропать пакеты движения (blink) перед swap-кликом,
-   // чтобы сервер не видел движения в момент инвентарного клика.
-   // Пакеты ИМЕННО дропаются (не досылаются) - иначе всплеск досыла ловится как "multi action".
-   // Позиция ресинкается следующим обычным move-пакетом (за 2 тика смещение <1 блока).
-   private static final int BLINK_TICKS = 2;
+   // Сколько тиков дропать пакеты движения (blink) + держать игрока замороженным
+   // перед swap-кликом, чтобы сервер не видел движения в момент инвентарного клика.
+   // Пакеты ДРОПАЮТСЯ (не досылаются) - всплеск досыла ловится как "multi action".
+   private static final int BLINK_TICKS = 4;
    public final BindSetting wheelBind = new BindSetting("Бинд колеса", "Клавиша открытия колеса");
    public final TextSetting slot1 = new TextSetting("Слот 1", "ID предмета");
    public final ButtonSetting pick1 = new ButtonSetting("Выбрать слот 1", "Открыть инвентарь")
@@ -116,7 +116,7 @@ public class AutoSwap extends ModuleStructure {
    }
 
    // Blink: пока активен, ДРОПАЕМ исходящие пакеты движения, чтобы сервер не получал
-   // апдейты позиции возле swap-клика. НИЧЕГО НЕ ДОСЫЛАЕМ (всплеск = multi action).
+   // апдейты позиции возле swap-клика. НИЧЕГО НЕ ДОСЫЛАЕМ.
    // ClickSlot (swap) - отдельный пакет, его пропускаем.
    @EventHandler
    public void onPacket(PacketEvent var1) {
@@ -125,6 +125,15 @@ public class AutoSwap extends ModuleStructure {
          if (var2 instanceof PlayerMoveC2SPacket || var2 instanceof PlayerInputC2SPacket) {
             var1.cancel();
          }
+      }
+   }
+
+   // Пока идёт blink - обнуляем ввод движения, чтобы клиент не разгонялся
+   // (реального смещения нет -> нечего ресинкать, нет рубербанда).
+   @EventHandler
+   public void onInput(InputEvent var1) {
+      if (mc.player != null && this.blinkActive) {
+         var1.inputNone();
       }
    }
 
@@ -138,6 +147,8 @@ public class AutoSwap extends ModuleStructure {
          return;
       }
 
+      this.haltMovement();
+
       if (this.blinkPhase > 0) {
          this.blinkPhase--;
          return;
@@ -149,6 +160,13 @@ public class AutoSwap extends ModuleStructure {
       }
 
       this.stopBlink();
+   }
+
+   private void haltMovement() {
+      if (mc.player != null) {
+         mc.player.setSprinting(false);
+         mc.player.setVelocity(0.0, mc.player.getVelocity().y, 0.0);
+      }
    }
 
    // Просто выключаем blink. Дропнутые move-пакеты НЕ досылаются -
