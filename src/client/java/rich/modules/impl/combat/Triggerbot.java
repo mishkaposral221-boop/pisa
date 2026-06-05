@@ -121,7 +121,9 @@ public class Triggerbot extends ModuleStructure {
                 return;
             }
 
-            // ---- AIRBORNE: land the crit, but only once sprint is confirmed off server-side. ----
+            // ---- AIRBORNE: land the crit the INSTANT the window is valid (fallDistance>0 + charge),
+            // once sprint is confirmed off server-side. No waiting for a 'cleaner' fall - if a player
+            // knocks us, we still crit on the very first descending tick. ----
             if (!mc.player.isOnGround()) {
                 if (this.isPerfectCrit() && charge >= CRIT_CHARGE && serverClean) {
                     this.attack(target);
@@ -130,8 +132,11 @@ public class Triggerbot extends ModuleStructure {
             }
 
             // ---- ON GROUND ----
-            // If a jump-crit is coming (jump held), keep sprint suppressed and wait for the air phase.
-            if (critPossible && this.isJumpHeld()) {
+            // HOLD for the crit when the player is jumping OR is being launched upward (e.g. knocked by
+            // another player's hit -> velocity.y > 0). Firing a flat ground combo here would eat the
+            // attack cooldown and ruin the incoming jump-crit. This is exactly the 'combo while I was in
+            // a jump' bug: we now wait for the air phase and crit instead.
+            if (critPossible && (this.isJumpHeld() || mc.player.getVelocity().y > 0.0)) {
                 return;
             }
             // Ground combo (non-crit). Only when sprint is confirmed off so we never emit a sprint-hit.
