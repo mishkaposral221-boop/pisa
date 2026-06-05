@@ -157,7 +157,7 @@ public class AimEngine {
             this.aimPointTicks = 0;
             return;
         }
-        if (this.aimRandom.nextFloat() < 0.05f) {
+        if (this.aimRandom.nextFloat() < 0.04f) {
             return;
         }
         float applyYaw = 0.0f;
@@ -166,14 +166,15 @@ public class AimEngine {
         boolean movingToward = this.rawTickYawDelta * wantYaw + this.rawTickPitchDelta * wantPitch > 0.0f;
         if (totalAngle > deadzone) {
             float t = Math.min((totalAngle - deadzone) / 18.0f, 1.0f);
-            float strength = movingToward ? 0.34f + t * 0.26f : 0.05f;
-            float maxPull = movingToward ? 2.6f + t * 1.8f : 0.6f;
-            float moveScale = movingToward ? MathHelper.clamp((float)(mouseDelta * 0.8f), (float)0.2f, (float)1.0f) : 0.25f;
+            // МЕГА-сильная тяга, но ТОЛЬКО по движению игрока (нет автономного лока).
+            float strength = movingToward ? 0.55f + t * 0.4f : 0.06f;
+            float maxPull = movingToward ? 4.5f + t * 5.5f : 0.7f;
+            float moveScale = movingToward ? MathHelper.clamp((float)(mouseDelta * 0.9f), (float)0.3f, (float)1.0f) : 0.25f;
             // Независимый джиттер по осям: коррелированный шум сам по себе сигнатура.
             float jitterYaw = (this.aimRandom.nextFloat() - 0.5f) * 0.16f;
             float jitterPitch = (this.aimRandom.nextFloat() - 0.5f) * 0.10f;
-            // Лёгкий постоянный недолёт: живой игрок никогда не сидит идеально в центре.
-            float undershoot = this.aimRandom.nextFloat() < 0.22f ? 0.7f + this.aimRandom.nextFloat() * 0.2f : 0.94f;
+            // Лёгкий недолёт: живой игрок никогда не сидит идеально в центре.
+            float undershoot = this.aimRandom.nextFloat() < 0.18f ? 0.78f + this.aimRandom.nextFloat() * 0.18f : 0.97f;
             float rawYawPull = MathHelper.clamp((float)(wantYaw * strength * moveScale * undershoot + jitterYaw), (float)(-maxPull), (float)maxPull);
             float rawPitchPull = MathHelper.clamp((float)(wantPitch * strength * moveScale * 0.6f * undershoot + jitterPitch), (float)(-maxPull * 0.6f), (float)(maxPull * 0.6f));
             // Снап к GCD-сетке с накоплением остатка: грид-чистота без системного смещения.
