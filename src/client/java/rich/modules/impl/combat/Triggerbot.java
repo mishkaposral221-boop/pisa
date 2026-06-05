@@ -23,38 +23,42 @@ import rich.util.c;
  *   Tick N   : onInputTick clears forward/sprint from playerInput
  *   Tick N   : sendMovementPackets sends pos with W=false, sprint=false
  *   Tick N+1 : pendingTarget set, countdown=0 -> attack(), then resume W
+ *
+ * Charge thresholds (lowered for faster hitting):
+ *   GROUND_ATTACK_CHARGE  0.93  (was 1.0)  - hit ground targets at 93%
+ *   CRIT_CHARGE           0.84  (was 0.9)  - hit air crits at 84%
+ *   GROUND_COMBO_DELAY    2     (was 3)    - 1 tick less combo delay
  */
 public class Triggerbot extends ModuleStructure {
 
-    /** Read by ClientPlayerEntityMixin.onInputTick to clear the W key for 1 tick before a crit. */
     public static volatile boolean SUPPRESS_FORWARD = false;
-    /** Read by ClientPlayerEntityMixin.onInputTick to clear the jump key when gating crits. */
     public static volatile boolean SUPPRESS_JUMP    = false;
-    /** Unused now but kept for any external readers. */
     public static volatile boolean SUPPRESS_SPRINT  = false;
 
     private static final Logger LOG = LoggerFactory.getLogger("Triggerbot");
 
-    // Pre-attack W-release state
-    private Entity  pendingTarget    = null; // target saved for next-tick attack
-    private int     preAttackCountdown = 0;  // ticks remaining before we fire
-    private boolean pendingWasForward  = false; // was W held when we queued the attack?
+    private Entity  pendingTarget      = null;
+    private int     preAttackCountdown = 0;
+    private boolean pendingWasForward  = false;
 
     private String lastDiag = "";
     private int ticksOutOfWater = 10;
     private int ticksOnGround   = 0;
 
-    private static final int   GROUND_COMBO_DELAY  = 3;
-    private static final float GROUND_ATTACK_CHARGE = 1.0F;
-    private static final float CRIT_CHARGE          = 0.9F;
+    // --- Timing constants ---
+    // Lower = hits sooner in the cooldown cycle. Don't go below ~0.80 or
+    // the server will register 0 damage (weapon not ready).
+    private static final int   GROUND_COMBO_DELAY   = 2;    // ticks on ground before ground combo
+    private static final float GROUND_ATTACK_CHARGE = 0.93F; // ground attack threshold (was 1.0)
+    private static final float CRIT_CHARGE          = 0.84F; // air-crit threshold     (was 0.9)
 
     public SliderSettings noCritCharge = new SliderSettings("Charge under debuff",
             "Min weapon charge when crit is impossible")
-            .setValue(0.80F).range(0.3F, 1.0F);
+            .setValue(0.78F).range(0.3F, 1.0F);
 
     public SliderSettings jumpCharge = new SliderSettings("Jump charge",
             "Min charge before held-jump fires")
-            .setValue(0.55F).range(0.3F, 1.0F);
+            .setValue(0.50F).range(0.3F, 1.0F);
 
     public static Triggerbot getInstance() {
         return c.a(Triggerbot.class);
@@ -89,34 +93,30 @@ public class Triggerbot extends ModuleStructure {
                 return;
             }
 
-            // Counters
             if (isInWater()) { ticksOutOfWater = 0; }
             else if (ticksOutOfWater < 100) { ticksOutOfWater++; }
 
             if (mc.player.isOnGround()) { if (ticksOnGround < 100) ticksOnGround++; }
             else { ticksOnGround = 0; }
 
-            // --- Handle pending pre-attack state ---
+            // --- Pending pre-attack (W release + 1 tick delay for crit) ---
             if (pendingTarget != null) {
                 if (!isEntityValid(pendingTarget)) {
-                    // Target gone, abort
                     pendingTarget = null;
                     preAttackCountdown = 0;
                     return;
                 }
                 if (preAttackCountdown > 0) {
-                    // Still waiting, keep W suppressed
                     preAttackCountdown--;
                     wantSuppressForward = true;
                     return;
                 }
-                // Countdown reached 0 -> fire!
                 Entity t = pendingTarget;
                 boolean wasForward = pendingWasForward;
                 pendingTarget = null;
                 preAttackCountdown = 0;
                 doAttack(t, wasForward);
-                LOG.info("[Triggerbot] CRIT FIRE (was_fw=" + wasForward + ")");
+                diag("CRIT_FIRE", "CRIT FIRE fw=" + wasForward);
                 return;
             }
 
@@ -127,16 +127,14 @@ public class Triggerbot extends ModuleStructure {
             boolean critPossible = critAchievable();
             float charge = charge();
 
-            // In water - no crit possible
             if (isInWater()) {
                 if (charge >= GROUND_ATTACK_CHARGE) {
                     doAttack(target, mc.options.forwardKey.isPressed());
-                    LOG.info("[Triggerbot] HIT water");
+                    diag("WATER", "HIT water");
                 }
                 return;
             }
 
-            // Crit impossible (debuff / condition)
             if (!critPossible) {
                 float need = noCritCharge.getValue();
                 if (charge >= need) {
@@ -148,19 +146,17 @@ public class Triggerbot extends ModuleStructure {
                 return;
             }
 
-            // --- AIR CRIT path (with W pre-release) ---
+            // --- Air crit path ---
             if (!mc.player.isOnGround()) {
                 String blocker = critBlocker();
                 if (blocker == null && charge >= CRIT_CHARGE) {
-                    // Queue the attack: release W this tick, attack next tick
-                    pendingTarget     = target;
-                    preAttackCountdown = 0; // attack on NEXT tick (1 tick = ~50ms)
-                    pendingWasForward = mc.options.forwardKey.isPressed();
-                    wantSuppressForward = true; // clear W+sprint from input this tick
-                    diag("CRIT_QUEUE", "CRIT queued fall=" + fmt(mc.player.fallDistance)
-                        + " charge=" + fmt(charge) + " fw=" + pendingWasForward);
+                    pendingTarget      = target;
+                    preAttackCountdown = 0;
+                    pendingWasForward  = mc.options.forwardKey.isPressed();
+                    wantSuppressForward = true;
+                    diag("CRIT_Q", "CRIT queue charge=" + fmt(charge));
                 } else {
-                    diag("AIR_BLOCK", "AIR block=" + blocker + " charge=" + fmt(charge));
+                    diag("AIR_BLOCK", "block=" + blocker + " charge=" + fmt(charge));
                 }
                 return;
             }
@@ -176,12 +172,12 @@ public class Triggerbot extends ModuleStructure {
                 return;
             }
 
-            // --- Ground combo attack ---
+            // --- Ground combo ---
             if (charge >= GROUND_ATTACK_CHARGE && ticksOnGround >= GROUND_COMBO_DELAY) {
                 doAttack(target, mc.options.forwardKey.isPressed());
-                diag("COMBO", "COMBO ground charge=" + fmt(charge));
+                diag("COMBO", "COMBO charge=" + fmt(charge));
             } else {
-                diag("GROUND_WAIT", "ground wait charge=" + fmt(charge) + " ticks=" + ticksOnGround);
+                diag("GROUND_WAIT", "wait charge=" + fmt(charge) + " ticks=" + ticksOnGround);
             }
 
         } finally {
@@ -191,11 +187,6 @@ public class Triggerbot extends ModuleStructure {
         }
     }
 
-    /**
-     * Send the actual attack.
-     * Order of packets to server:
-     *   STOP_SPRINTING -> attack -> START_SPRINTING (if applicable)
-     */
     private void doAttack(Entity target, boolean wasForward) {
         mc.player.setSprinting(false);
         mc.interactionManager.attackEntity(mc.player, target);
@@ -242,15 +233,15 @@ public class Triggerbot extends ModuleStructure {
     }
 
     private String critBlocker() {
-        if (!(mc.player.fallDistance > 0.0))                          return "fall<=0";
-        if (ticksOutOfWater < 3)                                       return "justLeftWater";
-        if (mc.player.isOnGround())                                    return "onGround";
-        if (mc.player.isClimbing())                                    return "climbing";
-        if (mc.player.isTouchingWater())                               return "water";
-        if (mc.player.hasStatusEffect(StatusEffects.LEVITATION))       return "levitation";
-        if (mc.player.hasStatusEffect(StatusEffects.BLINDNESS))        return "blindness";
-        if (mc.player.hasVehicle())                                    return "vehicle";
-        if (mc.player.getAbilities().flying)                           return "flying";
+        if (!(mc.player.fallDistance > 0.0))                    return "fall<=0";
+        if (ticksOutOfWater < 3)                                return "justLeftWater";
+        if (mc.player.isOnGround())                             return "onGround";
+        if (mc.player.isClimbing())                             return "climbing";
+        if (mc.player.isTouchingWater())                        return "water";
+        if (mc.player.hasStatusEffect(StatusEffects.LEVITATION)) return "levitation";
+        if (mc.player.hasStatusEffect(StatusEffects.BLINDNESS))  return "blindness";
+        if (mc.player.hasVehicle())                             return "vehicle";
+        if (mc.player.getAbilities().flying)                    return "flying";
         return null;
     }
 
