@@ -32,6 +32,7 @@
     "KeyboardMixin",
     "LightmapTextureManagerMixin",
     "LivingEntityRendererMixin",
+    "MinecraftClientAccessor",
     "MinecraftClientMixin",
     "MixinBuiltChunk",
     "MixinClientPlayerInteractionManager",
