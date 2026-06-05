@@ -9,6 +9,7 @@ import net.minecraft.text.Text;
 import net.minecraft.util.Hand;
 import rich.events.api.EventHandler;
 import rich.events.impl.TickEvent;
+import rich.modules.impl.movement.AutoSprint;
 import rich.modules.module.ModuleStructure;
 import rich.modules.module.category.ModuleCategory;
 import rich.util.c;
@@ -24,6 +25,8 @@ public class Triggerbot extends ModuleStructure {
     private int ticksOnGround = 0;
     // Consecutive ticks we have been cleanly non-sprinting (=> the server already got STOP_SPRINTING).
     private int cleanTicks = 0;
+    // Throttle for ground-state console logging so we don't flood while waiting for charge.
+    private int logThrottle = 0;
 
     private static final int GROUND_COMBO_DELAY = 3;
     private static final float GROUND_ATTACK_CHARGE = 1.0F;
@@ -87,9 +90,11 @@ public class Triggerbot extends ModuleStructure {
             this.debug(target);
 
             if (mc.player.isUsingItem() || !this.isWeaponInHand()) {
+                this.logState("no-weapon-or-using", target, false, false);
                 return;
             }
             if (!hittable) {
+                this.logState("no-target", target, false, false);
                 return;
             }
 
@@ -111,14 +116,19 @@ public class Triggerbot extends ModuleStructure {
             // ---- IN WATER: crit impossible, normal hits. ----
             if (this.isInWater()) {
                 if (charge >= GROUND_ATTACK_CHARGE) {
+                    this.logState("WATER-ATTACK", target, serverClean, true);
                     this.attack(target);
+                } else {
+                    this.logState("water-wait-charge", target, serverClean, false);
                 }
                 return;
             }
 
             // ---- AIRBORNE: land the crit, but only once sprint is confirmed off server-side. ----
             if (!mc.player.isOnGround()) {
-                if (this.isPerfectCrit() && charge >= CRIT_CHARGE && serverClean) {
+                boolean ok = this.isPerfectCrit() && charge >= CRIT_CHARGE && serverClean;
+                this.logState(ok ? "AIR-ATTACK" : "air-skip", target, serverClean, ok);
+                if (ok) {
                     this.attack(target);
                 }
                 return;
@@ -127,14 +137,47 @@ public class Triggerbot extends ModuleStructure {
             // ---- ON GROUND ----
             // If a jump-crit is coming (jump held), keep sprint suppressed and wait for the air phase.
             if (critPossible && this.isJumpHeld()) {
+                this.logState("ground-wait-jump", target, serverClean, false);
                 return;
             }
             // Ground combo (non-crit). Only when sprint is confirmed off so we never emit a sprint-hit.
-            if (charge >= GROUND_ATTACK_CHARGE && this.ticksOnGround >= GROUND_COMBO_DELAY && serverClean) {
+            boolean groundOk = charge >= GROUND_ATTACK_CHARGE && this.ticksOnGround >= GROUND_COMBO_DELAY && serverClean;
+            this.logState(groundOk ? "GROUND-ATTACK" : "ground-wait", target, serverClean, groundOk);
+            if (groundOk) {
                 this.attack(target);
             }
         } finally {
             SUPPRESS_SPRINT = wantSuppress;
+        }
+    }
+
+    // Console logging (shows up in the game log/console the user pastes). Always logs attacks and any
+    // airborne tick; throttles the repetitive ground/charge-wait spam so the log stays readable.
+    private void logState(String why, Entity target, boolean serverClean, boolean attacking) {
+        try {
+            boolean airborne = mc.player != null && !mc.player.isOnGround();
+            boolean verbose = attacking || airborne;
+            if (!verbose) {
+                if (this.logThrottle++ % 5 != 0) {
+                    return;
+                }
+            }
+            String s = String.format(
+                "[TB] %s | air=%s fall=%.3f chg=%.2f clean=%d spr=%s srvSpr=%s jump=%s ground=%s perfectCrit=%s serverClean=%s tgt=%s",
+                why,
+                airborne,
+                mc.player.fallDistance,
+                this.charge(),
+                this.cleanTicks,
+                mc.player.isSprinting(),
+                AutoSprint.isServerSprinting(),
+                this.isJumpHeld(),
+                mc.player.isOnGround(),
+                this.isPerfectCrit(),
+                serverClean,
+                (target instanceof LivingEntity));
+            System.out.println(s);
+        } catch (Throwable ignored) {
         }
     }
 
