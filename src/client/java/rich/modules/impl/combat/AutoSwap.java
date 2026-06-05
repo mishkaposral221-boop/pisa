@@ -1,6 +1,5 @@
 package rich.modules.impl.combat;
 
-import java.util.ArrayList;
 import java.util.List;
 import net.minecraft.client.gui.screen.ingame.InventoryScreen;
 import net.minecraft.network.packet.Packet;
@@ -31,9 +30,11 @@ import rich.util.inventory.InventoryUtils;
 import rich.util.render.pipeline.WheelPipeline;
 
 public class AutoSwap extends ModuleStructure {
-   // Сколько тиков придерживать пакеты движения (blink) перед swap-кликом,
+   // Сколько тиков дропать пакеты движения (blink) перед swap-кликом,
    // чтобы сервер не видел движения в момент инвентарного клика.
-   private static final int BLINK_TICKS = 3;
+   // Пакеты ИМЕННО дропаются (не досылаются) - иначе всплеск досыла ловится как "multi action".
+   // Позиция ресинкается следующим обычным move-пакетом (за 2 тика смещение <1 блока).
+   private static final int BLINK_TICKS = 2;
    public final BindSetting wheelBind = new BindSetting("Бинд колеса", "Клавиша открытия колеса");
    public final TextSetting slot1 = new TextSetting("Слот 1", "ID предмета");
    public final ButtonSetting pick1 = new ButtonSetting("Выбрать слот 1", "Открыть инвентарь")
@@ -54,7 +55,6 @@ public class AutoSwap extends ModuleStructure {
    private int pendingSwapSlot = -1;
    private boolean blinkActive = false;
    private int blinkPhase = 0;
-   private final List<Packet<?>> queuedPackets = new ArrayList<>();
 
    public static AutoSwap getInstance() {
       return c.a(AutoSwap.class);
@@ -115,15 +115,14 @@ public class AutoSwap extends ModuleStructure {
       }
    }
 
-   // Blink: пока активен, перехватываем и откладываем исходящие пакеты движения,
-   // чтобы сервер не получал апдейты позиции возле swap-клика.
-   // ClickSlot (swap) - это отдельный пакет, его не трогаем (пропускаем).
+   // Blink: пока активен, ДРОПАЕМ исходящие пакеты движения, чтобы сервер не получал
+   // апдейты позиции возле swap-клика. НИЧЕГО НЕ ДОСЫЛАЕМ (всплеск = multi action).
+   // ClickSlot (swap) - отдельный пакет, его пропускаем.
    @EventHandler
    public void onPacket(PacketEvent var1) {
       if (this.blinkActive && var1.isSend()) {
          Packet<?> var2 = var1.getPacket();
          if (var2 instanceof PlayerMoveC2SPacket || var2 instanceof PlayerInputC2SPacket) {
-            this.queuedPackets.add(var2);
             var1.cancel();
          }
       }
@@ -152,18 +151,11 @@ public class AutoSwap extends ModuleStructure {
       this.stopBlink();
    }
 
-   // Отключаем blink и отправляем все накопленные пакеты движения одним всплеском
-   // (уже после swap-клика).
+   // Просто выключаем blink. Дропнутые move-пакеты НЕ досылаются -
+   // следующий обычный move-пакет сам ресинкнет позицию.
    private void stopBlink() {
       this.blinkActive = false;
       this.blinkPhase = 0;
-      if (mc.getNetworkHandler() != null) {
-         for (Packet<?> var2 : this.queuedPackets) {
-            mc.getNetworkHandler().sendPacket(var2);
-         }
-      }
-
-      this.queuedPackets.clear();
    }
 
    private boolean requestSwap(ItemStack var1) {
@@ -174,7 +166,6 @@ public class AutoSwap extends ModuleStructure {
       Slot var2 = InventoryUtils.findSlotAnywhere(var1.getItem());
       if (var2 != null) {
          this.pendingSwapSlot = var2.id;
-         this.queuedPackets.clear();
          this.blinkPhase = BLINK_TICKS;
          this.blinkActive = true;
          return true;
