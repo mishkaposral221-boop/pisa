@@ -1,42 +1,26 @@
 package rich.modules.impl.misc;
 
 import rich.Initialization;
+import rich.events.api.EventManager;
 import rich.modules.module.ModuleStructure;
 import rich.modules.module.category.ModuleCategory;
+import rich.util.animations.Direction;
 
 import java.util.ArrayList;
 import java.util.List;
 
 /**
  * Panic Mode:
- * 1. Сохраняет список включённых модулей
- * 2. Выключает ВСЕ модули
- * 3. Блокирует открытие GUI мода
- *
- * После перезахода на сервер (onGameJoin):
- *   - GUI разблокируется
- *   - Модули остаются выключены
- *
- * Когда игрок открывает GUI после перезахода:
- *   - Паник-режим снимается
- *   - Восстанавливает все ранее включённые модули
- *
- * Клавиша по умолчанию: HOME (268)
+ * - Активация через бинд или через GUI: одинаковые эффекты
+ * - В GUI модуль всегда показывается как выключенный (нельзя случайно оставить включённым)
+ * - Клавиша настраивается в GUI (биндинг PanicMode), по умолчанию HOME
  */
 public class PanicMode extends ModuleStructure {
 
     private static PanicMode instance;
 
-    /** true = паника активна (GUI заблокирован, все модули выключены) */
     private boolean panicActive = false;
-
-    /**
-     * true = игрок уже перезашёл после паники.
-     * GUI разблокирован, но модули ещё не восстановлены.
-     */
     private boolean rejoinedAfterPanic = false;
-
-    /** Модули, которые были включены до паники */
     private final List<ModuleStructure> savedEnabledModules = new ArrayList<>();
 
     public PanicMode() {
@@ -47,6 +31,20 @@ public class PanicMode extends ModuleStructure {
 
     public static PanicMode getInstance() {
         return instance;
+    }
+
+    /**
+     * Вызывается автоматически, когда игрок включает модуль через GUI.
+     * Триггерит панику и сразу сбрасывает визуальный статус на «выключен».
+     */
+    @Override
+    public void activate() {
+        activatePanic();
+        // Сбрасываем визуальный статус модуля в «выключен» без рекурсии:
+        // напрямую меняем state + анимацию + снимаем с подписки событий
+        this.state = false;
+        this.getAnimation().setDirection(Direction.BACKWARDS);
+        EventManager.unregister(this);
     }
 
     /**
@@ -93,7 +91,7 @@ public class PanicMode extends ModuleStructure {
         }
     }
 
-    /** @return true если GUI сейчас заблокирован */
+    /** @return true если GUI заблокирован */
     public boolean isGuiBlocked() {
         return panicActive && !rejoinedAfterPanic;
     }
