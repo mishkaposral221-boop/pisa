@@ -15,6 +15,7 @@ import rich.modules.impl.misc.FTHelper;
 import rich.modules.impl.misc.IrcModule;
 import rich.modules.impl.misc.ItemCooldowns;
 import rich.modules.impl.misc.ItemHelper;
+import rich.modules.impl.misc.PanicMode;
 import rich.modules.impl.movement.AutoSprint;
 import rich.modules.impl.player.AutoPotion;
 import rich.modules.impl.player.AutoRespawn;
@@ -141,7 +142,9 @@ public class ModuleRepository {
          .add(new ArmorHudModule())
          .add(new InventoryHUDModule())
          .add(new InfoModule())
-         .add(new NotificationsModule());
+         .add(new NotificationsModule())
+         // PanicMode — всегда последний, чтобы гарантированно инициализировать instance
+         .add(new PanicMode());
    }
 
    public ModuleBuilder builder() {
