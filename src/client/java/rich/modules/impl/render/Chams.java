@@ -6,14 +6,9 @@ import rich.modules.module.setting.implement.BooleanSetting;
 import rich.util.c;
 
 /**
- * Chams — renders enemy players through walls with their real skin/armor/items texture.
- *
- * <p>No color tint is applied — the player looks exactly like normal but is visible
- * through walls (thanks to the NO_DEPTH_TEST pipeline in {@link rich.util.render.clientpipeline.ClientPipelines#CHAMS_ENTITY}).</p>
- *
- * <p>RICH$EQUIPMENT_TARGET — flag set by LivingEntityRendererMixin to true during
- * render() of a target player. Armor and item mixins read this flag to scope
- * the through-wall layer only to enemy players.</p>
+ * Chams - renders enemy players through walls with their REAL skin/armor/items texture.
+ * No colour tint: the player looks exactly as normal but is visible through walls
+ * (NO_DEPTH_TEST pipeline in ClientPipelines#CHAMS_ENTITY).
  */
 public class Chams extends ModuleStructure {
 
