@@ -135,16 +135,17 @@ public class Triggerbot extends ModuleStructure {
             // once sprint is confirmed off server-side. No waiting for a 'cleaner' fall - if a player
             // knocks us, we still crit on the very first descending tick. ----
             if (!mc.player.isOnGround()) {
-                boolean perfectCrit = this.isPerfectCrit();
+                String blocker = this.critBlocker();
+                boolean perfectCrit = blocker == null;
                 if (perfectCrit && charge >= CRIT_CHARGE && serverClean) {
                     this.attack(target);
                     LOG.info("[Triggerbot] CRIT air charge=" + fmt(charge) + " fall=" + fmt(mc.player.fallDistance)
                         + " velY=" + fmt(mc.player.getVelocity().y) + " " + this.state());
                 } else {
-                    // Почему крит НЕ ушёл - главная диагностика.
+                    // Почему крит НЕ ушёл - главная диагностика (точная причина).
                     String reason;
                     if (!perfectCrit) {
-                        reason = "no-perfectCrit (fall=" + fmt(mc.player.fallDistance) + " ticksOOW=" + this.ticksOutOfWater + ")";
+                        reason = "no-perfectCrit:" + blocker + " (fall=" + fmt(mc.player.fallDistance) + " ticksOOW=" + this.ticksOutOfWater + ")";
                     } else if (charge < CRIT_CHARGE) {
                         reason = "charge-too-low (" + fmt(charge) + " < " + CRIT_CHARGE + ")";
                     } else {
@@ -159,7 +160,9 @@ public class Triggerbot extends ModuleStructure {
             // HOLD for the crit when the player is jumping OR is being launched upward (e.g. knocked by
             // another player's hit -> velocity.y > 0). Firing a flat ground combo here would eat the
             // attack cooldown and ruin the incoming jump-crit. This is exactly the 'combo while I was in
-            // a jump' bug: we now wait for the air phase and crit instead.
+            // a jump' bug: we now wait for the air phase and crit instead. NOTE: critPossible is false
+            // when a crit is impossible anyway (e.g. blindness), so under a debuff sphere we DON'T hold -
+            // we fall through and deal normal combo damage instead of standing there waiting forever.
             if (critPossible && (this.isJumpHeld() || mc.player.getVelocity().y > 0.0)) {
                 this.diag("GROUND_HOLD", "GROUND hold-for-crit jump=" + this.isJumpHeld()
                     + " velY=" + fmt(mc.player.getVelocity().y) + " charge=" + fmt(charge) + " " + this.state());
@@ -188,12 +191,14 @@ public class Triggerbot extends ModuleStructure {
             ? mc.player.getStatusEffect(StatusEffects.HASTE).getAmplifier() + 1 : 0;
         int fatigue = mc.player.hasStatusEffect(StatusEffects.MINING_FATIGUE) && mc.player.getStatusEffect(StatusEffects.MINING_FATIGUE) != null
             ? mc.player.getStatusEffect(StatusEffects.MINING_FATIGUE).getAmplifier() + 1 : 0;
+        boolean blind = mc.player.hasStatusEffect(StatusEffects.BLINDNESS);
         return "[onGround=" + mc.player.isOnGround()
             + " sprint=" + mc.player.isSprinting()
             + " cleanTicks=" + this.cleanTicks
             + " attackSpeed=" + fmt(mc.player.getAttackCooldownProgressPerTick())
             + " haste=" + haste
-            + " miningFatigue=" + fatigue + "]";
+            + " miningFatigue=" + fatigue
+            + " blind=" + blind + "]";
     }
 
     private void diag(String key, String full) {
@@ -240,26 +245,36 @@ public class Triggerbot extends ModuleStructure {
         }
     }
 
-    // Mirror the SERVER crit rule (ServerPlayNetworkHandler): fallDistance>0, airborne, not climbing/
-    // in water, no blindness/levitation, no vehicle, not flying. NOTE: the server does NOT check
-    // velocity.y, so we must not require it either (that was skipping the first valid crit ticks).
-    private boolean isPerfectCrit() {
-        return mc.player.fallDistance > 0.0
-            && this.ticksOutOfWater >= 3
-            && !mc.player.isOnGround()
-            && !mc.player.isClimbing()
-            && !mc.player.isTouchingWater()
-            && !mc.player.hasStatusEffect(StatusEffects.LEVITATION)
-            && !mc.player.hasStatusEffect(StatusEffects.BLINDNESS)
-            && !mc.player.hasVehicle()
-            && !mc.player.getAbilities().flying;
+    // Returns the name of the FIRST condition that BLOCKS a crit, or null if a crit is valid.
+    // Mirrors the SERVER crit rule (PlayerEntity.attack): fallDistance>0, airborne, not climbing/
+    // in water, no levitation/BLINDNESS, no vehicle, not flying. (Server also requires !sprinting,
+    // handled separately via serverClean.) Used both as the gate and for precise logging.
+    private String critBlocker() {
+        if (!(mc.player.fallDistance > 0.0)) return "fall<=0";
+        if (this.ticksOutOfWater < 3) return "justLeftWater";
+        if (mc.player.isOnGround()) return "onGround";
+        if (mc.player.isClimbing()) return "climbing";
+        if (mc.player.isTouchingWater()) return "water";
+        if (mc.player.hasStatusEffect(StatusEffects.LEVITATION)) return "levitation";
+        if (mc.player.hasStatusEffect(StatusEffects.BLINDNESS)) return "blindness";
+        if (mc.player.hasVehicle()) return "vehicle";
+        if (mc.player.getAbilities().flying) return "flying";
+        return null;
     }
 
+    private boolean isPerfectCrit() {
+        return this.critBlocker() == null;
+    }
+
+    // A crit is even ACHIEVABLE this tick (ignoring fallDistance/onGround which depend on jumping).
+    // Includes BLINDNESS: while blinded the server forbids crits entirely, so we must NOT hold for a
+    // crit that can never land - instead fall through to a normal ground combo.
     private boolean critAchievable() {
         return this.ticksOutOfWater >= 3
             && !mc.player.isTouchingWater()
             && !mc.player.isClimbing()
             && !mc.player.hasStatusEffect(StatusEffects.LEVITATION)
+            && !mc.player.hasStatusEffect(StatusEffects.BLINDNESS)
             && !mc.player.hasVehicle()
             && !mc.player.getAbilities().flying;
     }
