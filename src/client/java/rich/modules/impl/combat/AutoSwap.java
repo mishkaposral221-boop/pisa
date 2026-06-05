@@ -1,7 +1,11 @@
 package rich.modules.impl.combat;
 
+import java.util.ArrayList;
 import java.util.List;
 import net.minecraft.client.gui.screen.ingame.InventoryScreen;
+import net.minecraft.network.packet.Packet;
+import net.minecraft.network.packet.c2s.play.PlayerInputC2SPacket;
+import net.minecraft.network.packet.c2s.play.PlayerMoveC2SPacket;
 import net.minecraft.screen.slot.SlotActionType;
 import net.minecraft.screen.slot.Slot;
 import net.minecraft.item.Item;
@@ -14,8 +18,8 @@ import rich.Initialization;
 import rich.events.api.EventHandler;
 import rich.events.impl.ClickSlotEvent;
 import rich.events.impl.DrawEvent;
-import rich.events.impl.InputEvent;
 import rich.events.impl.KeyEvent;
+import rich.events.impl.PacketEvent;
 import rich.events.impl.TickEvent;
 import rich.modules.module.ModuleStructure;
 import rich.modules.module.category.ModuleCategory;
@@ -27,8 +31,9 @@ import rich.util.inventory.InventoryUtils;
 import rich.util.render.pipeline.WheelPipeline;
 
 public class AutoSwap extends ModuleStructure {
-   // Сколько тиков держать игрока неподвижным перед свапом, чтобы сервер видел клик по инвентарю без движения.
-   private static final int STOP_TICKS = 2;
+   // Сколько тиков придерживать пакеты движения (blink) перед swap-кликом,
+   // чтобы сервер не видел движения в момент инвентарного клика.
+   private static final int BLINK_TICKS = 3;
    public final BindSetting wheelBind = new BindSetting("Бинд колеса", "Клавиша открытия колеса");
    public final TextSetting slot1 = new TextSetting("Слот 1", "ID предмета");
    public final ButtonSetting pick1 = new ButtonSetting("Выбрать слот 1", "Открыть инвентарь")
@@ -47,8 +52,9 @@ public class AutoSwap extends ModuleStructure {
    private int lastHover = -1;
    private int pickingForSlot = -1;
    private int pendingSwapSlot = -1;
-   private int stopPhase = 0;
-   private int trailing = 0;
+   private boolean blinkActive = false;
+   private int blinkPhase = 0;
+   private final List<Packet<?>> queuedPackets = new ArrayList<>();
 
    public static AutoSwap getInstance() {
       return c.a(AutoSwap.class);
@@ -109,50 +115,55 @@ public class AutoSwap extends ModuleStructure {
       }
    }
 
-   // Обход кика "Inventory" при свапе во время движения.
-   // Свап инвентаря - это window-click (кнопка 40 SWAP), который в ванилле невозможен во время
-   // движения (открытый инвентарь останавливает игрока), поэтому античит считает это читом.
-   // Решение: перед свапом на несколько тиков полностью останавливаем игрока (обнуляем инпут,
-   // спринт и горизонтальную скорость) - и только потом кликаем, когда сервер уже видит нас стоящими.
+   // Blink: пока активен, перехватываем и откладываем исходящие пакеты движения,
+   // чтобы сервер не получал апдейты позиции возле swap-клика.
+   // ClickSlot (swap) - это отдельный пакет, его не трогаем (пропускаем).
+   @EventHandler
+   public void onPacket(PacketEvent var1) {
+      if (this.blinkActive && var1.isSend()) {
+         Packet<?> var2 = var1.getPacket();
+         if (var2 instanceof PlayerMoveC2SPacket || var2 instanceof PlayerInputC2SPacket) {
+            this.queuedPackets.add(var2);
+            var1.cancel();
+         }
+      }
+   }
+
    @EventHandler
    public void onTick(TickEvent var1) {
       if (mc.player == null || mc.interactionManager == null) {
          return;
       }
 
+      if (!this.blinkActive) {
+         return;
+      }
+
+      if (this.blinkPhase > 0) {
+         this.blinkPhase--;
+         return;
+      }
+
       if (this.pendingSwapSlot >= 0) {
-         this.haltMovement();
-         if (this.stopPhase > 0) {
-            this.stopPhase--;
-         } else {
-            mc.interactionManager.clickSlot(mc.player.playerScreenHandler.syncId, this.pendingSwapSlot, 40, SlotActionType.SWAP, mc.player);
-            this.pendingSwapSlot = -1;
-            this.trailing = 1;
+         mc.interactionManager.clickSlot(mc.player.playerScreenHandler.syncId, this.pendingSwapSlot, 40, SlotActionType.SWAP, mc.player);
+         this.pendingSwapSlot = -1;
+      }
+
+      this.stopBlink();
+   }
+
+   // Отключаем blink и отправляем все накопленные пакеты движения одним всплеском
+   // (уже после swap-клика).
+   private void stopBlink() {
+      this.blinkActive = false;
+      this.blinkPhase = 0;
+      if (mc.getNetworkHandler() != null) {
+         for (Packet<?> var2 : this.queuedPackets) {
+            mc.getNetworkHandler().sendPacket(var2);
          }
-      } else if (this.trailing > 0) {
-         this.haltMovement();
-         this.trailing--;
       }
-   }
 
-   // Пока идёт фаза остановки/свапа - гасим весь инпут движения, чтобы и физика, и пакет инпута
-   // показывали "стою на месте".
-   @EventHandler
-   public void onInput(InputEvent var1) {
-      if (mc.player != null && this.isSuppressing()) {
-         var1.inputNone();
-      }
-   }
-
-   private boolean isSuppressing() {
-      return this.pendingSwapSlot >= 0 || this.trailing > 0;
-   }
-
-   private void haltMovement() {
-      if (mc.player != null) {
-         mc.player.setSprinting(false);
-         mc.player.setVelocity(0.0, mc.player.getVelocity().y, 0.0);
-      }
+      this.queuedPackets.clear();
    }
 
    private boolean requestSwap(ItemStack var1) {
@@ -163,8 +174,9 @@ public class AutoSwap extends ModuleStructure {
       Slot var2 = InventoryUtils.findSlotAnywhere(var1.getItem());
       if (var2 != null) {
          this.pendingSwapSlot = var2.id;
-         this.stopPhase = STOP_TICKS;
-         this.trailing = 0;
+         this.queuedPackets.clear();
+         this.blinkPhase = BLINK_TICKS;
+         this.blinkActive = true;
          return true;
       }
 
@@ -244,8 +256,7 @@ public class AutoSwap extends ModuleStructure {
       this.wheelOpen = false;
       this.pickingForSlot = -1;
       this.pendingSwapSlot = -1;
-      this.stopPhase = 0;
-      this.trailing = 0;
+      this.stopBlink();
       this.setCursorUnlocked(false);
    }
 
