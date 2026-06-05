@@ -88,7 +88,7 @@ public class AimEngine {
             this.aimLockedTarget = found.getUuid();
             this.aimLostTicks = 0;
             this.hasPrevTarget = false;
-            this.aimReactionTicks = 1 + this.aimRandom.nextInt(3);
+            this.aimReactionTicks = 1 + this.aimRandom.nextInt(2);
             this.aimPointTicks = 0;
         }
         if (target == null) {
@@ -120,7 +120,7 @@ public class AimEngine {
         if (this.hasPrevTarget) {
             double velX = targetX - this.prevTargetX;
             double velZ = targetZ - this.prevTargetZ;
-            float predFactor = MathHelper.clamp((float)(dist * 0.5f), (float)0.65f, (float)3.0f);
+            float predFactor = MathHelper.clamp((float)(dist * 0.55f), (float)0.75f, (float)3.4f);
             targetX += velX * (double)predFactor;
             targetZ += velZ * (double)predFactor;
         }
@@ -141,7 +141,7 @@ public class AimEngine {
         // Snapping our pull to THIS grid keeps the total yaw/pitch delta a clean multiple of the player's
         // own sensitivity step, so server-side GCD/rotation checks can't tell the assist apart from the mouse.
         float step = sens * sens * sens * 1.2f;
-        float deadzone = Math.max((float)Math.toDegrees(Math.atan2(halfW, dist)) * 0.18f, 0.30f);
+        float deadzone = Math.max((float)Math.toDegrees(Math.atan2(halfW, dist)) * 0.15f, 0.25f);
         float totalAngle = (float)Math.sqrt(wantYaw * wantYaw + wantPitch * wantPitch);
         if (totalAngle > aimFov + 12.0f) {
             this.aimLockedTarget = null;
@@ -149,7 +149,7 @@ public class AimEngine {
             this.aimPointTicks = 0;
             return;
         }
-        if (this.aimRandom.nextFloat() < 0.08f) {
+        if (this.aimRandom.nextFloat() < 0.04f) {
             return;
         }
         float applyYaw = 0.0f;
@@ -157,19 +157,19 @@ public class AimEngine {
         if (totalAngle > deadzone) {
             boolean movingToward = this.rawTickYawDelta * wantYaw + this.rawTickPitchDelta * wantPitch > 0.0f;
             float t = Math.min((totalAngle - deadzone) / 15.0f, 1.0f);
-            float strength = movingToward ? 0.42f + t * 0.48f : 0.14f + t * 0.18f;
-            float maxPull = movingToward ? 4.2f + t * 5.5f : 1.2f + t * 1.6f;
-            float moveScale = movingToward ? MathHelper.clamp((float)(mouseDelta * 0.85f), (float)0.28f, (float)0.95f) : 0.35f;
+            float strength = movingToward ? 0.58f + t * 0.52f : 0.22f + t * 0.24f;
+            float maxPull = movingToward ? 5.6f + t * 7.4f : 1.8f + t * 2.3f;
+            float moveScale = movingToward ? MathHelper.clamp((float)(mouseDelta * 0.95f), (float)0.34f, (float)1.0f) : 0.4f;
             // Independent yaw/pitch jitter: correlated noise on both axes is itself a detectable signature.
             float jitterYaw = (this.aimRandom.nextFloat() - 0.5f) * 0.16f;
             float jitterPitch = (this.aimRandom.nextFloat() - 0.5f) * 0.10f;
-            float undershoot = this.aimRandom.nextFloat() < 0.2f ? 0.7f + this.aimRandom.nextFloat() * 0.2f : 1.0f;
+            float undershoot = this.aimRandom.nextFloat() < 0.16f ? 0.75f + this.aimRandom.nextFloat() * 0.2f : 1.0f;
             float rawYawPull = MathHelper.clamp((float)(wantYaw * strength * moveScale * undershoot + jitterYaw), (float)(-maxPull), (float)maxPull);
-            float rawPitchPull = MathHelper.clamp((float)(wantPitch * strength * moveScale * 0.55f * undershoot + jitterPitch), (float)(-maxPull * 0.55f), (float)(maxPull * 0.55f));
+            float rawPitchPull = MathHelper.clamp((float)(wantPitch * strength * moveScale * 0.6f * undershoot + jitterPitch), (float)(-maxPull * 0.6f), (float)(maxPull * 0.6f));
             applyYaw = Math.abs(rawYawPull) > step ? (float)Math.round(rawYawPull / step) * step : 0.0f;
             applyPitch = Math.abs(rawPitchPull) > step ? (float)Math.round(rawPitchPull / step) * step : 0.0f;
         } else if (totalAngle > deadzone * 0.4f) {
-            float microStr = 0.14f;
+            float microStr = 0.2f;
             float rawYawPull = wantYaw * microStr;
             float rawPitchPull = wantPitch * microStr * 0.4f;
             applyYaw = Math.abs(rawYawPull) > step ? (float)Math.round(rawYawPull / step) * step : 0.0f;
