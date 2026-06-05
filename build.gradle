@@ -1,56 +1,28 @@
-plugins {
-	id 'fabric-loom' version '1.16.2'
-}
-
+plugins { id 'fabric-loom' version '1.16.2' }
 version = "1.0.01"
 group = "rich"
-
 loom {
-	splitEnvironmentSourceSets()
-	accessWidenerPath = file("src/main/resources/runtime_visuals.accesswidener")
+  splitEnvironmentSourceSets()
+  accessWidenerPath = file("src/main/resources/runtime_visuals.accesswidener")
 }
-
 repositories {
-	maven { url = "https://maven.fabricmc.net/repository/release/" }
-	mavenCentral()
-	maven { url = "https://jitpack.io" }
-	maven { url = "local-maven" }
+  maven { url = "https://maven.fabricmc.net/repository/release/" }
+  mavenCentral()
+  maven { url = "https://jitpack.io" }
+  maven { url = "local-maven" }
 }
-
 dependencies {
-	minecraft "com.mojang:minecraft:1.21.11"
-	mappings "net.fabricmc:yarn:1.21.11+build.5:v2"
-	modImplementation "net.fabricmc:fabric-loader:0.19.2"
-
-	modImplementation "net.fabricmc.fabric-api:fabric-api:0.141.1+1.21.11"
-
-	// Used by rich render/aura code (com.ferra13671.*, org.joml.*)
-	modImplementation "com.ferra13671:CometRenderer:3.0.0"
-	include "com.ferra13671:CometRenderer:3.0.0"
-
-	implementation "org.joml:joml:1.5.4"
-
-	// Bundled in original JAR for proxy (META-INF/jars also listed in fabric.mod.json)
-	modImplementation include("io.netty:netty-codec-socks:4.1.82.Final")
-	modImplementation include("io.netty:netty-handler-proxy:4.1.82.Final")
+  minecraft "com.mojang:minecraft:1.21.11"
+  mappings "net.fabricmc:yarn:1.21.11+build.5:v2"
+  modImplementation "net.fabricmc:fabric-loader:0.19.2"
+  modImplementation "net.fabricmc.fabric-api:fabric-api:0.141.1+1.21.11"
+  modImplementation "com.ferra13671:CometRenderer:3.0.0"
+  include "com.ferra13671:CometRenderer:3.0.0"
+  implementation "org.joml:joml:1.5.4"
+  modImplementation "io.netty:netty-codec-socks:4.1.82.Final"
+  modImplementation "io.netty:netty-handler-proxy:4.1.82.Final"
 }
-
-processResources {
-	inputs.property "version", project.version
-	filesMatching("fabric.mod.json") {
-		expand "version": project.version
-	}
-}
-
-tasks.withType(JavaCompile).configureEach {
-	it.options.release = 21
-}
-
-java {
-	sourceCompatibility = JavaVersion.VERSION_21
-	targetCompatibility = JavaVersion.VERSION_21
-}
-
-jar {
-	duplicatesStrategy = DuplicatesStrategy.EXCLUDE
-}
+processResources { inputs.property "version", project.version; filesMatching("fabric.mod.json") { expand "version": project.version } }
+tasks.withType(JavaCompile).configureEach { it.options.release = 21 }
+java { sourceCompatibility = JavaVersion.VERSION_21; targetCompatibility = JavaVersion.VERSION_21 }
+jar { duplicatesStrategy = DuplicatesStrategy.EXCLUDE }
