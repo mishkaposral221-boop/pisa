@@ -32,142 +32,189 @@ import rich.modules.impl.render.Chams;
 import rich.modules.impl.render.HitEffect;
 import rich.util.render.clientpipeline.ClientPipelines;
 
+/**
+ * Chams rendering for enemy players:
+ *
+ * The body (skin) is drawn through walls by replacing getRenderLayer() with
+ * CHAMS_ENTITY (a no-depth-test pipeline that still samples the real skin texture).
+ *
+ * Armor is handled by ArmorChamsMixin (@Redirect on armorCutoutNoCull).
+ *
+ * Items in hands: MC 1.21 deferred-queue system prevents easy pipeline swap;
+ * they render normally (visible only when not occluded).
+ *
+ * RICH$EQUIPMENT_TARGET is set true at the HEAD of render() when the entity
+ * is a chams target, and reset to false at RETURN.  ArmorChamsMixin reads this
+ * flag to decide whether to apply the chams pipeline to each armor layer.
+ */
 @Mixin(LivingEntityRenderer.class)
-public abstract class LivingEntityRendererMixin<S extends LivingEntityRenderState, M extends EntityModel<? super S>> implements IMinecraft {
-   @Unique
-   private static final Map<LivingEntityRenderState, Integer> RICH$STATE_ENTITY_ID = Collections.synchronizedMap(new WeakHashMap<>());
+public abstract class LivingEntityRendererMixin<S extends LivingEntityRenderState, M extends EntityModel<? super S>>
+        implements IMinecraft {
 
-   @Shadow
-   @Nullable
-   protected abstract RenderLayer getRenderLayer(S var1, boolean var2, boolean var3, boolean var4);
+    // Map render states -> entity IDs so we can identify "is this the local player?".
+    // WeakHashMap: entries are collected once the render state is no longer referenced.
+    @Unique
+    private static final Map<LivingEntityRenderState, Integer> RICH$STATE_ID =
+            Collections.synchronizedMap(new WeakHashMap<>());
 
-   @Shadow
-   public abstract Identifier getTexture(S var1);
+    @Shadow
+    @Nullable
+    protected abstract RenderLayer getRenderLayer(S state, boolean visible, boolean glowing, boolean translucent);
 
-   @ModifyExpressionValue(
-      method = "updateRenderState(Lnet/minecraft/entity/LivingEntity;Lnet/minecraft/client/render/entity/state/LivingEntityRenderState;F)V",
-      at = @At(value = "INVOKE", target = "Lnet/minecraft/util/math/MathHelper;lerpAngleDegrees(FFF)F")
-   )
-   private float lerpAngleDegreesHook(float var1, @Local(ordinal = 0, argsOnly = true) LivingEntity var2, @Local(ordinal = 0, argsOnly = true) float var3) {
-      AngleConnection var4 = AngleConnection.INSTANCE;
-      if (var2.equals(mc.player) && var4.getCurrentAngle() != null && !(mc.currentScreen instanceof HandledScreen)) {
-         float var5 = var4.getPreviousRotation().getYaw();
-         float var6 = var4.getRotation().getYaw();
-         return MathHelper.lerpAngleDegrees(var3, var5, var6);
-      } else {
-         return var1;
-      }
-   }
+    @Shadow
+    public abstract Identifier getTexture(S state);
 
-   @ModifyExpressionValue(
-      method = "updateRenderState(Lnet/minecraft/entity/LivingEntity;Lnet/minecraft/client/render/entity/state/LivingEntityRenderState;F)V",
-      at = @At(value = "INVOKE", target = "Lnet/minecraft/entity/LivingEntity;getLerpedPitch(F)F")
-   )
-   private float getLerpedPitchHook(float var1, @Local(ordinal = 0, argsOnly = true) LivingEntity var2, @Local(ordinal = 0, argsOnly = true) float var3) {
-      AngleConnection var4 = AngleConnection.INSTANCE;
-      if (var2.equals(mc.player) && var4.getCurrentAngle() != null && !(mc.currentScreen instanceof HandledScreen)) {
-         float var5 = var4.getPreviousRotation().getPitch();
-         float var6 = var4.getRotation().getPitch();
-         return MathHelper.lerp(var3, var5, var6);
-      } else {
-         return var1;
-      }
-   }
+    // ---------------------------------------------------------------------------
+    // 1) Entity-ID tracking: store the entity ID in the render state so we can
+    //    check later whether a state belongs to the local player.
+    // ---------------------------------------------------------------------------
+    @Inject(
+        method = "updateRenderState(Lnet/minecraft/entity/LivingEntity;Lnet/minecraft/client/render/entity/state/LivingEntityRenderState;F)V",
+        at = @At("TAIL")
+    )
+    private void rich$trackEntityId(LivingEntity entity, S state, float tickDelta, CallbackInfo ci) {
+        RICH$STATE_ID.put(state, entity.getId());
+    }
 
-   @Inject(
-      method = "updateRenderState(Lnet/minecraft/entity/LivingEntity;Lnet/minecraft/client/render/entity/state/LivingEntityRenderState;F)V",
-      at = @At("TAIL")
-   )
-   private void updateRenderStateHook(LivingEntity var1, S var2, float var3, CallbackInfo var4) {
-      RICH$STATE_ENTITY_ID.put(var2, var1.getId());
-   }
+    // ---------------------------------------------------------------------------
+    // 2) Set the RICH$EQUIPMENT_TARGET flag at the start of each player render.
+    //    ArmorChamsMixin reads this flag to apply (or skip) the chams pipeline.
+    // ---------------------------------------------------------------------------
+    @Inject(
+        method = "render(Lnet/minecraft/client/render/entity/state/LivingEntityRenderState;Lnet/minecraft/client/util/math/MatrixStack;Lnet/minecraft/client/render/command/OrderedRenderCommandQueue;Lnet/minecraft/client/render/state/CameraRenderState;)V",
+        at = @At("HEAD")
+    )
+    private void rich$chamsBegin(
+            LivingEntityRenderState state, MatrixStack matrices,
+            OrderedRenderCommandQueue queue, CameraRenderState camera, CallbackInfo ci) {
+        Chams.RICH$EQUIPMENT_TARGET = rich$isChamsTarget(state);
+    }
 
-   @Inject(
-      method = "render(Lnet/minecraft/client/render/entity/state/LivingEntityRenderState;Lnet/minecraft/client/util/math/MatrixStack;Lnet/minecraft/client/render/command/OrderedRenderCommandQueue;Lnet/minecraft/client/render/state/CameraRenderState;)V",
-      at = @At("HEAD")
-   )
-   private void richEquipmentChamsStart(LivingEntityRenderState var1, MatrixStack var2, OrderedRenderCommandQueue var3, CameraRenderState var4, CallbackInfo var5) {
-      Chams.RICH$EQUIPMENT_TARGET = this.richIsChamsTarget(var1);
-   }
+    @Inject(
+        method = "render(Lnet/minecraft/client/render/entity/state/LivingEntityRenderState;Lnet/minecraft/client/util/math/MatrixStack;Lnet/minecraft/client/render/command/OrderedRenderCommandQueue;Lnet/minecraft/client/render/state/CameraRenderState;)V",
+        at = @At("RETURN")
+    )
+    private void rich$chamsEnd(
+            LivingEntityRenderState state, MatrixStack matrices,
+            OrderedRenderCommandQueue queue, CameraRenderState camera, CallbackInfo ci) {
+        Chams.RICH$EQUIPMENT_TARGET = false;
+    }
 
-   @Inject(
-      method = "render(Lnet/minecraft/client/render/entity/state/LivingEntityRenderState;Lnet/minecraft/client/util/math/MatrixStack;Lnet/minecraft/client/render/command/OrderedRenderCommandQueue;Lnet/minecraft/client/render/state/CameraRenderState;)V",
-      at = @At("RETURN")
-   )
-   private void richEquipmentChamsEnd(LivingEntityRenderState var1, MatrixStack var2, OrderedRenderCommandQueue var3, CameraRenderState var4, CallbackInfo var5) {
-      Chams.RICH$EQUIPMENT_TARGET = false;
-   }
+    // ---------------------------------------------------------------------------
+    // 3) Body (skin) through-wall rendering.
+    //    Redirect getRenderLayer() -> CHAMS_ENTITY pipeline for chams targets.
+    //    CHAMS_ENTITY uses depth-test=ALWAYS so it draws through geometry.
+    // ---------------------------------------------------------------------------
+    @Redirect(
+        method = "render(Lnet/minecraft/client/render/entity/state/LivingEntityRenderState;Lnet/minecraft/client/util/math/MatrixStack;Lnet/minecraft/client/render/command/OrderedRenderCommandQueue;Lnet/minecraft/client/render/state/CameraRenderState;)V",
+        at = @At(
+            value = "INVOKE",
+            target = "Lnet/minecraft/client/render/entity/LivingEntityRenderer;getRenderLayer(Lnet/minecraft/client/render/entity/state/LivingEntityRenderState;ZZZ)Lnet/minecraft/client/render/RenderLayer;"
+        )
+    )
+    private RenderLayer rich$chamsBodyLayer(
+            LivingEntityRenderer<?, ?, ?> self,
+            LivingEntityRenderState state, boolean visible, boolean glowing, boolean translucent) {
 
-   @Unique
-   private boolean richIsChamsTarget(LivingEntityRenderState var1) {
-      Chams var2 = Chams.getInstance();
-      if (var2 == null || !var2.isState() || !(var1 instanceof PlayerEntityRenderState)) {
-         return false;
-      }
-      Integer var3 = RICH$STATE_ENTITY_ID.get(var1);
-      return var3 != null && mc.player != null && var3 != mc.player.getId();
-   }
+        Integer entityId = RICH$STATE_ID.get(state);
+        Chams chams = Chams.getInstance();
 
-   @Redirect(
-      method = "render(Lnet/minecraft/client/render/entity/state/LivingEntityRenderState;Lnet/minecraft/client/util/math/MatrixStack;Lnet/minecraft/client/render/command/OrderedRenderCommandQueue;Lnet/minecraft/client/render/state/CameraRenderState;)V",
-      at = @At(
-         value = "INVOKE",
-         target = "Lnet/minecraft/client/render/entity/LivingEntityRenderer;getRenderLayer(Lnet/minecraft/client/render/entity/state/LivingEntityRenderState;ZZZ)Lnet/minecraft/client/render/RenderLayer;"
-      )
-   )
-   private RenderLayer renderLayerHook(LivingEntityRenderer<?, ?, ?> var1, LivingEntityRenderState var2, boolean var3, boolean var4, boolean var5) {
-      Integer var6 = RICH$STATE_ENTITY_ID.get(var2);
-      Chams var8 = Chams.getInstance();
-      if (var8 != null && var8.isState() && var2 instanceof PlayerEntityRenderState) {
-         boolean var9 = var6 != null && mc.player != null && var6 == mc.player.getId();
-         if (!var9) {
-            Identifier var10 = this.getTexture((S)var2);
-            if (var10 != null) {
-               return ClientPipelines.CHAMS_ENTITY.apply(var10);
+        // Draw enemy players through walls with real skin texture
+        if (chams != null && chams.isState() && state instanceof PlayerEntityRenderState) {
+            boolean isSelf = (entityId != null && mc.player != null && entityId == mc.player.getId());
+            if (!isSelf) {
+                Identifier texture = this.getTexture((S) state);
+                if (texture != null) {
+                    return ClientPipelines.CHAMS_ENTITY.apply(texture);
+                }
             }
-         }
-      }
+        }
 
-      HitEffect var7 = HitEffect.getInstance();
-      if (!var4 && var6 != null && var7 != null && var7.shouldTintEntity(var6)) {
-         var4 = true;
-      }
+        // HitEffect tint: let the vanilla layer handle it but force glowing=true
+        HitEffect hitEffect = HitEffect.getInstance();
+        if (!glowing && entityId != null && hitEffect != null && hitEffect.shouldTintEntity(entityId)) {
+            glowing = true;
+        }
 
-      return this.getRenderLayer((S)var2, var3, var4, var5);
-   }
+        return this.getRenderLayer((S) state, visible, glowing, translucent);
+    }
 
-   @ModifyReturnValue(
-      method = "getMixColor(Lnet/minecraft/client/render/entity/state/LivingEntityRenderState;)I",
-      at = @At("RETURN")
-   )
-   private int modifyMixColor(int var1, @Local(argsOnly = true) S var2) {
-      Integer var3 = RICH$STATE_ENTITY_ID.get(var2);
-      // Chams renders with the real player texture via CHAMS_ENTITY pipeline (no-depth-test).
-      // No tint is applied here - getMixColor returns vanilla value (white = full texture color).
-      HitEffect var4 = HitEffect.getInstance();
-      if (var3 != null && var4 != null && var4.shouldTintEntity(var3)) {
-         int var5 = var4.getEntityTintColor();
-         int var6 = var5 >> 24 & 0xFF;
-         int var7 = var5 >> 16 & 0xFF;
-         int var8 = var5 >> 8 & 0xFF;
-         int var9 = var5 & 0xFF;
-         int var10 = var1 >> 24 & 0xFF;
-         int var11 = var1 >> 16 & 0xFF;
-         int var12 = var1 >> 8 & 0xFF;
-         int var13 = var1 & 0xFF;
-         float var14 = var6 / 255.0F;
-         int var15 = (int)(var11 * var7 / 255.0F);
-         int var16 = (int)(var12 * var8 / 255.0F);
-         int var17 = (int)(var13 * var9 / 255.0F);
-         int var18 = (int)(var11 + (var15 - var11) * var14);
-         int var19 = (int)(var12 + (var16 - var12) * var14);
-         int var20 = (int)(var13 + (var17 - var13) * var14);
-         var18 = Math.min(255, Math.max(0, var18));
-         var19 = Math.min(255, Math.max(0, var19));
-         var20 = Math.min(255, Math.max(0, var20));
-         return var10 << 24 | var18 << 16 | var19 << 8 | var20;
-      } else {
-         return var1;
-      }
-   }
+    // ---------------------------------------------------------------------------
+    // 4) Smooth rotation for the local player (silent aim / angle connection).
+    // ---------------------------------------------------------------------------
+    @ModifyExpressionValue(
+        method = "updateRenderState(Lnet/minecraft/entity/LivingEntity;Lnet/minecraft/client/render/entity/state/LivingEntityRenderState;F)V",
+        at = @At(value = "INVOKE", target = "Lnet/minecraft/util/math/MathHelper;lerpAngleDegrees(FFF)F")
+    )
+    private float rich$lerpYaw(float original,
+            @Local(ordinal = 0, argsOnly = true) LivingEntity entity,
+            @Local(ordinal = 0, argsOnly = true) float tickDelta) {
+        AngleConnection ac = AngleConnection.INSTANCE;
+        if (entity.equals(mc.player) && ac.getCurrentAngle() != null
+                && !(mc.currentScreen instanceof HandledScreen)) {
+            return MathHelper.lerpAngleDegrees(
+                tickDelta,
+                ac.getPreviousRotation().getYaw(),
+                ac.getRotation().getYaw());
+        }
+        return original;
+    }
+
+    @ModifyExpressionValue(
+        method = "updateRenderState(Lnet/minecraft/entity/LivingEntity;Lnet/minecraft/client/render/entity/state/LivingEntityRenderState;F)V",
+        at = @At(value = "INVOKE", target = "Lnet/minecraft/entity/LivingEntity;getLerpedPitch(F)F")
+    )
+    private float rich$lerpPitch(float original,
+            @Local(ordinal = 0, argsOnly = true) LivingEntity entity,
+            @Local(ordinal = 0, argsOnly = true) float tickDelta) {
+        AngleConnection ac = AngleConnection.INSTANCE;
+        if (entity.equals(mc.player) && ac.getCurrentAngle() != null
+                && !(mc.currentScreen instanceof HandledScreen)) {
+            return MathHelper.lerp(
+                tickDelta,
+                ac.getPreviousRotation().getPitch(),
+                ac.getRotation().getPitch());
+        }
+        return original;
+    }
+
+    // ---------------------------------------------------------------------------
+    // 5) HitEffect color tint blending.
+    // ---------------------------------------------------------------------------
+    @ModifyReturnValue(
+        method = "getMixColor(Lnet/minecraft/client/render/entity/state/LivingEntityRenderState;)I",
+        at = @At("RETURN")
+    )
+    private int rich$mixColor(int original, @Local(argsOnly = true) S state) {
+        Integer entityId = RICH$STATE_ID.get(state);
+        HitEffect hitEffect = HitEffect.getInstance();
+        if (entityId == null || hitEffect == null || !hitEffect.shouldTintEntity(entityId)) {
+            return original;
+        }
+        int tint  = hitEffect.getEntityTintColor();
+        float alpha = ((tint >> 24) & 0xFF) / 255.0F;
+        int tr = (tint >> 16) & 0xFF;
+        int tg = (tint >>  8) & 0xFF;
+        int tb =  tint        & 0xFF;
+        int or = (original >> 16) & 0xFF;
+        int og = (original >>  8) & 0xFF;
+        int ob =  original        & 0xFF;
+        int oa = (original >> 24) & 0xFF;
+        int nr = Math.min(255, Math.max(0, (int)(or + (or * tr / 255.0F - or) * alpha)));
+        int ng = Math.min(255, Math.max(0, (int)(og + (og * tg / 255.0F - og) * alpha)));
+        int nb = Math.min(255, Math.max(0, (int)(ob + (ob * tb / 255.0F - ob) * alpha)));
+        return (oa << 24) | (nr << 16) | (ng << 8) | nb;
+    }
+
+    // ---------------------------------------------------------------------------
+    // Helpers
+    // ---------------------------------------------------------------------------
+    @Unique
+    private boolean rich$isChamsTarget(LivingEntityRenderState state) {
+        Chams chams = Chams.getInstance();
+        if (chams == null || !chams.isState()) return false;
+        if (!(state instanceof PlayerEntityRenderState)) return false;
+        Integer id = RICH$STATE_ID.get(state);
+        return id != null && mc.player != null && id != mc.player.getId();
+    }
 }
