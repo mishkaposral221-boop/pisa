@@ -4,33 +4,45 @@ import net.minecraft.entity.Entity;
 import net.minecraft.util.math.Vec3d;
 import rich.modules.impl.combat.aura.impl.LinearConstructor;
 import rich.modules.impl.combat.aura.impl.RotateConstructor;
+import rich.modules.impl.combat.aura.rotations.HumanAngle;
 
+/**
+ * AngleConfig - rotation plan factory.
+ *
+ * DEFAULT -> HumanAngle (anti-detect):
+ *   max 38/28 deg/tick, distance easing, gaussian jitter, random hitbox offset
+ *
+ * FAST -> LinearConstructor (40/30 deg/tick, no jitter):
+ *   For non-PvP uses where detection doesn't matter.
+ */
 public class AngleConfig {
-   public static AngleConfig DEFAULT = new AngleConfig(new LinearConstructor(), true, true);
-   public static boolean moveCorrection;
-   public static boolean freeCorrection;
-   private final RotateConstructor angleSmooth;
-   private final int resetThreshold = 1;
+    public static AngleConfig DEFAULT = new AngleConfig(new HumanAngle(), true, true);
+    public static AngleConfig FAST    = new AngleConfig(new LinearConstructor(), true, true);
 
-   public AngleConfig(boolean var1, boolean var2) {
-      this(new LinearConstructor(), var1, var2);
-   }
+    public static boolean moveCorrection;
+    public static boolean freeCorrection;
 
-   public AngleConfig(boolean var1) {
-      this(new LinearConstructor(), var1, true);
-   }
+    private final RotateConstructor angleSmooth;
 
-   public AngleConfig(RotateConstructor var1, boolean var2, boolean var3) {
-      this.angleSmooth = var1;
-      moveCorrection = var2;
-      freeCorrection = var3;
-   }
+    public AngleConfig(boolean moveCorr, boolean freeCorr) {
+        this(new HumanAngle(), moveCorr, freeCorr);
+    }
 
-   public AngleConstructor createRotationPlan(Angle var1, Vec3d var2, Entity var3, int var4) {
-      return new AngleConstructor(var1, var2, var3, this.angleSmooth, var4, 1.0F, moveCorrection, freeCorrection);
-   }
+    public AngleConfig(boolean moveCorr) {
+        this(new HumanAngle(), moveCorr, true);
+    }
 
-   public AngleConstructor createRotationPlan(Angle var1, Vec3d var2, Entity var3, boolean var4, boolean var5) {
-      return new AngleConstructor(var1, var2, var3, this.angleSmooth, 1, 1.0F, var4, var5);
-   }
+    public AngleConfig(RotateConstructor smooth, boolean moveCorr, boolean freeCorr) {
+        this.angleSmooth = smooth;
+        moveCorrection   = moveCorr;
+        freeCorrection   = freeCorr;
+    }
+
+    public AngleConstructor createRotationPlan(Angle angle, Vec3d vec, Entity entity, int ticks) {
+        return new AngleConstructor(angle, vec, entity, angleSmooth, ticks, 1.0F, moveCorrection, freeCorrection);
+    }
+
+    public AngleConstructor createRotationPlan(Angle angle, Vec3d vec, Entity entity, boolean moveCorr, boolean freeCorr) {
+        return new AngleConstructor(angle, vec, entity, angleSmooth, 1, 1.0F, moveCorr, freeCorr);
+    }
 }
