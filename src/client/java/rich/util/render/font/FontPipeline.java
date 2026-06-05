@@ -59,13 +59,23 @@ public class FontPipeline {
    private GpuBuffer dummyVertexBuffer;
    private ByteBuffer dataBuffer;
    private boolean initialized = false;
-   private final List<FontPipeline.CharData> charBatch = new ArrayList<>(256);
+   // Reusable glyph pool: avoids allocating a CharData per character every frame (major GC source).
+   private final ArrayList<FontPipeline.CharData> charPool = new ArrayList<>(256);
+   private int charCount = 0;
    private FontAtlas currentAtlas = null;
    private float currentOutlineWidth = 0.0F;
    private int currentOutlineColor = 0;
    private GpuTextureView cachedTextureView = null;
    private GpuTexture cachedGpuTexture = null;
    private boolean batching = false;
+
+   private FontPipeline.CharData nextChar() {
+      if (this.charCount >= this.charPool.size()) {
+         this.charPool.add(new FontPipeline.CharData());
+      }
+
+      return this.charPool.get(this.charCount++);
+   }
 
    private int getFixedScaledWidth() {
       MinecraftClient var1 = MinecraftClient.getInstance();
@@ -176,16 +186,14 @@ public class FontPipeline {
                         float var26 = var29.width * var11;
                         float var27 = var29.height * var11;
                         if (var29.width > 0.0F && var29.height > 0.0F) {
-                           this.charBatch
-                              .add(
-                                 new FontPipeline.CharData(
-                                    var31, var25, var26, var27, var29.u0, var29.v0, var29.u1, var29.v1, var19, var18, var16, var17, var11
-                                 )
+                           this.nextChar()
+                              .set(
+                                 var31, var25, var26, var27, var29.u0, var29.v0, var29.u1, var29.v1, var19, var18, var16, var17, var11
                               );
                         }
 
                         var12 += var29.xAdvance * var11;
-                        if (this.charBatch.size() >= 256) {
+                        if (this.charCount >= 256) {
                            this.flush();
                         }
 
@@ -194,7 +202,7 @@ public class FontPipeline {
                   }
                }
 
-               if (!this.batching && !this.charBatch.isEmpty() && this.currentAtlas != null) {
+               if (!this.batching && this.charCount > 0 && this.currentAtlas != null) {
                   this.flush();
                }
             }
@@ -274,16 +282,14 @@ public class FontPipeline {
                         float var24 = var27.width * var13;
                         float var25 = var27.height * var13;
                         if (var27.width > 0.0F && var27.height > 0.0F) {
-                           this.charBatch
-                              .add(
-                                 new FontPipeline.CharData(
-                                    var29, var23, var24, var25, var27.u0, var27.v0, var27.u1, var27.v1, var17, var16, var10, var11, var13
-                                 )
+                           this.nextChar()
+                              .set(
+                                 var29, var23, var24, var25, var27.u0, var27.v0, var27.u1, var27.v1, var17, var16, var10, var11, var13
                               );
                         }
 
                         var14 += var27.xAdvance * var13;
-                        if (this.charBatch.size() >= 256) {
+                        if (this.charCount >= 256) {
                            this.flush();
                         }
 
@@ -292,7 +298,7 @@ public class FontPipeline {
                   }
                }
 
-               if (!this.batching && !this.charBatch.isEmpty() && this.currentAtlas != null) {
+               if (!this.batching && this.charCount > 0 && this.currentAtlas != null) {
                   this.flush();
                }
             }
@@ -301,22 +307,22 @@ public class FontPipeline {
    }
 
    public void flush() {
-      if (!this.charBatch.isEmpty() && this.currentAtlas != null) {
+      if (this.charCount > 0 && this.currentAtlas != null) {
          MinecraftClient var1 = MinecraftClient.getInstance();
          if (var1.getFramebuffer() == null) {
-            this.charBatch.clear();
+            this.charCount = 0;
             this.currentAtlas = null;
          } else {
             AbstractTexture var2 = var1.getTextureManager().getTexture(this.currentAtlas.getTextureId());
             if (var2 == null) {
-               this.charBatch.clear();
+               this.charCount = 0;
                this.currentAtlas = null;
             } else {
                GpuTexture var3;
                try {
                   var3 = var2.getGlTexture();
                } catch (Exception var12) {
-                  this.charBatch.clear();
+                  this.charCount = 0;
                   this.currentAtlas = null;
                   return;
                }
@@ -356,7 +362,7 @@ public class FontPipeline {
                   RenderSystem.bindDefaultUniforms(var8);
                   var8.setUniform("DynamicTransforms", var6);
                   var8.setUniform("FontData", this.uniformBuffer);
-                  var8.draw(0, this.charBatch.size() * 6);
+                  var8.draw(0, this.charCount * 6);
                } catch (Throwable var13) {
                   if (var8 != null) {
                      try {
@@ -373,12 +379,12 @@ public class FontPipeline {
                   var8.close();
                }
 
-               this.charBatch.clear();
+               this.charCount = 0;
                this.currentAtlas = null;
             }
          }
       } else {
-         this.charBatch.clear();
+         this.charCount = 0;
          this.currentAtlas = null;
       }
    }
@@ -404,12 +410,13 @@ public class FontPipeline {
       this.dataBuffer.putFloat(var2.getAtlasHeight());
       this.dataBuffer.putFloat(var2.getDistanceRange());
       this.dataBuffer.putFloat(var2.getFontSize());
-      this.dataBuffer.putInt(this.charBatch.size());
+      this.dataBuffer.putInt(this.charCount);
       this.dataBuffer.putInt(0);
       this.dataBuffer.putInt(0);
       this.dataBuffer.putInt(0);
 
-      for (FontPipeline.CharData var13 : this.charBatch) {
+      for (int var40 = 0; var40 < this.charCount; var40++) {
+         FontPipeline.CharData var13 = this.charPool.get(var40);
          this.dataBuffer.putFloat(var13.x);
          this.dataBuffer.putFloat(var13.y);
          this.dataBuffer.putFloat(var13.width);
@@ -552,34 +559,37 @@ public class FontPipeline {
       float pivotY;
       float glyphScale;
 
-      CharData(
-         float var1,
-         float var2,
-         float var3,
-         float var4,
-         float var5,
-         float var6,
-         float var7,
-         float var8,
-         int var9,
-         float var10,
-         float var11,
-         float var12,
-         float var13
+      CharData() {
+      }
+
+      void set(
+         float x,
+         float y,
+         float width,
+         float height,
+         float u0,
+         float v0,
+         float u1,
+         float v1,
+         int color,
+         float rotation,
+         float pivotX,
+         float pivotY,
+         float glyphScale
       ) {
-         this.x = var1;
-         this.y = var2;
-         this.width = var3;
-         this.height = var4;
-         this.u0 = var5;
-         this.v0 = var6;
-         this.u1 = var7;
-         this.v1 = var8;
-         this.color = var9;
-         this.rotation = var10;
-         this.pivotX = var11;
-         this.pivotY = var12;
-         this.glyphScale = var13;
+         this.x = x;
+         this.y = y;
+         this.width = width;
+         this.height = height;
+         this.u0 = u0;
+         this.v0 = v0;
+         this.u1 = u1;
+         this.v1 = v1;
+         this.color = color;
+         this.rotation = rotation;
+         this.pivotX = pivotX;
+         this.pivotY = pivotY;
+         this.glyphScale = glyphScale;
       }
    }
 }
