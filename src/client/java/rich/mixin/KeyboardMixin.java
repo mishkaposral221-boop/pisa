@@ -27,24 +27,33 @@ public class KeyboardMixin {
 
          PanicMode panicMode = PanicMode.getInstance();
 
-         // ── Активация Panic Mode (нажатие = action 1) ─────────────────────────
+         // ── Активация Panic Mode (action 1 = нажатие) ─────────────────────
+         // Клавиша настраивается через GUI мода (в поле бинда PanicMode), по умолчанию HOME
          if (var3 == 1 && panicMode != null && var4.key() == panicMode.getKey()) {
             panicMode.activatePanic();
+            // Не отправляем KeyEvent дальше, чтобы паника активировалась мгновенно
+            return;
          }
 
-         // ── Открытие GUI мода (отпускание кнопки = action 0) ──────────────────
-         if (var3 == 0 && var4.key() == BindConfig.getInstance().getBindKey() && this.canOpenClickGui()) {
-            if (panicMode != null && panicMode.isGuiBlocked()) {
-               // Паника активна, перезахода ещё не было — GUI заблокирован
-               // ничего не делаем
-            } else {
-               // Если паника активна, но игрок уже перезашёл —
-               // восстанавливаем модули перед открытием GUI
-               if (panicMode != null && panicMode.isAwaitingGuiOpen()) {
-                  panicMode.onGuiOpenedAfterPanic();
+         // ── Пока паника активна — блокируем ВСЕ клавишные бинды модулей ─────────
+         // KeyEvent не отправляется, поэтому ModuleSwitcher не реагирует на бинди
+         if (panicMode != null && panicMode.isPanicActive()) {
+            // Хотя бы открытие GUI всё равно разрешаем (после перезахода)
+            if (var3 == 0 && var4.key() == BindConfig.getInstance().getBindKey() && this.canOpenClickGui()) {
+               if (!panicMode.isGuiBlocked()) {
+                  if (panicMode.isAwaitingGuiOpen()) {
+                     panicMode.onGuiOpenedAfterPanic();
+                  }
+                  ClickGui.INSTANCE.openGui();
                }
-               ClickGui.INSTANCE.openGui();
             }
+            // KeyEvent НЕ отправляем — модульные бинди не работают
+            return;
+         }
+
+         // ── Обычный режим: открытие GUI мода + бинды модулей ───────────
+         if (var3 == 0 && var4.key() == BindConfig.getInstance().getBindKey() && this.canOpenClickGui()) {
+            ClickGui.INSTANCE.openGui();
          }
 
          EventManager.callEvent(new KeyEvent(this.client.currentScreen, net.minecraft.client.util.InputUtil.Type.KEYSYM, var4.key(), var3));
