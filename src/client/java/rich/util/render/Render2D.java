@@ -11,6 +11,7 @@ import org.joml.Matrix4f;
 import rich.Initialization;
 import rich.util.render.pipeline.Arc2D;
 import rich.util.render.pipeline.ArcOutline2D;
+import rich.util.render.shader.Scissor;
 
 public class Render2D {
    private static boolean inOverlayMode = false;
@@ -100,10 +101,12 @@ public class Render2D {
    // Each RenderPipeline already declares its own blend/depth state, so these are no-ops.
    public static void beginOverlay() {
       inOverlayMode = true;
+      Scissor.reset();
    }
 
    public static void endOverlay() {
       inOverlayMode = false;
+      Scissor.reset();
    }
 
    public static void clearDepth() {
