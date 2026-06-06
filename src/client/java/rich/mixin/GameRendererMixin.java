@@ -38,6 +38,7 @@ import rich.modules.impl.render.Hud;
 import rich.modules.impl.render.NoNausea;
 import rich.modules.impl.render.NoRender;
 import rich.screens.clickgui.ClickGui;
+import rich.util.PerfStats;
 import rich.util.render.Render3D;
 
 @Mixin(GameRenderer.class)
@@ -103,9 +104,15 @@ public abstract class GameRendererMixin {
       @Local MatrixStack var6
    ) {
       if (this.client.world != null && this.client.player != null) {
+         long t0 = PerfStats.begin();
+
+         long t = PerfStats.begin();
          MatrixStack var7 = new MatrixStack();
          var7.multiply(RotationAxis.POSITIVE_X.rotationDegrees(this.camera.getPitch()));
          var7.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(this.camera.getYaw() + 180.0F));
+         PerfStats.end("world:camMatrix", t);
+
+         t = PerfStats.begin();
          Render3D.lastProjMat.set(this.client.gameRenderer.getBasicProjectionMatrix(this.getFov(this.camera, var5, true)));
          Render3D.lastModMat.set(RenderSystem.getModelViewMatrix());
          Render3D.lastWorldSpaceMatrix.set(var7.peek().getPositionMatrix());
@@ -113,6 +120,9 @@ public abstract class GameRendererMixin {
          Render3D.setLastTickDelta(var5);
          Render3D.setLastCameraPos(this.camera.getCameraPos());
          Render3D.setLastCameraRotation(new Quaternionf(this.camera.getRotation()));
+         PerfStats.end("world:render3dState", t);
+
+         t = PerfStats.begin();
          Matrix4fStack var8 = RenderSystem.getModelViewStack();
          var8.pushMatrix().mul(var4);
          this.matrices.push();
@@ -123,10 +133,18 @@ public abstract class GameRendererMixin {
 
          var8.mul(this.matrices.peek().getPositionMatrix().invert(new Matrix4f()));
          this.matrices.pop();
+         PerfStats.end("world:viewTransforms", t);
+
+         t = PerfStats.begin();
          WorldRenderEvent var9 = new WorldRenderEvent(var6, var5);
          EventManager.callEvent(var9);
          Render3D.onWorldRender(var9);
+         PerfStats.end("world:events+render3d", t);
+
          var8.popMatrix();
+
+         PerfStats.end("world:total", t0);
+         PerfStats.tickAndMaybeDump();
       }
    }
 
@@ -158,22 +176,36 @@ public abstract class GameRendererMixin {
          if (!this.isLoadingScreen(this.client.currentScreen)) {
             if (this.client.getOverlay() == null) {
                if (this.shouldRenderOnTop(this.client.currentScreen)) {
+                  long t0 = PerfStats.begin();
+
+                  long t = PerfStats.begin();
                   this.guiState.clear();
                   int var4 = (int)this.client.mouse.getScaledX(this.client.getWindow());
                   int var5 = (int)this.client.mouse.getScaledY(this.client.getWindow());
                   float var6 = var1.getTickProgress(false);
                   DrawContext var7 = new DrawContext(this.client, this.guiState, var4, var5);
+                  PerfStats.end("gui:setup", t);
+
                   Hud var8 = Hud.getInstance();
                   if (var8 != null && var8.isState()) {
                      boolean var9 = this.client.currentScreen instanceof ChatScreen;
+                     t = PerfStats.begin();
                      Drag.onDraw(var7, var4, var5, var6, var9);
+                     PerfStats.end("gui:dragOnDraw", t);
                   }
 
                   if (this.client.currentScreen instanceof ClickGui var11) {
+                     t = PerfStats.begin();
                      var11.renderOverlay(var7, var1);
+                     PerfStats.end("gui:clickGuiOverlay", t);
                   }
 
+                  t = PerfStats.begin();
                   this.guiRenderer.render(this.fogRenderer.getFogBuffer(net.minecraft.client.render.fog.FogRenderer.FogType.NONE));
+                  PerfStats.end("gui:rendererRender", t);
+
+                  PerfStats.end("gui:total", t0);
+                  PerfStats.tickAndMaybeDump();
                }
             }
          }
