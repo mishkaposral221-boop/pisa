@@ -43,9 +43,7 @@ public class HotKeys extends AbstractHudElement {
             .stream()
             .filter(var0 -> var0.getKey() != -1)
             .toList();
-         boolean var1 = !this.keysList.isEmpty();
-         boolean var2 = this.isChat(this.mc.currentScreen);
-         if (!var1 && !var2) {
+         if (this.keysList.isEmpty()) {
             this.stopAnimation();
          } else {
             this.startAnimation();
@@ -60,7 +58,7 @@ public class HotKeys extends AbstractHudElement {
 
    @Override
    public void drawDraggable(DrawContext var1, int var2) {
-      if (var2 > 0) {
+      if (var2 > 0 && !this.keysList.isEmpty()) {
          float var3 = var2 / 255.0F;
          long var4 = System.currentTimeMillis();
          float var6 = (float)(var4 - this.lastUpdateTime) / 1000.0F;
