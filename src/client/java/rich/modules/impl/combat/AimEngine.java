@@ -1,271 +1,305 @@
 package rich.modules.impl.combat;
 
+import net.minecraft.class_1297;
+import net.minecraft.class_1309;
+import net.minecraft.class_243;
+import net.minecraft.class_310;
+import net.minecraft.class_3532;
+import net.minecraft.class_3959;
+import net.minecraft.class_638;
+import net.minecraft.class_746;
+
 import java.util.Random;
 import java.util.UUID;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.network.ClientPlayerEntity;
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.LivingEntity;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.util.hit.BlockHitResult;
-import net.minecraft.util.hit.HitResult;
-import net.minecraft.util.math.MathHelper;
-import net.minecraft.util.math.Vec3d;
-import net.minecraft.world.RaycastContext;
 
-/**
- * Core aim-assist engine. Reconstructed from runtime-visuals-1.0.01.jar.
- */
 public class AimEngine {
 
-    private final AimAssist config;
-    private final Random aimRandom = new Random();
-
-    // --- Rotation state ---
-    private float   lastPlayerYaw;
-    private float   lastPlayerPitch;
-    private float   rawTickYawDelta;
-    private float   rawTickPitchDelta;
+    private final Random aimRandom;
+    private float lastPlayerYaw = 0f;
+    private float lastPlayerPitch = 0f;
+    private float rawTickYawDelta = 0f;
+    private float rawTickPitchDelta = 0f;
     private boolean firstFrame = true;
-
-    // --- Target lock ---
-    private UUID    aimLockedTarget  = null;
-    private int     aimLostTicks     = 0;
-    private int     aimReactionTicks = 0;
-
-    // --- Aim-point randomization ---
-    private double  aimOffsetX   = 0.0;
-    private double  aimOffsetY   = 0.65;
-    private double  aimOffsetZ   = 0.0;
-    private int     aimPointTicks = 0;
-
-    // --- Prediction ---
-    private double  prevTargetX;
-    private double  prevTargetZ;
+    private UUID aimLockedTarget = null;
+    private int aimLostTicks = 0;
+    private int aimPointTicks = 0;
+    private double aimOffsetX = 0.0;
+    private double aimOffsetY = 0.65;
+    private double aimOffsetZ = 0.0;
     private boolean hasPrevTarget = false;
+    private int aimReactionTicks = 0;
+    private float yawRemainder = 0f;
+    private float pitchRemainder = 0f;
+    private long lastAimTick = -1L;
+    private float tickAimYaw = 0f;
+    private float tickAimPitch = 0f;
+    private float tickYawCap = 15.0f;
+    private float tickPitchCap = 9.0f;
+    private double prevTargetX;
+    private double prevTargetZ;
 
-    // --- GCD remainder accumulators ---
-    private float   yawRemainder   = 0.0F;
-    private float   pitchRemainder = 0.0F;
-
-    // --- Per-tick angle budget ---
-    private static final float BASE_TICK_YAW   = 13.0F;
-    private static final float BASE_TICK_PITCH =  7.5F;
-    private long    lastAimTick  = -1L;
-    private float   tickAimYaw   = 0.0F;
-    private float   tickAimPitch = 0.0F;
-    private float   tickYawCap   = 15.0F;
-    private float   tickPitchCap =  9.0F;
+    private final AimAssist config;
 
     public AimEngine(AimAssist config) {
+        this.aimRandom = new Random();
         this.config = config;
     }
 
-    public void onFrame(float partialTick) {
-        MinecraftClient mc = config.mc;
-        if (!config.isState() || mc.player == null || mc.world == null) {
-            resetState();
+    public void onFrame(float partialTicks) {
+        config.isState();
+        class_310 mc = AimAssist.mc;
+        if (!config.isState() || mc.field_1724 == null || mc.field_1687 == null) {
+            aimLockedTarget = null;
+            aimReactionTicks = 0;
+            aimPointTicks = 0;
+            hasPrevTarget = false;
+            firstFrame = true;
+            yawRemainder = 0f;
+            pitchRemainder = 0f;
+            tickAimYaw = 0f;
+            tickAimPitch = 0f;
+            lastAimTick = -1L;
             return;
         }
-        if (mc.currentScreen != null) return;
+        if (mc.field_1755 != null) return;
 
-        ClientPlayerEntity player = mc.player;
+        class_746 player = mc.field_1724;
 
         if (firstFrame) {
-            lastPlayerYaw   = player.getYaw();
-            lastPlayerPitch = player.getPitch();
+            lastPlayerYaw = player.method_36454();
+            lastPlayerPitch = player.method_36455();
             firstFrame = false;
             return;
         }
 
-        rawTickYawDelta   = MathHelper.wrapDegrees(player.getYaw()   - lastPlayerYaw);
-        rawTickPitchDelta = player.getPitch() - lastPlayerPitch;
-        lastPlayerYaw     = player.getYaw();
-        lastPlayerPitch   = player.getPitch();
+        rawTickYawDelta = class_3532.method_15393(player.method_36454() - lastPlayerYaw);
+        rawTickPitchDelta = player.method_36455() - lastPlayerPitch;
+        lastPlayerYaw = player.method_36454();
+        lastPlayerPitch = player.method_36455();
 
-        float mouseDelta = Math.abs(rawTickYawDelta) + Math.abs(rawTickPitchDelta);
-        if (mouseDelta < 0.01F) {
-            yawRemainder   = 0.0F;
-            pitchRemainder = 0.0F;
+        float totalDelta = Math.abs(rawTickYawDelta) + Math.abs(rawTickPitchDelta);
+        if (totalDelta < 0.01f) {
+            yawRemainder = 0f;
+            pitchRemainder = 0f;
             return;
         }
 
-        Entity target = resolveTarget(mc, player);
+        class_243 eyePos = player.method_33571();
+        class_243 prevPos = player.method_5828(1.0f);
+        class_1297 target = null;
+        float fovSetting = config.fov();
+
+        // Try to find locked target
+        if (aimLockedTarget != null) {
+            for (Object obj : (Iterable<?>) mc.field_1687.method_18112()) {
+                class_1297 e = (class_1297) obj;
+                if (!e.method_5667().equals(aimLockedTarget)) continue;
+                if (!(e instanceof class_1309)) continue;
+                class_1309 living = (class_1309) e;
+                if (living.method_5805() && !living.method_7325()
+                        && player.method_5739(e) <= config.maxDistance()) {
+                    target = living;
+                    aimLostTicks = 0;
+                } else {
+                    aimLostTicks++;
+                    if (aimLostTicks >= 25) aimLockedTarget = null;
+                }
+                break;
+            }
+        }
+
+        // Fallback: find new target
         if (target == null) {
-            yawRemainder   = 0.0F;
-            pitchRemainder = 0.0F;
-            return;
+            class_1297 found = config.findTarget(mc);
+            if (found != null) {
+                target = found;
+                aimLockedTarget = found.method_5667();
+                aimLostTicks = 0;
+                hasPrevTarget = false;
+                aimReactionTicks = 1 + aimRandom.nextInt(2);
+                aimPointTicks = 0;
+            }
         }
 
-        if (aimReactionTicks > 0) { --aimReactionTicks; return; }
+        if (target == null) {
+            hasPrevTarget = false;
+            aimReactionTicks = 0;
+            aimPointTicks = 0;
+            yawRemainder = 0f;
+            pitchRemainder = 0f;
+            return;
+        }
 
         if (!canSeeTarget(mc, player, target)) {
-            if (++aimLostTicks > 8) {
-                aimLockedTarget  = null;
+            aimLostTicks++;
+            if (aimLostTicks > 8) {
+                aimLockedTarget = null;
                 aimReactionTicks = 0;
-                hasPrevTarget    = false;
+                aimPointTicks = 0;
+                hasPrevTarget = false;
             }
             return;
         }
-        aimLostTicks = 0;
 
-        if (--aimPointTicks <= 0)
-            randomizeAimPoint(target, player.distanceTo(target));
+        float dist = player.method_5739(target);
+        float halfWidth = target.method_17681() * 0.5f;
 
-        applyRotation(mc, player, target);
-    }
-
-    private void applyRotation(MinecraftClient mc, ClientPlayerEntity player, Entity target) {
-        Vec3d eye = player.getEyePos();
-
-        double tx = target.getX(), tz = target.getZ();
-        if (hasPrevTarget) {
-            float dist       = player.distanceTo(target);
-            float predFactor = MathHelper.clamp(dist * 0.4F, 0.5F, 2.0F);
-            tx += (tx - prevTargetX) * predFactor;
-            tz += (tz - prevTargetZ) * predFactor;
+        if (aimReactionTicks > 0) {
+            aimReactionTicks--;
+            return;
         }
-        prevTargetX   = target.getX();
-        prevTargetZ   = target.getZ();
+
+        aimPointTicks--;
+        if (aimPointTicks <= 0) {
+            randomizeAimPoint(target, dist);
+        }
+
+        double targetX = target.method_23317();
+        double targetZ = target.method_23321();
+
+        if (hasPrevTarget) {
+            double velX = targetX - prevTargetX;
+            double velZ = targetZ - prevTargetZ;
+            float predFactor = class_3532.method_15363(dist * 0.4f, 0.5f, 2.0f);
+            targetX += velX * predFactor;
+            targetZ += velZ * predFactor;
+        }
+
+        prevTargetX = target.method_23317();
+        prevTargetZ = target.method_23321();
         hasPrevTarget = true;
 
-        double ty = target.getY() + target.getHeight() * aimOffsetY
-                    + aimRandom.nextGaussian() * 0.005;
-        double dx = tx + aimOffsetX + aimRandom.nextGaussian() * 0.003 - eye.x;
-        double dy = ty - eye.y;
-        double dz = tz + aimOffsetZ + aimRandom.nextGaussian() * 0.003 - eye.z;
+        double aimY = target.method_23318() + (double) target.method_17682() * aimOffsetY
+                + aimRandom.nextGaussian() * 0.005;
+        targetX = targetX + aimOffsetX + aimRandom.nextGaussian() * 0.003;
+        double dX = targetX - eyePos.field_1352;
+        double dY = aimY - eyePos.field_1351;
+        targetZ = targetZ + aimOffsetZ + aimRandom.nextGaussian() * 0.003;
+        double dZ = targetZ - eyePos.field_1350;
 
-        double hDist    = Math.sqrt(dx * dx + dz * dz);
-        float wantYaw   = (float)  Math.toDegrees(Math.atan2(-dx, dz));
-        float wantPitch = (float)(-Math.toDegrees(Math.atan2(dy, hDist)));
+        double horizDist = Math.sqrt(dX * dX + dZ * dZ);
+        float targetYaw = (float) Math.toDegrees(Math.atan2(-dX, dZ));
+        float targetPitch = (float) -Math.toDegrees(Math.atan2(dY, horizDist));
 
-        float yawD      = MathHelper.wrapDegrees(wantYaw   - player.getYaw());
-        float pitchD    = wantPitch - player.getPitch();
-        float totalAngle = (float) Math.sqrt(yawD * yawD + pitchD * pitchD);
-        if (totalAngle < 0.001F) return;
+        float diffYaw = class_3532.method_15393(targetYaw - player.method_36454());
+        float diffPitch = targetPitch - player.method_36455();
 
-        if (totalAngle > config.fov() + 12.0F) { aimLockedTarget = null; return; }
+        // GCD
+        float sens = (float) ((double) mc.field_1690.method_42495().method_41753() * 0.6f + 0.2f);
+        float gcd = sens * sens * sens * 1.2f;
 
-        float halfW   = target.getWidth() * 0.5F;
-        float dist    = player.distanceTo(target);
-        float deadzone = Math.max((float) Math.toDegrees(Math.atan2(halfW, dist)) * 0.15F, 0.25F);
-        if (totalAngle < deadzone) { yawRemainder = 0.0F; pitchRemainder = 0.0F; return; }
+        float aimAngle = Math.max(
+                (float) Math.toDegrees(Math.atan2((double) halfWidth, (double) dist)) * 0.15f,
+                0.25f);
 
-        if (aimRandom.nextFloat() < 0.04F) return;
+        float angDist = (float) Math.sqrt((double) (diffYaw * diffYaw + diffPitch * diffPitch));
 
-        // GCD (mouse quantum)
-        float sens = (float)((Double) mc.options.getMouseSensitivity().getValue()).doubleValue()
-                     * 0.6F + 0.2F;
-        float step = sens * sens * sens * 1.2F;
-
-        boolean movingToward = rawTickYawDelta * yawD + rawTickPitchDelta * pitchD > 0;
-        float maxPull  = 18.0F + config.smoothness() * 14.0F;
-        float yawCap   = (Math.abs(yawD)   / totalAngle) * maxPull;
-        float pitchCap = (Math.abs(pitchD) / totalAngle) * maxPull * 0.65F;
-
-        float t        = Math.min((totalAngle - 0.25F) / 18.0F, 1.0F);
-        float strength = movingToward ? 0.5F + t * 0.35F : 0.05F;
-        float jitterYaw   = (aimRandom.nextFloat() - 0.5F) * 0.16F;
-        float jitterPitch = (aimRandom.nextFloat() - 0.5F) * 0.10F;
-
-        float r = aimRandom.nextFloat();
-        float overshoot = r < 0.14F ? 1.04F + aimRandom.nextFloat() * 0.12F
-                        : r < 0.32F ? 0.72F + aimRandom.nextFloat() * 0.18F
-                        : 0.95F;
-
-        float rawYawPull   = MathHelper.clamp(yawD   * strength * overshoot + jitterYaw,   -yawCap,   yawCap);
-        float rawPitchPull = MathHelper.clamp(pitchD * strength * overshoot * 0.6F + jitterPitch, -pitchCap, pitchCap);
-        if (!movingToward) { rawYawPull *= 0.12F; rawPitchPull *= 0.12F; }
-
-        long curTick = mc.world.getTime();
-        if (curTick != lastAimTick) {
-            lastAimTick  = curTick;
-            tickAimYaw   = 0.0F;
-            tickAimPitch = 0.0F;
-            tickYawCap   = BASE_TICK_YAW   + aimRandom.nextFloat() * 5.0F;
-            tickPitchCap = BASE_TICK_PITCH + aimRandom.nextFloat() * 3.0F;
+        // Too far outside FOV buffer — unlock
+        if (angDist > fovSetting + 12.0f) {
+            aimLockedTarget = null;
+            aimReactionTicks = 0;
+            aimPointTicks = 0;
+            return;
         }
-        rawYawPull   = MathHelper.clamp(rawYawPull,   -(tickYawCap   - Math.abs(tickAimYaw)),   tickYawCap   - Math.abs(tickAimYaw));
-        rawPitchPull = MathHelper.clamp(rawPitchPull, -(tickPitchCap - Math.abs(tickAimPitch)), tickPitchCap - Math.abs(tickAimPitch));
 
-        float desiredYaw   = rawYawPull   + yawRemainder;
-        float desiredPitch = rawPitchPull + pitchRemainder;
-        float applyYaw     = Math.round(desiredYaw   / step) * step;
-        float applyPitch   = Math.round(desiredPitch / step) * step;
-        yawRemainder   = MathHelper.clamp(desiredYaw   - applyYaw,   -step * 3.5F, step * 3.5F);
-        pitchRemainder = MathHelper.clamp(desiredPitch - applyPitch, -step * 3.5F, step * 3.5F);
+        // Frame skip
+        if (aimRandom.nextFloat() < 0.04f) return;
 
-        tickAimYaw   += applyYaw;
-        tickAimPitch += applyPitch;
+        // Per-tick cap refresh
+        long currentTick = mc.field_1687.method_75260();
+        if (currentTick != lastAimTick) {
+            lastAimTick = currentTick;
+            tickAimYaw = 0f;
+            tickAimPitch = 0f;
+            tickYawCap = 13.0f + aimRandom.nextFloat() * 5.0f;
+            tickPitchCap = 7.5f + aimRandom.nextFloat() * 3.0f;
+        }
 
-        if (applyYaw != 0.0F || applyPitch != 0.0F) {
-            float newYaw   = player.getYaw()   + applyYaw;
-            float newPitch = MathHelper.clamp(player.getPitch() + applyPitch, -90.0F, 90.0F);
-            player.setYaw(newYaw);
-            player.setPitch(newPitch);
+        float finalYaw = 0f;
+        float finalPitch = 0f;
+
+        boolean movingToward = (rawTickYawDelta * diffYaw + rawTickPitchDelta * diffPitch) > 0;
+
+        if (angDist > aimAngle) {
+            float t = Math.min((angDist - aimAngle) / 18.0f, 1.0f);
+
+            float strength = movingToward ? 0.5f + t * 0.35f : 0.05f;
+            float gcdRem   = movingToward ? 3.5f + t * 4.0f   : 0.6f;
+            float speedMul = movingToward
+                    ? class_3532.method_15363(totalDelta * 0.9f, 0.3f, 1.0f)
+                    : 0.25f;
+
+            float jitterYaw   = (aimRandom.nextFloat() - 0.5f) * 0.16f;
+            float jitterPitch = (aimRandom.nextFloat() - 0.5f) * 0.10f;
+
+            float r = aimRandom.nextFloat();
+            float overshoot;
+            if      (r < 0.14f) overshoot = 1.04f + aimRandom.nextFloat() * 0.12f;
+            else if (r < 0.32f) overshoot = 0.72f + aimRandom.nextFloat() * 0.18f;
+            else                overshoot = 0.95f;
+
+            float rawYaw   = class_3532.method_15363(diffYaw   * strength * speedMul * overshoot + jitterYaw,   -gcdRem,  gcdRem);
+            float rawPitch = class_3532.method_15363(diffPitch * strength * speedMul * 0.6f * overshoot + jitterPitch, -gcdRem * 0.6f, gcdRem * 0.6f);
+
+            float capY = Math.max(0f, tickYawCap   - Math.abs(tickAimYaw));
+            float capP = Math.max(0f, tickPitchCap - Math.abs(tickAimPitch));
+            rawYaw   = class_3532.method_15363(rawYaw,   -capY, capY);
+            rawPitch = class_3532.method_15363(rawPitch, -capP, capP);
+
+            float accYaw   = rawYaw   + yawRemainder;
+            float accPitch = rawPitch + pitchRemainder;
+
+            finalYaw   = Math.round(accYaw   / gcd) * gcd;
+            finalPitch = Math.round(accPitch / gcd) * gcd;
+
+            yawRemainder   = class_3532.method_15363(accYaw   - finalYaw,   -gcd * 4.0f, gcd * 4.0f);
+            pitchRemainder = class_3532.method_15363(accPitch - finalPitch, -gcd * 4.0f, gcd * 4.0f);
+
+            tickAimYaw   += finalYaw;
+            tickAimPitch += finalPitch;
+        } else {
+            yawRemainder   = 0f;
+            pitchRemainder = 0f;
+        }
+
+        if (finalYaw != 0f || finalPitch != 0f) {
+            float newYaw   = player.method_36454() + finalYaw;
+            float newPitch = class_3532.method_15363(player.method_36455() + finalPitch, -90.0f, 90.0f);
+            player.method_36456(newYaw);
+            player.method_36457(newPitch);
             lastPlayerYaw   = newYaw;
             lastPlayerPitch = newPitch;
         }
     }
 
-    private Entity resolveTarget(MinecraftClient mc, ClientPlayerEntity player) {
-        if (aimLockedTarget != null) {
-            for (Entity e : mc.world.getEntities()) {
-                if (!e.getUuid().equals(aimLockedTarget)) continue;
-                if (!(e instanceof LivingEntity living)) break;
-                if (living.isAlive() && !living.isSpectator()
-                        && player.distanceTo(e) <= config.maxDistance()) {
-                    aimLostTicks = 0;
-                    return e;
-                }
-                if (++aimLostTicks >= 25) aimLockedTarget = null;
-                break;
-            }
-        }
-        Entity found = config.findTarget(mc);
-        if (found != null) {
-            aimLockedTarget  = found.getUuid();
-            aimLostTicks     = 0;
-            hasPrevTarget    = false;
-            aimReactionTicks = 1 + aimRandom.nextInt(2);
-            aimPointTicks    = 0;
-        }
-        return found;
+    private boolean canSeeTarget(class_310 mc, class_1657 player, class_1297 target) {
+        class_243 eye = player.method_33571();
+        class_243 targetPoint = new class_243(
+                target.method_23317(),
+                target.method_23318() + (double) target.method_17682() * 0.7,
+                target.method_23321());
+        var ctx = new class_3959(
+                eye,
+                targetPoint,
+                class_3959.class_3960.field_17558,
+                class_3959.class_242.field_1348,
+                player);
+        var result = mc.field_1687.method_17742(ctx);
+        var type = result.method_17783();
+        if (type == net.minecraft.class_239.class_240.field_1333) return true;
+        return result.method_17784().method_1022(targetPoint) < 1.0;
     }
 
-    private boolean canSeeTarget(MinecraftClient mc, PlayerEntity player, Entity target) {
-        Vec3d eye       = player.getEyePos();
-        double targetY  = target.getY() + target.getHeight() * 0.7;
-        Vec3d targetPos = new Vec3d(target.getX(), targetY, target.getZ());
-        BlockHitResult hit = mc.world.raycast(new RaycastContext(
-            eye, targetPos,
-            RaycastContext.ShapeType.COLLIDER,
-            RaycastContext.FluidHandling.NONE,
-            player));
-        return hit.getType() == HitResult.Type.MISS
-            || hit.getPos().distanceTo(targetPos) < 1.0;
-    }
+    private void randomizeAimPoint(class_1297 target, float dist) {
+        double halfW = Math.max(0.04, (double) target.method_17681() * 0.38);
+        aimOffsetX = class_3532.method_15350(aimRandom.nextGaussian() * halfW * 0.45, -halfW, halfW);
+        aimOffsetZ = class_3532.method_15350(aimRandom.nextGaussian() * halfW * 0.45, -halfW, halfW);
 
-    private void randomizeAimPoint(Entity target, float dist) {
-        double half = Math.max(0.04, target.getWidth() * 0.38);
-        aimOffsetX = MathHelper.clamp(aimRandom.nextGaussian() * half * 0.45, -half, half);
-        aimOffsetZ = MathHelper.clamp(aimRandom.nextGaussian() * half * 0.45, -half, half);
-        double minY = dist > 3.0F ? 0.48 : 0.56;
-        double maxY = dist > 3.0F ? 0.76 : 0.86;
-        aimOffsetY = minY + aimRandom.nextDouble() * (maxY - minY);
+        double yMin = dist > 3.0f ? 0.48 : 0.56;
+        double yMax = dist > 3.0f ? 0.76 : 0.86;
+        aimOffsetY = class_3532.method_15350(
+                yMin + aimRandom.nextDouble() * (yMax - yMin), yMin, yMax);
+
         aimPointTicks = 8 + aimRandom.nextInt(14);
-    }
-
-    private void resetState() {
-        aimLockedTarget  = null;
-        aimReactionTicks = 0;
-        aimPointTicks    = 0;
-        hasPrevTarget    = false;
-        firstFrame       = true;
-        yawRemainder     = 0.0F;
-        pitchRemainder   = 0.0F;
-        tickAimYaw       = 0.0F;
-        tickAimPitch     = 0.0F;
-        lastAimTick      = -1L;
     }
 }
