@@ -104,13 +104,15 @@ public abstract class GameRendererMixin {
       @Local MatrixStack var6
    ) {
       if (this.client.world != null && this.client.player != null) {
-         long t0 = PerfStats.begin();
+         PerfStats.rootBegin("world:total");
 
-         long t = PerfStats.begin();
+         long t;
+
+         t = PerfStats.begin();
          MatrixStack var7 = new MatrixStack();
          var7.multiply(RotationAxis.POSITIVE_X.rotationDegrees(this.camera.getPitch()));
          var7.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(this.camera.getYaw() + 180.0F));
-         PerfStats.end("world:camMatrix", t);
+         PerfStats.section("world:camMatrix", System.nanoTime() - t);
 
          t = PerfStats.begin();
          Render3D.lastProjMat.set(this.client.gameRenderer.getBasicProjectionMatrix(this.getFov(this.camera, var5, true)));
@@ -120,7 +122,7 @@ public abstract class GameRendererMixin {
          Render3D.setLastTickDelta(var5);
          Render3D.setLastCameraPos(this.camera.getCameraPos());
          Render3D.setLastCameraRotation(new Quaternionf(this.camera.getRotation()));
-         PerfStats.end("world:render3dState", t);
+         PerfStats.section("world:render3dState", System.nanoTime() - t);
 
          t = PerfStats.begin();
          Matrix4fStack var8 = RenderSystem.getModelViewStack();
@@ -133,17 +135,17 @@ public abstract class GameRendererMixin {
 
          var8.mul(this.matrices.peek().getPositionMatrix().invert(new Matrix4f()));
          this.matrices.pop();
-         PerfStats.end("world:viewTransforms", t);
+         PerfStats.section("world:viewTransforms", System.nanoTime() - t);
 
          t = PerfStats.begin();
          WorldRenderEvent var9 = new WorldRenderEvent(var6, var5);
          EventManager.callEvent(var9);
          Render3D.onWorldRender(var9);
-         PerfStats.end("world:events+render3d", t);
+         PerfStats.section("world:events+render3d", System.nanoTime() - t);
 
          var8.popMatrix();
 
-         PerfStats.end("world:total", t0);
+         PerfStats.rootEnd();
          PerfStats.tickAndMaybeDump();
       }
    }
@@ -176,35 +178,37 @@ public abstract class GameRendererMixin {
          if (!this.isLoadingScreen(this.client.currentScreen)) {
             if (this.client.getOverlay() == null) {
                if (this.shouldRenderOnTop(this.client.currentScreen)) {
-                  long t0 = PerfStats.begin();
+                  PerfStats.rootBegin("gui:total");
 
-                  long t = PerfStats.begin();
+                  long t;
+
+                  t = PerfStats.begin();
                   this.guiState.clear();
                   int var4 = (int)this.client.mouse.getScaledX(this.client.getWindow());
                   int var5 = (int)this.client.mouse.getScaledY(this.client.getWindow());
                   float var6 = var1.getTickProgress(false);
                   DrawContext var7 = new DrawContext(this.client, this.guiState, var4, var5);
-                  PerfStats.end("gui:setup", t);
+                  PerfStats.section("gui:setup", System.nanoTime() - t);
 
                   Hud var8 = Hud.getInstance();
                   if (var8 != null && var8.isState()) {
                      boolean var9 = this.client.currentScreen instanceof ChatScreen;
                      t = PerfStats.begin();
                      Drag.onDraw(var7, var4, var5, var6, var9);
-                     PerfStats.end("gui:dragOnDraw", t);
+                     PerfStats.section("gui:dragOnDraw", System.nanoTime() - t);
                   }
 
                   if (this.client.currentScreen instanceof ClickGui var11) {
                      t = PerfStats.begin();
                      var11.renderOverlay(var7, var1);
-                     PerfStats.end("gui:clickGuiOverlay", t);
+                     PerfStats.section("gui:clickGuiOverlay", System.nanoTime() - t);
                   }
 
                   t = PerfStats.begin();
                   this.guiRenderer.render(this.fogRenderer.getFogBuffer(net.minecraft.client.render.fog.FogRenderer.FogType.NONE));
-                  PerfStats.end("gui:rendererRender", t);
+                  PerfStats.section("gui:rendererRender", System.nanoTime() - t);
 
-                  PerfStats.end("gui:total", t0);
+                  PerfStats.rootEnd();
                   PerfStats.tickAndMaybeDump();
                }
             }
