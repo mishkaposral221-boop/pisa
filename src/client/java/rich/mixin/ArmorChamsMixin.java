@@ -12,40 +12,28 @@ import rich.modules.impl.render.Chams;
 import rich.util.render.clientpipeline.ClientPipelines;
 
 /**
- * Intercepts ALL armor-related render layer methods in {@link RenderLayers} and
- * substitutes the chams pipeline when we are rendering a chams target.
+ * Intercepts armor-related render layer methods in {@link RenderLayers} and
+ * substitutes the unified CHAMS pipeline when rendering a chams target.
  *
- * <h3>Why we intercept multiple methods</h3>
- * <ul>
- *   <li>{@code armorCutoutNoCull}  – used by {@code EquipmentRenderer} for all
- *       humanoid armor pieces (helmet, chestplate, leggings, boots) in most
- *       MC versions.</li>
- *   <li>{@code dyeableArmorCutoutNoCull} – used for leather armor (which can
- *       be dyed) so it gets the same through-wall treatment.</li>
- *   <li>{@code getEntityCutoutNoCull(Identifier, boolean)} – fallback; some
- *       MC 1.21.x EquipmentRenderer variants route inner-layer (leggings)
- *       through this method instead of {@code armorCutoutNoCull}.</li>
- * </ul>
+ * Methods targeted:
+ *   - armorCutoutNoCull(Identifier)  — primary armor layer (all pieces incl. leggings)
+ *   - getEntityCutoutNoCull(Identifier, boolean) — optional fallback, require=0 so it
+ *     silently skips if the method doesn't exist in this MC version.
  *
- * <h3>Why CHAMS instead of old CHAMS_ARMOR / CHAMS_ENTITY</h3>
- * The old {@code CHAMS_ARMOR} pipeline used {@code ENTITY_SNIPPET} which runs
- * the vanilla entity shader. That shader multiplies texture color by the lightmap
- * sample: {@code color *= vertexColor * texelFetch(Sampler2, UV2, 0)}.
- * For HUMANOID_LEGGINGS (inner layer / layer_2), UV2 is (0,0) at draw time,
- * so the lightmap sample is (0,0,0,1) = black → leggings appear black.
- * The new {@code CHAMS} pipeline uses custom shaders that skip the lightmap
- * entirely, rendering at full brightness regardless of UV2.
+ * NOTE: dyeableArmorCutoutNoCull was REMOVED — it does NOT exist in MC 1.21.11
+ * RenderLayers and caused a hard crash at bootstrap.
  *
- * <h3>Bootstrap guard</h3>
- * {@code RenderLayers.armorCutoutNoCull()} is called during
- * {@code TexturedRenderLayers.<clinit>} (MC bootstrap) before our Manager is
- * initialised.  We check {@code getManager() != null} before touching any
- * mod state to avoid NPEs.
+ * Why CHAMS and not CHAMS_ENTITY/CHAMS_ARMOR:
+ *   The old pipelines used ENTITY_SNIPPET which applies lightmap multiplication.
+ *   For HUMANOID_LEGGINGS, UV2=(0,0) at draw time -> lightmap sample = black ->
+ *   leggings appear black.  The new CHAMS pipeline uses custom flat shaders that
+ *   skip the lightmap, rendering at full brightness for all geometry.
  */
 @Mixin(RenderLayers.class)
 public class ArmorChamsMixin {
 
     // ── armorCutoutNoCull ─────────────────────────────────────────────────────
+    // Primary path for ALL armor pieces in MC 1.21.11
 
     @Inject(
         method = "armorCutoutNoCull",
@@ -60,28 +48,15 @@ public class ArmorChamsMixin {
         }
     }
 
-    // ── dyeableArmorCutoutNoCull (leather armor) ──────────────────────────────
-
-    @Inject(
-        method = "dyeableArmorCutoutNoCull",
-        at = @At("HEAD"),
-        cancellable = true
-    )
-    private static void rich$chamsDyeable(
-            Identifier texture,
-            CallbackInfoReturnable<RenderLayer> cir) {
-        if (rich$shouldChams()) {
-            cir.setReturnValue(ClientPipelines.CHAMS.apply(texture));
-        }
-    }
-
     // ── getEntityCutoutNoCull(Identifier, boolean) ────────────────────────────
-    // Fallback: some MC 1.21.x builds route leggings through this method.
+    // Optional fallback — some MC 1.21.x builds route leggings through this.
+    // require=0: silently skip if method doesn't exist in this MC version.
 
     @Inject(
         method = "getEntityCutoutNoCull(Lnet/minecraft/util/Identifier;Z)Lnet/minecraft/client/render/RenderLayer;",
         at = @At("HEAD"),
-        cancellable = true
+        cancellable = true,
+        require = 0
     )
     private static void rich$chamsEntityCutout(
             Identifier texture,
