@@ -69,6 +69,14 @@ public abstract class GameRendererMixin {
    private long richRenderWorldStartNs = 0L;
    @Unique
    private long richAfterGuiStartNs = 0L;
+   @Unique
+   private long richUpdateCameraStartNs = 0L;
+   @Unique
+   private long richRenderBlurStartNs = 0L;
+   @Unique
+   private long richRenderActiveTextStartNs = 0L;
+   @Unique
+   private long richRenderHandStartNs = 0L;
 
    @Shadow
    protected abstract void bobView(MatrixStack var1, float var2);
@@ -122,6 +130,81 @@ public abstract class GameRendererMixin {
       long elapsed = System.nanoTime() - startNs;
       if (elapsed > 0L) {
          this.richGameRenderKnownNs += elapsed;
+      }
+   }
+
+   @Inject(method = "updateCamera", at = @At("HEAD"), require = 0)
+   private void richProfileUpdateCameraStart(RenderTickCounter var1, CallbackInfo var2) {
+      FrameProfiler profiler = FrameProfiler.getInstance();
+      if (profiler.isEnabled()) {
+         this.richUpdateCameraStartNs = System.nanoTime();
+         profiler.begin("Minecraft/GameRenderer.updateCamera");
+      }
+   }
+
+   @Inject(method = "updateCamera", at = @At("RETURN"), require = 0)
+   private void richProfileUpdateCameraEnd(RenderTickCounter var1, CallbackInfo var2) {
+      FrameProfiler profiler = FrameProfiler.getInstance();
+      if (profiler.isEnabled()) {
+         profiler.end();
+         this.richAccountGameRendererKnown(this.richUpdateCameraStartNs);
+         this.richUpdateCameraStartNs = 0L;
+      }
+   }
+
+   @Inject(method = "renderBlur", at = @At("HEAD"), require = 0)
+   private void richProfileRenderBlurStart(CallbackInfo var1) {
+      FrameProfiler profiler = FrameProfiler.getInstance();
+      if (profiler.isEnabled()) {
+         this.richRenderBlurStartNs = System.nanoTime();
+         profiler.begin("Minecraft/GameRenderer.renderBlur");
+      }
+   }
+
+   @Inject(method = "renderBlur", at = @At("RETURN"), require = 0)
+   private void richProfileRenderBlurEnd(CallbackInfo var1) {
+      FrameProfiler profiler = FrameProfiler.getInstance();
+      if (profiler.isEnabled()) {
+         profiler.end();
+         this.richAccountGameRendererKnown(this.richRenderBlurStartNs);
+         this.richRenderBlurStartNs = 0L;
+      }
+   }
+
+   @Inject(method = "renderActiveTextAreas", at = @At("HEAD"), require = 0)
+   private void richProfileActiveTextAreasStart(CallbackInfo var1) {
+      FrameProfiler profiler = FrameProfiler.getInstance();
+      if (profiler.isEnabled()) {
+         this.richRenderActiveTextStartNs = System.nanoTime();
+         profiler.begin("Minecraft/GameRenderer.renderActiveTextAreas");
+      }
+   }
+
+   @Inject(method = "renderActiveTextAreas", at = @At("RETURN"), require = 0)
+   private void richProfileActiveTextAreasEnd(CallbackInfo var1) {
+      FrameProfiler profiler = FrameProfiler.getInstance();
+      if (profiler.isEnabled()) {
+         profiler.end();
+         this.richAccountGameRendererKnown(this.richRenderActiveTextStartNs);
+         this.richRenderActiveTextStartNs = 0L;
+      }
+   }
+
+   @Inject(method = "renderHand", at = @At("HEAD"), require = 0)
+   private void richProfileRenderHandStart(float var1, boolean var2, Matrix4f var3, CallbackInfo var4) {
+      FrameProfiler profiler = FrameProfiler.getInstance();
+      if (profiler.isEnabled()) {
+         this.richRenderHandStartNs = System.nanoTime();
+         profiler.begin("Minecraft/GameRenderer.renderHand");
+      }
+   }
+
+   @Inject(method = "renderHand", at = @At("RETURN"), require = 0)
+   private void richProfileRenderHandEnd(float var1, boolean var2, Matrix4f var3, CallbackInfo var4) {
+      FrameProfiler profiler = FrameProfiler.getInstance();
+      if (profiler.isEnabled()) {
+         profiler.end();
+         this.richRenderHandStartNs = 0L;
       }
    }
 
