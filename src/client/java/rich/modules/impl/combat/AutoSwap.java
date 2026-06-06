@@ -1,6 +1,5 @@
 package rich.modules.impl.combat;
 
-import java.util.List;
 import net.minecraft.client.gui.screen.ingame.InventoryScreen;
 import net.minecraft.network.packet.c2s.play.ClientCommandC2SPacket;
 import net.minecraft.screen.slot.SlotActionType;
@@ -24,20 +23,17 @@ import rich.modules.module.setting.implement.ButtonSetting;
 import rich.modules.module.setting.implement.TextSetting;
 import rich.util.c;
 import rich.util.inventory.InventoryUtils;
+import rich.util.profiler.FrameProfiler;
 import rich.util.render.pipeline.WheelPipeline;
 
 public class AutoSwap extends ModuleStructure {
-   // ВСЕГДА свапаем через инвентарь: ищем предмет где угодно (хотбар или глубина),
-   // реально открываем инвентарь, шлём STOP_SPRINTING, ПОЛНОСТЬЮ останавливаемся,
-   // ждём пока остановка устаканится, затем clickSlot(SWAP) и закрываем.
-   // Авто-спринт на это окно глушится через SUPPRESS_SPRINT.
    public static volatile boolean SUPPRESS_SPRINT = false;
-   // Сколько тиков стоим на месте ПЕРЕД свапом (полная остановка инерции/спринта на сервере).
    private static final int OPEN_TICKS = 4;
    private static final int CLOSE_TICKS = 1;
    private static final int PHASE_IDLE = 0;
    private static final int PHASE_OPENING = 1;
    private static final int PHASE_CLOSING = 2;
+
    public final BindSetting wheelBind = new BindSetting("Бинд колеса", "Клавиша открытия колеса");
    public final TextSetting slot1 = new TextSetting("Слот 1", "ID предмета");
    public final ButtonSetting pick1 = new ButtonSetting("Выбрать слот 1", "Открыть инвентарь")
@@ -51,6 +47,7 @@ public class AutoSwap extends ModuleStructure {
    public final ButtonSetting pick3 = new ButtonSetting("Выбрать слот 3", "Открыть инвентарь")
       .setButtonName("Выбрать")
       .setRunnable(() -> this.openPickerFor(2));
+
    private boolean wheelOpen = false;
    private boolean cursorUnlocked = false;
    private int lastHover = -1;
@@ -59,6 +56,10 @@ public class AutoSwap extends ModuleStructure {
    private int swapPhase = PHASE_IDLE;
    private int phaseTimer = 0;
    private boolean sentSprintStop = false;
+
+   // Кешируем ItemStack для колеса: раньше Identifier parse + registry lookup делались каждый DrawEvent.
+   private final String[] cachedIds = new String[]{"", "", ""};
+   private final ItemStack[] cachedStacks = new ItemStack[]{ItemStack.EMPTY, ItemStack.EMPTY, ItemStack.EMPTY};
 
    public static AutoSwap getInstance() {
       return c.a(AutoSwap.class);
@@ -89,9 +90,10 @@ public class AutoSwap extends ModuleStructure {
                   ItemStack var3 = ((Slot)var2.get(var1.getSlotId())).getStack();
                   if (!var3.isEmpty()) {
                      Identifier var4 = Registries.ITEM.getId(var3.getItem());
-                     List var5 = List.of(this.slot1, this.slot2, this.slot3);
-                     if (this.pickingForSlot < var5.size()) {
-                        ((TextSetting)var5.get(this.pickingForSlot)).setText(var4.toString());
+                     TextSetting setting = this.getSlotSetting(this.pickingForSlot);
+                     if (setting != null) {
+                        setting.setText(var4.toString());
+                        this.invalidateCachedStack(this.pickingForSlot);
                      }
 
                      var1.cancel();
@@ -130,22 +132,18 @@ public class AutoSwap extends ModuleStructure {
       }
 
       if (this.swapPhase == PHASE_OPENING) {
-         // инвентарь должен быть открыт; если юзер его закрыл - отменяем.
          if (!(mc.currentScreen instanceof InventoryScreen)) {
             this.resetSwap();
             return;
          }
 
-         // первым тиком явно говорим серверу, что мы перестали спринтовать.
          if (!this.sentSprintStop) {
             this.stopServerSprint();
             this.sentSprintStop = true;
          }
 
-         // ПОЛНАЯ остановка пока ждём перед свапом.
          this.haltMovement();
 
-         // ждём пока остановка устаканится (несколько тиков) ПЕРЕД свапом.
          if (this.phaseTimer > 0) {
             this.phaseTimer--;
             return;
@@ -179,7 +177,6 @@ public class AutoSwap extends ModuleStructure {
       }
    }
 
-   // Явно сообщаем серверу STOP_SPRINTING (этот пакет трекает AutoSprint).
    private void stopServerSprint() {
       if (mc.player != null && mc.getNetworkHandler() != null) {
          mc.player.setSprinting(false);
@@ -187,7 +184,6 @@ public class AutoSwap extends ModuleStructure {
       }
    }
 
-   // Полная остановка: сброс спринта и обнуление горизонтальной скорости (инерции).
    private void haltMovement() {
       if (mc.player != null) {
          mc.player.setSprinting(false);
@@ -211,12 +207,10 @@ public class AutoSwap extends ModuleStructure {
       }
 
       Item var2 = var1.getItem();
-      // уже в офхенде - ничего делать не нужно.
       if (mc.player.getOffHandStack().getItem() == var2) {
          return true;
       }
 
-      // ВСЕГДА через инвентарь: ищем слот где угодно (хотбар 36-44 или глубина 9-35).
       Slot var3 = InventoryUtils.findSlotAnywhere(var2);
       if (var3 != null) {
          this.pendingSwapSlot = var3.id;
@@ -234,54 +228,59 @@ public class AutoSwap extends ModuleStructure {
 
    @EventHandler
    public void onDraw(DrawEvent var1) {
-      if (mc.player != null) {
-         if (this.wheelOpen) {
-            if (mc.currentScreen == null) {
-               this.setCursorUnlocked(true);
-               int var2 = var1.getDrawContext().getScaledWindowWidth();
-               int var3 = var1.getDrawContext().getScaledWindowHeight();
-               float var4 = var2 / 2.0F;
-               float var5 = var3 / 2.0F;
-               float var6 = 92.0F;
-               float var7 = 54.0F;
-               float var8 = (float)(mc.mouse.getX() * var2 / mc.getWindow().getWidth());
-               float var9 = (float)(mc.mouse.getY() * var3 / mc.getWindow().getHeight());
-               byte var10 = 3;
-               int var11 = this.getHoverIndex(var8, var9, var4, var5, var7, var6, var10);
-               if (var11 != -1 && var11 != this.lastHover) {
-                  this.lastHover = var11;
-                  ItemStack var12 = this.getStackForIndex(var11);
-                  if (!var12.isEmpty() && this.requestSwap(var12)) {
-                     this.wheelOpen = false;
-                     this.lastHover = -1;
-                     this.setCursorUnlocked(false);
-                     return;
-                  }
-               }
+      if (mc.player == null || !this.wheelOpen || mc.currentScreen != null) {
+         return;
+      }
 
-               float var21 = 360.0F / var10;
-               float var22 = 2.0F;
-               WheelPipeline var14 = Initialization.getInstance().getManager().getRenderCore().getWheelPipeline();
-
-               for (int var15 = 0; var15 < var10; var15++) {
-                  int var16 = var15 == var11 ? -1593847505 : 1624100301;
-                  float var17 = -90.0F + var21 * var15 + var22 / 2.0F;
-                  float var18 = var17 + var21 - var22;
-                  var14.drawSegment(var4, var5, var7, var6, (float)Math.toRadians(var17), (float)Math.toRadians(var18), var16);
-               }
-
-               for (int var23 = 0; var23 < var10; var23++) {
-                  ItemStack var24 = this.getStackForIndex(var23);
-                  if (!var24.isEmpty()) {
-                     float var25 = (float)Math.toRadians(-90.0F + var21 * var23 + var21 / 2.0F);
-                     float var26 = (var7 + var6) / 2.0F;
-                     float var19 = var4 + (float)Math.cos(var25) * var26;
-                     float var20 = var5 + (float)Math.sin(var25) * var26;
-                     var1.getDrawContext().drawItem(var24, (int)(var19 - 8.0F), (int)(var20 - 8.0F));
-                  }
-               }
+      FrameProfiler profiler = FrameProfiler.getInstance();
+      boolean prof = profiler.isEnabled();
+      if (prof) profiler.begin("AutoSwap/wheelDraw");
+      try {
+         this.setCursorUnlocked(true);
+         int var2 = var1.getDrawContext().getScaledWindowWidth();
+         int var3 = var1.getDrawContext().getScaledWindowHeight();
+         float var4 = var2 / 2.0F;
+         float var5 = var3 / 2.0F;
+         float var6 = 92.0F;
+         float var7 = 54.0F;
+         float var8 = (float)(mc.mouse.getX() * var2 / mc.getWindow().getWidth());
+         float var9 = (float)(mc.mouse.getY() * var3 / mc.getWindow().getHeight());
+         byte var10 = 3;
+         int var11 = this.getHoverIndex(var8, var9, var4, var5, var7, var6, var10);
+         if (var11 != -1 && var11 != this.lastHover) {
+            this.lastHover = var11;
+            ItemStack var12 = this.getStackForIndex(var11);
+            if (!var12.isEmpty() && this.requestSwap(var12)) {
+               this.wheelOpen = false;
+               this.lastHover = -1;
+               this.setCursorUnlocked(false);
+               return;
             }
          }
+
+         float var21 = 360.0F / var10;
+         float var22 = 2.0F;
+         WheelPipeline var14 = Initialization.getInstance().getManager().getRenderCore().getWheelPipeline();
+
+         for (int var15 = 0; var15 < var10; var15++) {
+            int var16 = var15 == var11 ? -1593847505 : 1624100301;
+            float var17 = -90.0F + var21 * var15 + var22 / 2.0F;
+            float var18 = var17 + var21 - var22;
+            var14.drawSegment(var4, var5, var7, var6, (float)Math.toRadians(var17), (float)Math.toRadians(var18), var16);
+         }
+
+         for (int var23 = 0; var23 < var10; var23++) {
+            ItemStack var24 = this.getStackForIndex(var23);
+            if (!var24.isEmpty()) {
+               float var25 = (float)Math.toRadians(-90.0F + var21 * var23 + var21 / 2.0F);
+               float var26 = (var7 + var6) / 2.0F;
+               float var19 = var4 + (float)Math.cos(var25) * var26;
+               float var20 = var5 + (float)Math.sin(var25) * var26;
+               var1.getDrawContext().drawItem(var24, (int)(var19 - 8.0F), (int)(var20 - 8.0F));
+            }
+         }
+      } finally {
+         if (prof) profiler.end();
       }
    }
 
@@ -312,24 +311,47 @@ public class AutoSwap extends ModuleStructure {
       this.setCursorUnlocked(false);
    }
 
-   private ItemStack getStackForIndex(int var1) {
-      List var2 = List.of(this.slot1, this.slot2, this.slot3);
-      if (var1 >= 0 && var1 < var2.size()) {
-         String var3 = ((TextSetting)var2.get(var1)).getText();
-         if (var3 != null && !var3.isBlank()) {
-            Identifier var4 = Identifier.tryParse(var3);
-            if (var4 == null) {
-               return ItemStack.EMPTY;
-            }
+   private TextSetting getSlotSetting(int index) {
+      if (index == 0) return this.slot1;
+      if (index == 1) return this.slot2;
+      if (index == 2) return this.slot3;
+      return null;
+   }
 
-            Item var5 = (Item)Registries.ITEM.get(var4);
-            return var5 != null && var5 != Items.AIR ? var5.getDefaultStack() : ItemStack.EMPTY;
-         } else {
-            return ItemStack.EMPTY;
-         }
-      } else {
+   private void invalidateCachedStack(int index) {
+      if (index >= 0 && index < this.cachedIds.length) {
+         this.cachedIds[index] = "";
+         this.cachedStacks[index] = ItemStack.EMPTY;
+      }
+   }
+
+   private ItemStack getStackForIndex(int var1) {
+      TextSetting setting = this.getSlotSetting(var1);
+      if (setting == null) {
          return ItemStack.EMPTY;
       }
+
+      String var3 = setting.getText();
+      if (var3 == null || var3.isBlank()) {
+         this.cachedIds[var1] = var3 == null ? "" : var3;
+         this.cachedStacks[var1] = ItemStack.EMPTY;
+         return ItemStack.EMPTY;
+      }
+
+      if (var3.equals(this.cachedIds[var1])) {
+         return this.cachedStacks[var1];
+      }
+
+      this.cachedIds[var1] = var3;
+      Identifier var4 = Identifier.tryParse(var3);
+      if (var4 == null) {
+         this.cachedStacks[var1] = ItemStack.EMPTY;
+         return ItemStack.EMPTY;
+      }
+
+      Item var5 = (Item)Registries.ITEM.get(var4);
+      this.cachedStacks[var1] = var5 != null && var5 != Items.AIR ? var5.getDefaultStack() : ItemStack.EMPTY;
+      return this.cachedStacks[var1];
    }
 
    private int getHoverIndex(float var1, float var2, float var3, float var4, float var5, float var6, int var7) {
