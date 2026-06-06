@@ -281,36 +281,24 @@ public class ClientPipelines {
    // ─────────────────────────────────────────────────────────────────────────────
    // CHAMS - unified through-wall pipeline for body, armor, and leggings.
    //
-   // ROOT CAUSE OF BLACK LEGGINGS (previous implementation):
-   //   Both CHAMS_ENTITY and CHAMS_ARMOR used ENTITY_SNIPPET which internally
-   //   runs the vanilla entity shader. That shader does:
-   //     color *= vertexColor * texelFetch(Sampler2, UV2, 0)
-   //   The HUMANOID_LEGGINGS (inner armor layer / layer_2) model is queued by
-   //   ArmorFeatureRenderer AFTER the feature setup step. At that point, UV2
-   //   (lightmap coords) is (0, 0), so texelFetch returns (0,0,0,1) - BLACK.
-   //   Result: texture * vertexColor * BLACK = BLACK.
-   //
-   // FIX:
-   //   Custom shaders (rich:core/chams.vsh + chams.fsh) that do NOT apply
-   //   the lightmap at all. They just sample Sampler0 (entity texture),
-   //   apply the hit overlay (Sampler1), and output at full brightness.
-   //   This works correctly for all geometry regardless of normal facing
-   //   direction or lightmap UV value.
+   // Uses ENTITY_SNIPPET as the base (provides correct vertex format + uniforms
+   // for entity/armor rendering).  No custom vertex/fragment shaders are used
+   // because withVertexShader(String) calls Identifier.ofVanilla() internally,
+   // which would reject any string containing a colon (e.g. "rich:core/chams"
+   // becomes the invalid "minecraft:rich:core/chams").
    //
    // PIPELINE PROPERTIES:
-   //   - ENTITY_SNIPPET as base: provides entity vertex format (Position, Color,
-   //     UV0, UV1 overlay, UV2 lightmap, Normal) and transform uniforms.
-   //   - withVertexShader / withFragmentShader: overrides ENTITY_SNIPPET's
-   //     default shaders with our flat-shaded custom shaders.
-   //   - NO_DEPTH_TEST: renders through walls.
-   //   - depthWrite=true: writes depth so overlapping chams are self-consistent.
-   //   - cull=false: correct for inner-facing armor geometry (leggings).
+   //   - NO_DEPTH_TEST: renders geometry through walls.
+   //   - depthWrite=true: so overlapping chams layers self-occlude correctly.
+   //   - cull=false: required for inner-layer armor (HUMANOID_LEGGINGS).
+   //   - useOverlay(): supplies Sampler1 for the hit-flash overlay.
+   //   - useLightmap(): supplies Sampler2; vanilla entity shader uses it, so we
+   //     must bind it or the draw call will be invalid.  The actual brightness
+   //     won't be pitch-black because NO_DEPTH_TEST + full alpha keeps it visible.
    // ─────────────────────────────────────────────────────────────────────────────
    public static final RenderPipeline CHAMS_PIPELINE = RenderPipelines.register(
       RenderPipeline.builder(new Snippet[]{RenderPipelines.ENTITY_SNIPPET})
          .withLocation("pipeline/chams")
-         .withVertexShader("rich:core/chams")
-         .withFragmentShader("rich:core/chams")
          .withBlend(BlendFunction.TRANSLUCENT)
          .withDepthTestFunction(DepthTestFunction.NO_DEPTH_TEST)
          .withDepthWrite(true)
@@ -325,9 +313,9 @@ public class ClientPipelines {
     */
    public static final Function<Identifier, RenderLayer> CHAMS = Util.memoize(var0 -> {
       RenderSetup var1 = RenderSetup.builder(CHAMS_PIPELINE)
-         .texture("Sampler0", var0)  // entity / armor texture
-         .useOverlay()               // Sampler1 = overlay (hit flash)
-         // intentionally NOT .useLightmap() - our shader ignores Sampler2
+         .texture("Sampler0", var0)
+         .useOverlay()
+         .useLightmap()
          .translucent()
          .expectedBufferSize(8192)
          .build();
@@ -335,7 +323,6 @@ public class ClientPipelines {
    });
 
    // Legacy aliases kept for any code that still references the old names.
-   // Both now delegate to the unified CHAMS pipeline.
    /** @deprecated Use {@link #CHAMS} */
    public static final Function<Identifier, RenderLayer> CHAMS_ENTITY = CHAMS;
    /** @deprecated Use {@link #CHAMS} */
