@@ -17,7 +17,6 @@ import rich.events.impl.WorldRenderEvent;
 import rich.modules.module.ModuleStructure;
 import rich.modules.module.category.ModuleCategory;
 import rich.modules.module.setting.implement.BooleanSetting;
-import rich.modules.module.setting.implement.ModeSetting;
 import rich.modules.module.setting.implement.SliderSettings;
 import rich.util.c;
 
@@ -26,43 +25,30 @@ public class AimAssist extends ModuleStructure {
     private final AimEngine engine = new AimEngine(this);
     private final Random random = new Random();
 
-    // --- Settings ---
-    public SliderSettings fov = new SliderSettings("FOV", "Угол обзора для аима")
+    public SliderSettings fov = new SliderSettings("FOV", "Field of view for aiming")
             .setValue(45.0F).range(10.0F, 180.0F);
-    public SliderSettings maxDistance = new SliderSettings("Distance", "Макс. дистанция до цели")
+    public SliderSettings maxDistance = new SliderSettings("Distance", "Maximum distance to target")
             .setValue(3.0F).range(1.0F, 6.0F);
-    public SliderSettings smoothness = new SliderSettings("Smoothness", "Сила плавности (0=медл, 1=быстр)")
+    public SliderSettings smoothness = new SliderSettings("Smoothness", "Smoothing factor for aim")
             .setValue(0.35F).range(0.05F, 1.0F);
-    public BooleanSetting onlyWeapon = new BooleanSetting("OnlyWeapon", "Только с оружием")
+    public SliderSettings throwStrength = new SliderSettings("Throw", "Throw strength for projectiles")
+            .setValue(0.5F).range(0.1F, 1.0F);
+    public BooleanSetting onlyWeapon = new BooleanSetting("OnlyWeapon", "Only aim when holding weapon")
             .setValue(true);
-    public BooleanSetting onlyOnMove = new BooleanSetting("OnlyOnMouseMove",
-            "Ассист только при движении мыши (антидетект)")
-            .setValue(true);
-    // Профиль ротации: SLOTH (легит), SMOOTH (средний), FUNTIME, HVH
-    public ModeSetting profile = new ModeSetting("Profile", "Профиль ротации",
-            "SMOOTH", "SLOTH", "SMOOTH", "FUNTIME", "HVH");
 
     public AimAssist() {
-        super("AimAssist", "Помощь прицеливания", ModuleCategory.COMBAT);
-        this.settings(fov, maxDistance, smoothness, onlyWeapon, onlyOnMove, profile);
+        super("AimAssist", "Assist aim towards targets", ModuleCategory.VISUALS);
+        this.settings(fov, maxDistance, smoothness, throwStrength, onlyWeapon);
     }
 
-    public static AimAssist getInstance() { return c.a(AimAssist.class); }
+    public static AimAssist getInstance() {
+        return (AimAssist) c.a(AimAssist.class);
+    }
 
-    // Геттеры для AimEngine
     public float fov()          { return fov.getValue(); }
     public float maxDistance()  { return maxDistance.getValue(); }
     public float smoothness()   { return smoothness.getValue(); }
     public boolean onlyWeapon() { return onlyWeapon.isValue(); }
-    public boolean onlyOnMove() { return onlyOnMove.isValue(); }
-    public AimEngine.Profile getProfile() {
-        return switch (profile.getValue()) {
-            case "SLOTH"   -> AimEngine.Profile.SLOTH;
-            case "FUNTIME" -> AimEngine.Profile.FUNTIME;
-            case "HVH"     -> AimEngine.Profile.HVH;
-            default        -> AimEngine.Profile.SMOOTH;
-        };
-    }
     public AimEngine getEngine() { return engine; }
 
     @EventHandler
@@ -70,7 +56,7 @@ public class AimAssist extends ModuleStructure {
         engine.onFrame(event.getPartialTicks());
     }
 
-    /** Находит лучшую цель в FOV. Приоритет — наименьший угол, дистанция как тай-брейкер. */
+    /** Finds best target within FOV. Priority: smallest angle, distance as tiebreaker. */
     public Entity findTarget(MinecraftClient client) {
         if (client.player == null || client.world == null) return null;
         ClientPlayerEntity player = client.player;
@@ -78,19 +64,23 @@ public class AimAssist extends ModuleStructure {
 
         Entity best = null;
         double bestScore = Double.MAX_VALUE;
+
         for (Entity entity : client.world.getEntities()) {
-            if (entity == player || !(entity instanceof PlayerEntity tp)) continue;
-            if (!tp.isAlive() || tp.isSpectator()) continue;
-            double dist = player.distanceTo(entity);
-            if (dist > maxDistance() || dist < 0.5) continue;
+            if (!(entity instanceof PlayerEntity targetPlayer)) continue;
+            if (!targetPlayer.isAlive() || targetPlayer.isSpectator()) continue;
+
+            float dist = player.distanceTo(entity);
+            if (dist > maxDistance() || dist < 0.5F) continue;
 
             double[] diff = getAngleDiff(player, entity.getEyePos());
-            double angleDist = Math.sqrt(diff[0]*diff[0] + diff[1]*diff[1]);
+            double angleDist = Math.sqrt(diff[0] * diff[0] + diff[1] * diff[1]);
             if (angleDist > fov()) continue;
 
-            // Наименьший угол — лучшая цель (не ближайшая игрок за спиной)
             double score = angleDist + dist * 0.1;
-            if (score < bestScore) { bestScore = score; best = entity; }
+            if (score < bestScore) {
+                bestScore = score;
+                best = entity;
+            }
         }
         return best;
     }
@@ -99,27 +89,28 @@ public class AimAssist extends ModuleStructure {
         return getAngleDiffWithYawPitch(player, target, player.getYaw(), player.getPitch());
     }
 
-    public double[] getAngleDiffWithYawPitch(PlayerEntity player, Vec3d target,
-                                              float yaw, float pitch) {
-        Vec3d eye = player.getEyePos();
-        Vec3d d   = target.subtract(eye);
-        double hd = Math.sqrt(d.x*d.x + d.z*d.z);
-        double tYaw   = Math.toDegrees(Math.atan2(-d.x, d.z));
-        double tPitch = Math.toDegrees(-Math.atan2(d.y, hd));
-        return new double[]{
-            MathHelper.wrapDegrees(tYaw   - yaw),
-            MathHelper.wrapDegrees(tPitch - pitch)
-        };
+    public double[] getAngleDiffWithYawPitch(PlayerEntity player, Vec3d target, float yaw, float pitch) {
+        Vec3d eye      = player.getEyePos();
+        Vec3d toTarget = target.subtract(eye);
+        double horizDist  = Math.sqrt(toTarget.x * toTarget.x + toTarget.z * toTarget.z);
+        double targetYaw   = Math.toDegrees(Math.atan2(-toTarget.x, toTarget.z));
+        double targetPitch = Math.toDegrees(-Math.atan2(toTarget.y, horizDist));
+        double yawDiff   = MathHelper.wrapDegrees(targetYaw   - yaw);
+        double pitchDiff = MathHelper.wrapDegrees(targetPitch - pitch);
+        return new double[]{ yawDiff, pitchDiff };
     }
 
-    public Vec3d getNearestPoint(Entity entity, PlayerEntity player) {
-        Box box = entity.getBoundingBox();
-        Vec3d eye = player.getEyePos();
-        float yR = player.getYaw()   * ((float)Math.PI/180);
-        float pR = player.getPitch() * ((float)Math.PI/180);
-        double lx = -Math.sin(yR)*Math.cos(pR), ly = -Math.sin(pR), lz = Math.cos(yR)*Math.cos(pR);
-        double dist = eye.distanceTo(box.getCenter());
-        Vec3d ct = eye.add(new Vec3d(lx,ly,lz).multiply(dist));
+    /** Returns point on target's bounding box closest to the player's crosshair. */
+    public Vec3d getNearestPoint(Entity target, PlayerEntity player) {
+        Box   box      = target.getBoundingBox();
+        Vec3d eye      = player.getEyePos();
+        float yawRad   = player.getYaw()   * ((float) Math.PI / 180.0F);
+        float pitchRad = player.getPitch() * ((float) Math.PI / 180.0F);
+        double lookX   = -Math.sin(yawRad) * Math.cos(pitchRad);
+        double lookY   = -Math.sin(pitchRad);
+        double lookZ   =  Math.cos(yawRad) * Math.cos(pitchRad);
+        double dist    = eye.distanceTo(box.getCenter());
+        Vec3d ct = eye.add(new Vec3d(lookX, lookY, lookZ).multiply(dist));
         return new Vec3d(
             MathHelper.clamp(ct.x, box.minX, box.maxX),
             MathHelper.clamp(ct.y, box.minY, box.maxY),
