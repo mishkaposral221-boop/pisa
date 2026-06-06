@@ -16,7 +16,6 @@ import net.minecraft.client.render.GameRenderer;
 import net.minecraft.client.render.fog.FogRenderer;
 import net.minecraft.util.math.RotationAxis;
 import net.minecraft.client.render.RenderTickCounter;
-import net.minecraft.client.render.fog.FogRenderer.FogType;
 import org.joml.Matrix4f;
 import org.joml.Matrix4fStack;
 import org.joml.Quaternionf;
@@ -38,6 +37,7 @@ import rich.modules.impl.render.Hud;
 import rich.modules.impl.render.NoNausea;
 import rich.modules.impl.render.NoRender;
 import rich.screens.clickgui.ClickGui;
+import rich.util.profiler.FrameProfiler;
 import rich.util.render.Render3D;
 
 @Mixin(GameRenderer.class)
@@ -78,12 +78,39 @@ public abstract class GameRendererMixin {
       }
    }
 
+   @Inject(method = "render", at = @At("HEAD"), require = 0)
+   private void richProfileGameRendererStart(RenderTickCounter var1, boolean var2, CallbackInfo var3) {
+      FrameProfiler.getInstance().begin("Minecraft/GameRenderer.render");
+   }
+
+   @Inject(method = "render", at = @At("RETURN"), require = 0)
+   private void richProfileGameRendererEnd(RenderTickCounter var1, boolean var2, CallbackInfo var3) {
+      FrameProfiler.getInstance().end();
+   }
+
+   @Inject(method = "renderWorld", at = @At("HEAD"), require = 0)
+   private void richProfileRenderWorldStart(RenderTickCounter var1, CallbackInfo var2) {
+      FrameProfiler.getInstance().begin("Minecraft/GameRenderer.renderWorld");
+   }
+
+   @Inject(method = "renderWorld", at = @At("RETURN"), require = 0)
+   private void richProfileRenderWorldEnd(RenderTickCounter var1, CallbackInfo var2) {
+      FrameProfiler.getInstance().end();
+   }
+
    @ModifyReturnValue(method = "getFov", at = @At("RETURN"))
    private float hookGetFovReturn(float var1) {
-      FovEvent var2 = new FovEvent();
-      var2.setFov((int)var1);
-      EventManager.callEvent(var2);
-      return var2.isCancelled() ? var2.getFov() : var1;
+      FrameProfiler profiler = FrameProfiler.getInstance();
+      boolean prof = profiler.isEnabled();
+      if (prof) profiler.begin("Rich/GameRenderer/getFovHook");
+      try {
+         FovEvent var2 = new FovEvent();
+         var2.setFov((int)var1);
+         EventManager.callEvent(var2);
+         return var2.isCancelled() ? var2.getFov() : var1;
+      } finally {
+         if (prof) profiler.end();
+      }
    }
 
    @Inject(method = "updateCrosshairTarget", at = @At("HEAD"), cancellable = true)
@@ -102,31 +129,48 @@ public abstract class GameRendererMixin {
       @Local(ordinal = 0) float var5,
       @Local MatrixStack var6
    ) {
-      if (this.client.world != null && this.client.player != null) {
-         MatrixStack var7 = new MatrixStack();
-         var7.multiply(RotationAxis.POSITIVE_X.rotationDegrees(this.camera.getPitch()));
-         var7.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(this.camera.getYaw() + 180.0F));
-         Render3D.lastProjMat.set(this.client.gameRenderer.getBasicProjectionMatrix(this.getFov(this.camera, var5, true)));
-         Render3D.lastModMat.set(RenderSystem.getModelViewMatrix());
-         Render3D.lastWorldSpaceMatrix.set(var7.peek().getPositionMatrix());
-         Render3D.setLastWorldSpaceEntry(var6.peek());
-         Render3D.setLastTickDelta(var5);
-         Render3D.setLastCameraPos(this.camera.getCameraPos());
-         Render3D.setLastCameraRotation(new Quaternionf(this.camera.getRotation()));
-         Matrix4fStack var8 = RenderSystem.getModelViewStack();
-         var8.pushMatrix().mul(var4);
-         this.matrices.push();
-         this.tiltViewWhenHurt(this.matrices, this.camera.getLastTickProgress());
-         if ((Boolean)this.client.options.getBobView().getValue()) {
-            this.bobView(this.matrices, this.camera.getLastTickProgress());
-         }
+      FrameProfiler profiler = FrameProfiler.getInstance();
+      boolean prof = profiler.isEnabled();
+      if (prof) profiler.begin("Rich/GameRenderer/worldRenderHook");
+      try {
+         if (this.client.world != null && this.client.player != null) {
+            MatrixStack var7 = new MatrixStack();
+            var7.multiply(RotationAxis.POSITIVE_X.rotationDegrees(this.camera.getPitch()));
+            var7.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(this.camera.getYaw() + 180.0F));
+            Render3D.lastProjMat.set(this.client.gameRenderer.getBasicProjectionMatrix(this.getFov(this.camera, var5, true)));
+            Render3D.lastModMat.set(RenderSystem.getModelViewMatrix());
+            Render3D.lastWorldSpaceMatrix.set(var7.peek().getPositionMatrix());
+            Render3D.setLastWorldSpaceEntry(var6.peek());
+            Render3D.setLastTickDelta(var5);
+            Render3D.setLastCameraPos(this.camera.getCameraPos());
+            Render3D.setLastCameraRotation(new Quaternionf(this.camera.getRotation()));
+            Matrix4fStack var8 = RenderSystem.getModelViewStack();
+            var8.pushMatrix().mul(var4);
+            this.matrices.push();
+            this.tiltViewWhenHurt(this.matrices, this.camera.getLastTickProgress());
+            if ((Boolean)this.client.options.getBobView().getValue()) {
+               this.bobView(this.matrices, this.camera.getLastTickProgress());
+            }
 
-         var8.mul(this.matrices.peek().getPositionMatrix().invert(new Matrix4f()));
-         this.matrices.pop();
-         WorldRenderEvent var9 = new WorldRenderEvent(var6, var5);
-         EventManager.callEvent(var9);
-         Render3D.onWorldRender(var9);
-         var8.popMatrix();
+            var8.mul(this.matrices.peek().getPositionMatrix().invert(new Matrix4f()));
+            this.matrices.pop();
+            WorldRenderEvent var9 = new WorldRenderEvent(var6, var5);
+            if (prof) profiler.begin("Rich/Event/WorldRenderEvent");
+            try {
+               EventManager.callEvent(var9);
+            } finally {
+               if (prof) profiler.end();
+            }
+            if (prof) profiler.begin("Rich/Render3D.onWorldRender");
+            try {
+               Render3D.onWorldRender(var9);
+            } finally {
+               if (prof) profiler.end();
+            }
+            var8.popMatrix();
+         }
+      } finally {
+         if (prof) profiler.end();
       }
    }
 
@@ -154,29 +198,51 @@ public abstract class GameRendererMixin {
       at = @At(value = "INVOKE", target = "Lnet/minecraft/client/gui/render/GuiRenderer;render(Lcom/mojang/blaze3d/buffers/GpuBufferSlice;)V", shift = Shift.AFTER)
    )
    private void afterGuiRender(RenderTickCounter var1, boolean var2, CallbackInfo var3) {
-      if (this.client.world != null && this.client.player != null) {
-         if (!this.isLoadingScreen(this.client.currentScreen)) {
-            if (this.client.getOverlay() == null) {
-               if (this.shouldRenderOnTop(this.client.currentScreen)) {
-                  this.guiState.clear();
-                  int var4 = (int)this.client.mouse.getScaledX(this.client.getWindow());
-                  int var5 = (int)this.client.mouse.getScaledY(this.client.getWindow());
-                  float var6 = var1.getTickProgress(false);
-                  DrawContext var7 = new DrawContext(this.client, this.guiState, var4, var5);
-                  Hud var8 = Hud.getInstance();
-                  if (var8 != null && var8.isState()) {
-                     boolean var9 = this.client.currentScreen instanceof ChatScreen;
-                     Drag.onDraw(var7, var4, var5, var6, var9);
-                  }
+      FrameProfiler profiler = FrameProfiler.getInstance();
+      boolean prof = profiler.isEnabled();
+      if (prof) profiler.begin("Rich/GameRenderer/afterGuiRender");
+      try {
+         if (this.client.world != null && this.client.player != null) {
+            if (!this.isLoadingScreen(this.client.currentScreen)) {
+               if (this.client.getOverlay() == null) {
+                  if (this.shouldRenderOnTop(this.client.currentScreen)) {
+                     this.guiState.clear();
+                     int var4 = (int)this.client.mouse.getScaledX(this.client.getWindow());
+                     int var5 = (int)this.client.mouse.getScaledY(this.client.getWindow());
+                     float var6 = var1.getTickProgress(false);
+                     DrawContext var7 = new DrawContext(this.client, this.guiState, var4, var5);
+                     Hud var8 = Hud.getInstance();
+                     if (var8 != null && var8.isState()) {
+                        boolean var9 = this.client.currentScreen instanceof ChatScreen;
+                        if (prof) profiler.begin("Rich/Drag.onDraw");
+                        try {
+                           Drag.onDraw(var7, var4, var5, var6, var9);
+                        } finally {
+                           if (prof) profiler.end();
+                        }
+                     }
 
-                  if (this.client.currentScreen instanceof ClickGui var11) {
-                     var11.renderOverlay(var7, var1);
-                  }
+                     if (this.client.currentScreen instanceof ClickGui var11) {
+                        if (prof) profiler.begin("Rich/ClickGui.renderOverlay");
+                        try {
+                           var11.renderOverlay(var7, var1);
+                        } finally {
+                           if (prof) profiler.end();
+                        }
+                     }
 
-                  this.guiRenderer.render(this.fogRenderer.getFogBuffer(net.minecraft.client.render.fog.FogRenderer.FogType.NONE));
+                     if (prof) profiler.begin("Minecraft/GuiRenderer.render(afterRich)");
+                     try {
+                        this.guiRenderer.render(this.fogRenderer.getFogBuffer(net.minecraft.client.render.fog.FogRenderer.FogType.NONE));
+                     } finally {
+                        if (prof) profiler.end();
+                     }
+                  }
                }
             }
          }
+      } finally {
+         if (prof) profiler.end();
       }
    }
 
