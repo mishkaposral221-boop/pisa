@@ -277,6 +277,9 @@ public class ClientPipelines {
       RenderSetup var1 = RenderSetup.builder(GUI_ARROW_BLEND_PIPELINE).texture("Sampler0", var0).translucent().expectedBufferSize(256).build();
       return RenderLayer.of("gui_arrow_blend", var1);
    });
+
+   // ── Body chams (skin through walls) ─────────────────────────────────────────
+   // withCull(true): body geometry always faces outward, culling is fine.
    public static final RenderPipeline CHAMS_ENTITY_PIPELINE = RenderPipelines.register(
       RenderPipeline.builder(new Snippet[]{RenderPipelines.ENTITY_SNIPPET})
          .withLocation("pipeline/chams_entity")
@@ -289,5 +292,24 @@ public class ClientPipelines {
    public static final Function<Identifier, RenderLayer> CHAMS_ENTITY = Util.memoize(var0 -> {
       RenderSetup var1 = RenderSetup.builder(CHAMS_ENTITY_PIPELINE).texture("Sampler0", var0).useLightmap().useOverlay().translucent().expectedBufferSize(8192).build();
       return RenderLayer.of("chams_entity", var1);
+   });
+
+   // ── Armor chams (armor through walls) ───────────────────────────────────────
+   // withCull(false): REQUIRED for leggings (HUMANOID_LEGGINGS / layer_2).
+   // The inner leg geometry has back-facing polygons that get culled with
+   // withCull(true), causing leggings to appear solid black.
+   // Using withCull(false) ensures all armor faces are rendered correctly.
+   public static final RenderPipeline CHAMS_ARMOR_PIPELINE = RenderPipelines.register(
+      RenderPipeline.builder(new Snippet[]{RenderPipelines.ENTITY_SNIPPET})
+         .withLocation("pipeline/chams_armor")
+         .withBlend(BlendFunction.TRANSLUCENT)
+         .withDepthTestFunction(DepthTestFunction.NO_DEPTH_TEST)
+         .withDepthWrite(true)
+         .withCull(false)
+         .build()
+   );
+   public static final Function<Identifier, RenderLayer> CHAMS_ARMOR = Util.memoize(var0 -> {
+      RenderSetup var1 = RenderSetup.builder(CHAMS_ARMOR_PIPELINE).texture("Sampler0", var0).useLightmap().useOverlay().translucent().expectedBufferSize(8192).build();
+      return RenderLayer.of("chams_armor", var1);
    });
 }
