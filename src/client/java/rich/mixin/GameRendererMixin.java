@@ -61,6 +61,14 @@ public abstract class GameRendererMixin {
    private final MatrixStack matrices = new MatrixStack();
    @Unique
    private boolean richWorldPhaseOpen = false;
+   @Unique
+   private long richGameRenderStartNs = 0L;
+   @Unique
+   private long richGameRenderKnownNs = 0L;
+   @Unique
+   private long richRenderWorldStartNs = 0L;
+   @Unique
+   private long richAfterGuiStartNs = 0L;
 
    @Shadow
    protected abstract void bobView(MatrixStack var1, float var2);
@@ -82,18 +90,46 @@ public abstract class GameRendererMixin {
 
    @Inject(method = "render", at = @At("HEAD"), require = 0)
    private void richProfileGameRendererStart(RenderTickCounter var1, boolean var2, CallbackInfo var3) {
-      FrameProfiler.getInstance().begin("Minecraft/GameRenderer.render");
+      FrameProfiler profiler = FrameProfiler.getInstance();
+      if (profiler.isEnabled()) {
+         this.richGameRenderStartNs = System.nanoTime();
+         this.richGameRenderKnownNs = 0L;
+      }
+      profiler.begin("Minecraft/GameRenderer.render");
    }
 
    @Inject(method = "render", at = @At("RETURN"), require = 0)
    private void richProfileGameRendererEnd(RenderTickCounter var1, boolean var2, CallbackInfo var3) {
-      FrameProfiler.getInstance().end();
+      FrameProfiler profiler = FrameProfiler.getInstance();
+      if (profiler.isEnabled() && this.richGameRenderStartNs > 0L) {
+         long total = System.nanoTime() - this.richGameRenderStartNs;
+         long known = Math.max(0L, this.richGameRenderKnownNs);
+         if (total > 0L) {
+            profiler.record("Minecraft/GameRenderer.render/known", Math.min(total, known));
+            profiler.record("Minecraft/GameRenderer.render/unaccounted", Math.max(0L, total - known));
+         }
+         this.richGameRenderStartNs = 0L;
+         this.richGameRenderKnownNs = 0L;
+      }
+      profiler.end();
+   }
+
+   @Unique
+   private void richAccountGameRendererKnown(long startNs) {
+      if (startNs <= 0L || this.richGameRenderStartNs <= 0L) {
+         return;
+      }
+      long elapsed = System.nanoTime() - startNs;
+      if (elapsed > 0L) {
+         this.richGameRenderKnownNs += elapsed;
+      }
    }
 
    @Inject(method = "renderWorld", at = @At("HEAD"), require = 0)
    private void richProfileRenderWorldStart(RenderTickCounter var1, CallbackInfo var2) {
       FrameProfiler profiler = FrameProfiler.getInstance();
       if (profiler.isEnabled()) {
+         this.richRenderWorldStartNs = System.nanoTime();
          profiler.begin("Minecraft/GameRenderer.renderWorld");
          this.richBeginWorldPhase("Minecraft/renderWorld/start");
       }
@@ -105,6 +141,8 @@ public abstract class GameRendererMixin {
       if (profiler.isEnabled()) {
          this.richEndWorldPhase();
          profiler.end();
+         this.richAccountGameRendererKnown(this.richRenderWorldStartNs);
+         this.richRenderWorldStartNs = 0L;
       }
    }
 
@@ -299,7 +337,10 @@ public abstract class GameRendererMixin {
    private void afterGuiRender(RenderTickCounter var1, boolean var2, CallbackInfo var3) {
       FrameProfiler profiler = FrameProfiler.getInstance();
       boolean prof = profiler.isEnabled();
-      if (prof) profiler.begin("Rich/GameRenderer/afterGuiRender");
+      if (prof) {
+         this.richAfterGuiStartNs = System.nanoTime();
+         profiler.begin("Rich/GameRenderer/afterGuiRender");
+      }
       try {
          if (this.client.world != null && this.client.player != null) {
             if (!this.isLoadingScreen(this.client.currentScreen)) {
@@ -341,7 +382,11 @@ public abstract class GameRendererMixin {
             }
          }
       } finally {
-         if (prof) profiler.end();
+         if (prof) {
+            profiler.end();
+            this.richAccountGameRendererKnown(this.richAfterGuiStartNs);
+            this.richAfterGuiStartNs = 0L;
+         }
       }
    }
 
