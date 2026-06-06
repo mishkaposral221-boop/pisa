@@ -1,6 +1,5 @@
 package rich.screens.clickgui.impl.module.render;
 
-import java.util.ArrayList;
 import java.util.List;
 import net.minecraft.client.gui.DrawContext;
 import rich.modules.module.ModuleStructure;
@@ -60,8 +59,8 @@ public class SettingsPanelRenderer {
 
       int var15 = (int)(15.0F * var12);
       int var16 = (int)(215.0F * var12);
-      Render2D.rect(var4, var5, var6, var7, ClientTheme.panel(var15), 7.0F);
-      Render2D.outline(var4, var5, var6, var7, 0.5F, ClientTheme.outline(var16), 7.0F);
+      Render2D.rect(var4, var5, var6, var7, ClientTheme.panel(var15), SETTINGS_PANEL_CORNER_RADIUS);
+      Render2D.outline(var4, var5, var6, var7, 0.5F, ClientTheme.outline(var16), SETTINGS_PANEL_CORNER_RADIUS);
       if (var2 == null) {
          String var40 = "Select a module";
          float var42 = 6.0F;
@@ -78,101 +77,73 @@ public class SettingsPanelRenderer {
          }
 
          Render2D.rect(var4 + 8.0F, var5 + 30.0F, var6 - 16.0F, 1.25F, (int)(64.0F * var12) << 24 | 4210752, 10.0F);
-         float var41 = 3.0F;
+         float var41 = CORNER_INSET;
          float var19 = 6.0F;
          float var20 = var5 + 31.0F;
          float var21 = var7 - 26.0F - var19;
          float var22 = var4 + var41;
          float var23 = var6 - var41 * 2.0F;
-         Scissor.enable(var22, var20, var23, var21, var11);
-         ArrayList var24 = new ArrayList();
-         ArrayList var25 = new ArrayList();
-         float var26 = var5 + 38.0F + (float)var13.getSettingDisplayScroll();
-         if (var10001) {
-            var10000.begin("ClickGui/settingsPanel/layoutComponents");
-         }
-
-         try {
-            for (AbstractSettingComponent var28 : var3) {
-               float var29 = var14.getHeightAnimations().getOrDefault(var28, var28.getSetting().isVisible() ? 1.0F : 0.0F);
-               if (var29 <= 0.001F) {
-                  var24.add(null);
-                  var25.add(0.0F);
-               } else {
-                  var24.add(var26);
-                  float var30 = this.getComponentBaseHeight(var28);
-                  float var31 = var30 * var29;
-                  var25.add(var31);
-                  var26 += var31 + 2.0F * var29;
-               }
-            }
-         } finally {
-            if (var10001) {
-               var10000.end();
-            }
-         }
-
          float var45 = var20;
          float var46 = var20 + var21;
-         if (var10001) {
-            var10000.begin("ClickGui/settingsPanel/renderVisibleComponents");
-         }
+         boolean var48 = false;
 
+         Scissor.enable(var22, var20, var23, var21, var11);
          try {
-            for (int var47 = 0; var47 < var3.size(); var47++) {
-               AbstractSettingComponent var49 = (AbstractSettingComponent)var3.get(var47);
-               Float var52 = (Float)var24.get(var47);
-               if (var52 != null) {
-                  float var32 = var14.getVisibilityAnimations().getOrDefault(var49, var49.getSetting().isVisible() ? 1.0F : 0.0F);
+            float var26 = var5 + 38.0F + (float)var13.getSettingDisplayScroll();
+            if (var10001) {
+               var10000.begin("ClickGui/settingsPanel/renderVisibleComponents");
+            }
+
+            try {
+               for (AbstractSettingComponent var49 : var3) {
                   float var33 = var14.getHeightAnimations().getOrDefault(var49, var49.getSetting().isVisible() ? 1.0F : 0.0F);
-                  if (!(var32 <= 0.001F) || !(var33 <= 0.001F)) {
-                     float var34 = (Float)var25.get(var47);
-                     float var35 = var14.getSettingAnimations().getOrDefault(var49, 1.0F);
-                     float var36 = var35 * var32 * var12;
-                     var49.position(var4 + 8.0F, var52);
-                     var49.size(var6 - 16.0F, 16.0F);
-                     var49.setAlphaMultiplier(var36);
-                     if (var52 + var34 >= var45 && var52 <= var46 && var36 > 0.01F) {
-                        float var37 = Math.max(var52, var45);
-                        float var38 = Math.min(var52 + var34, var46);
-                        float var39 = var38 - var37;
-                        if (var39 > 0.5F) {
-                           Scissor.enable(var22, var37, var23, var39, var11);
-                           var1.getMatrices().pushMatrix();
-                           if (var10001) {
-                              var10000.begin("ClickGui/settingsPanel/component/" + var49.getClass().getSimpleName());
-                           }
+                  if (var33 <= 0.001F) {
+                     continue;
+                  }
 
-                           try {
-                              var49.render(var1, (int)var8, (int)var9, var10);
-                           } finally {
-                              if (var10001) {
-                                 var10000.end();
-                              }
-                           }
+                  float var34 = this.getComponentBaseHeight(var49) * var33;
+                  float var52 = var26;
+                  var26 += var34 + SETTING_SPACING * var33;
+                  float var32 = var14.getVisibilityAnimations().getOrDefault(var49, var49.getSetting().isVisible() ? 1.0F : 0.0F);
+                  if (var32 <= 0.001F && var33 <= 0.001F) {
+                     continue;
+                  }
 
-                           var1.getMatrices().popMatrix();
-                           Scissor.disable();
+                  if (var32 > 0.01F) {
+                     var48 = true;
+                  }
+
+                  float var35 = var14.getSettingAnimations().getOrDefault(var49, 1.0F);
+                  float var36 = var35 * var32 * var12;
+                  var49.position(var4 + 8.0F, var52);
+                  var49.size(var6 - 16.0F, SETTING_HEIGHT);
+                  var49.setAlphaMultiplier(var36);
+                  if (var52 + var34 >= var45 && var52 <= var46 && var36 > 0.01F) {
+                     // One outer scissor is enough to clip the settings list. Avoiding one
+                     // enable/disable pair per component prevents large GUI-driver stalls.
+                     var1.getMatrices().pushMatrix();
+                     if (var10001) {
+                        var10000.begin("ClickGui/settingsPanel/component/" + var49.getClass().getSimpleName());
+                     }
+
+                     try {
+                        var49.render(var1, (int)var8, (int)var9, var10);
+                     } finally {
+                        if (var10001) {
+                           var10000.end();
                         }
                      }
+
+                     var1.getMatrices().popMatrix();
                   }
+               }
+            } finally {
+               if (var10001) {
+                  var10000.end();
                }
             }
          } finally {
-            if (var10001) {
-               var10000.end();
-            }
-         }
-
-         Scissor.disable();
-         boolean var48 = false;
-
-         for (AbstractSettingComponent var53 : var3) {
-            float var55 = var14.getVisibilityAnimations().getOrDefault(var53, 0.0F);
-            if (var55 > 0.01F) {
-               var48 = true;
-               break;
-            }
+            Scissor.disable();
          }
 
          if (!var48) {
@@ -196,7 +167,7 @@ public class SettingsPanelRenderer {
          float var6 = var2.getHeightAnimations().getOrDefault(var5, var5.getSetting().isVisible() ? 1.0F : 0.0F);
          if (!(var6 <= 0.001F)) {
             float var7 = this.getComponentBaseHeight(var5);
-            var3 += (var7 + 2.0F) * var6;
+            var3 += (var7 + SETTING_SPACING) * var6;
          }
       }
 
@@ -209,7 +180,7 @@ public class SettingsPanelRenderer {
       } else if (var1 instanceof MultiSelectComponent) {
          return ((MultiSelectComponent)var1).getTotalHeight();
       } else {
-         return var1 instanceof ColorComponent ? ((ColorComponent)var1).getTotalHeight() : 16.0F;
+         return var1 instanceof ColorComponent ? ((ColorComponent)var1).getTotalHeight() : SETTING_HEIGHT;
       }
    }
 
