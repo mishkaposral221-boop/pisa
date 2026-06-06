@@ -1,7 +1,10 @@
 package rich.modules.impl.render;
 
+import java.util.ArrayList;
 import net.minecraft.client.gui.DrawContext;
+import net.minecraft.entity.EquipmentSlot;
 import net.minecraft.entity.player.PlayerEntity;
+import net.minecraft.item.ItemStack;
 import net.minecraft.util.math.Vec3d;
 import org.joml.Vector4f;
 import rich.events.api.EventHandler;
@@ -17,16 +20,16 @@ import rich.util.render.Render3D;
 import rich.util.render.font.Fonts;
 
 public class Nametags extends ModuleStructure {
-    // SAFE defaults: после краша убраны drawItem/armor и тяжёлая логика. Сначала стабильно запускаемся, потом точечно докрутим.
-    public BooleanSetting showArmor = new BooleanSetting("ShowArmor", "Disabled by default for FPS/stability").setValue(false);
+    public BooleanSetting showArmor = new BooleanSetting("ShowArmor", "Draw optimized held item + armor icons over nametags").setValue(true);
     public SliderSettings renderDistance = new SliderSettings("Distance", "Max distance to draw tags (blocks)").range(8.0F, 64.0F).setValue(32.0F);
-    public SliderSettings armorDistance = new SliderSettings("ArmorDistance", "Unused in safe mode").range(8.0F, 48.0F).setValue(12.0F);
+    public SliderSettings armorDistance = new SliderSettings("ArmorDistance", "Max distance to draw armor icons (blocks)").range(6.0F, 32.0F).setValue(16.0F);
     public SliderSettings maxTags = new SliderSettings("MaxTags", "Hard cap on tags drawn per frame").range(5.0F, 100.0F).setValue(20.0F);
-    public SliderSettings armorBudget = new SliderSettings("ArmorBudget", "Unused in safe mode").range(0.0F, 20.0F).setValue(0.0F);
+    public SliderSettings armorBudget = new SliderSettings("ArmorBudget", "Max equipment rows per frame").range(0.0F, 20.0F).setValue(6.0F);
 
     private static final float SCREEN_MARGIN = 100.0f;
     private final Vector4f reusablePos = new Vector4f();
     private final float[] reuseScreen = new float[2];
+    private final ArrayList<ItemStack> armorItems = new ArrayList<>(6);
 
     public Nametags() {
         super("Nametags", "Display player names above heads", ModuleCategory.VISUALS);
@@ -38,7 +41,7 @@ public class Nametags extends ModuleStructure {
     }
 
     public boolean showArmor() {
-        return false;
+        return this.showArmor.isValue();
     }
 
     @EventHandler
@@ -49,7 +52,7 @@ public class Nametags extends ModuleStructure {
         try {
             this.renderInternal(event.getDrawContext());
         } catch (Throwable ignored) {
-            // Важно: nametags не должны крашить весь клиент.
+            // Nametags must never crash the client render loop.
         } finally {
             if (prof) profiler.end();
         }
@@ -90,7 +93,11 @@ public class Nametags extends ModuleStructure {
         float td = Render3D.lastTickDelta;
         float maxDist = this.renderDistance.getValue();
         double maxDist2 = maxDist * maxDist;
+        boolean armorEnabled = this.showArmor();
+        float armorMax = this.armorDistance.getValue();
+        double armorMax2 = armorMax * armorMax;
         int tagsLeft = (int)this.maxTags.getValue();
+        int armorLeft = armorEnabled ? (int)this.armorBudget.getValue() : 0;
 
         for (PlayerEntity player : mc.world.getPlayers()) {
             if (tagsLeft <= 0) {
@@ -117,12 +124,18 @@ public class Nametags extends ModuleStructure {
                 continue;
             }
 
-            this.renderSimpleTag(player, cx, cy, (float)Math.sqrt(dist2));
+            float distance = (float)Math.sqrt(dist2);
+            boolean drawArmor = armorLeft > 0 && dist2 <= armorMax2;
+            if (this.renderSimpleTag(g, player, cx, cy, distance, drawArmor)) {
+                armorLeft--;
+            }
             tagsLeft--;
         }
     }
 
-    private void renderSimpleTag(PlayerEntity player, float cx, float cy, float distance) {
+    private boolean renderSimpleTag(DrawContext g, PlayerEntity player, float cx, float cy, float distance, boolean drawArmor) {
+        FrameProfiler profiler = FrameProfiler.getInstance();
+        boolean prof = profiler.isEnabled();
         String name = player.getName().getString();
         int hp = (int)Math.ceil(player.getHealth());
         String text = name + " " + hp;
@@ -130,7 +143,15 @@ public class Nametags extends ModuleStructure {
         float fontSize = 6.0f * scale;
         float padX = 3.0f * scale;
         float padY = 2.0f * scale;
-        float width = Fonts.BOLD.getWidth(text, fontSize);
+
+        if (prof) profiler.begin("Nametags/text");
+        float width;
+        try {
+            width = Fonts.BOLD.getWidth(text, fontSize);
+        } finally {
+            if (prof) profiler.end();
+        }
+
         float panelW = width + padX * 2.0f;
         float panelH = fontSize + padY * 2.0f;
         float x = cx - panelW / 2.0f;
@@ -138,5 +159,69 @@ public class Nametags extends ModuleStructure {
 
         Render2D.rect(x, y, panelW, panelH, 0x88101015, Math.max(2.0f, 3.0f * scale));
         Fonts.BOLD.draw(text, x + padX, y + padY, fontSize, 0xFFFFFFFF);
+
+        if (!drawArmor) {
+            return false;
+        }
+
+        if (prof) profiler.begin("Nametags/armorRow");
+        try {
+            return this.renderArmorRow(g, player, cx, y, scale);
+        } finally {
+            if (prof) profiler.end();
+        }
+    }
+
+    private boolean renderArmorRow(DrawContext g, PlayerEntity player, float cx, float tagY, float tagScale) {
+        this.armorItems.clear();
+        this.addIfPresent(player.getEquippedStack(EquipmentSlot.MAINHAND));
+        this.addIfPresent(player.getEquippedStack(EquipmentSlot.OFFHAND));
+        this.addIfPresent(player.getEquippedStack(EquipmentSlot.HEAD));
+        this.addIfPresent(player.getEquippedStack(EquipmentSlot.CHEST));
+        this.addIfPresent(player.getEquippedStack(EquipmentSlot.LEGS));
+        this.addIfPresent(player.getEquippedStack(EquipmentSlot.FEET));
+
+        int count = this.armorItems.size();
+        if (count <= 0) {
+            return false;
+        }
+
+        float itemScale = Math.max(0.55f, Math.min(0.75f, tagScale * 0.72f));
+        float itemSize = 16.0f * itemScale;
+        float spacing = itemSize + 1.0f;
+        float totalW = count * spacing - 1.0f;
+        float startX = cx - totalW / 2.0f;
+        float itemY = tagY - itemSize - 1.5f;
+        boolean pushed = false;
+
+        try {
+            g.getMatrices().pushMatrix();
+            pushed = true;
+            g.getMatrices().translate(startX, itemY);
+            g.getMatrices().scale(itemScale, itemScale);
+            float step = spacing / itemScale;
+
+            for (int i = 0; i < count; i++) {
+                g.drawItem(this.armorItems.get(i), 0, 0);
+                g.getMatrices().translate(step, 0.0f);
+            }
+        } catch (Throwable ignored) {
+            // If item rendering fails for an unusual stack, keep nametags alive.
+        } finally {
+            if (pushed) {
+                try {
+                    g.getMatrices().popMatrix();
+                } catch (Throwable ignored) {
+                }
+            }
+        }
+
+        return true;
+    }
+
+    private void addIfPresent(ItemStack stack) {
+        if (stack != null && !stack.isEmpty()) {
+            this.armorItems.add(stack);
+        }
     }
 }
