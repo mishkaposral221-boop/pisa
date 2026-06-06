@@ -32,6 +32,7 @@
     "HeldItemRendererMixin",
     "IClientWorld",
     "InGameHudMixin",
+    "InGameHudProfilingMixin",
     "InGameOverlayRendererMixin",
     "IScreen",
     "KeyboardInputMixin",
