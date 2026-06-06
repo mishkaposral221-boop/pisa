@@ -58,14 +58,6 @@ public abstract class ClientPlayerEntityMixin extends AbstractClientPlayerEntity
    private void onInputTick(CallbackInfo ci) {
       if (IMinecraft.mc.player == null) return;
 
-      // SUPPRESS_FORWARD: Triggerbot sets this TRUE for exactly 1 tick before a crit
-      // attack so the movement packet that leaves BEFORE the attack packet shows
-      // the player not moving forward / not sprinting.
-      // Flow:
-      //   Tick N  (onTick HEAD): crit ready -> set SUPPRESS_FORWARD=true, queue target
-      //   Tick N  (here)       : clear forward+sprint from PlayerInput, call setSprinting(false)
-      //   Tick N  (sendMvt)    : movement packet sent with W=false, sprint=false
-      //   Tick N+1 (onTick HEAD): fire the queued attack(), then SUPPRESS_FORWARD=false
       try {
          Triggerbot tb = Triggerbot.getInstance();
          if (Triggerbot.SUPPRESS_FORWARD && tb != null && tb.isState()
@@ -77,14 +69,12 @@ public abstract class ClientPlayerEntityMixin extends AbstractClientPlayerEntity
                   pi.jump(), pi.sneak(), false
                );
             }
-            // Explicit packet: tell the server to stop sprinting NOW
             if (IMinecraft.mc.player.isSprinting()) {
                IMinecraft.mc.player.setSprinting(false);
             }
          }
       } catch (Throwable ignored) {}
 
-      // SUPPRESS_SPRINT (legacy / other modules)
       try {
          Triggerbot tb = Triggerbot.getInstance();
          if (Triggerbot.SUPPRESS_SPRINT && tb != null && tb.isState()
@@ -98,7 +88,6 @@ public abstract class ClientPlayerEntityMixin extends AbstractClientPlayerEntity
          }
       } catch (Throwable ignored) {}
 
-      // SUPPRESS_JUMP (crit gate)
       try {
          Triggerbot tb = Triggerbot.getInstance();
          if (Triggerbot.SUPPRESS_JUMP && tb != null && tb.isState()
@@ -139,7 +128,9 @@ public abstract class ClientPlayerEntityMixin extends AbstractClientPlayerEntity
       if (e.isCancelled()) ci.cancel();
    }
 
-   @Inject(method = "move", at = @At("HEAD"), cancellable = true)
+   // В 1.21.11 этот метод может не находиться в ClientPlayerEntity напрямую.
+   // require=0 не даст клиенту падать на старте, а в логах профайлера всё равно будет видно остальные причины просадок.
+   @Inject(method = "move", at = @At("HEAD"), cancellable = true, require = 0)
    public void onMoveHook(MovementType type, Vec3d movement, CallbackInfo ci) {
       MoveEvent e = new MoveEvent(movement);
       EventManager.callEvent(e);

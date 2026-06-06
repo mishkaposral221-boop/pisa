@@ -99,22 +99,36 @@ public final class EventManager {
 
    public static Event callEvent(Event var0) {
       List<MethodData> var1 = REGISTRY_MAP.get(var0.getClass());
-      if (var1 != null) {
-         if (var0 instanceof EventStoppable var2) {
-            for (EventManager.MethodData var4 : var1) {
-               invoke(var4, var0);
-               if (var2.isStopped()) {
-                  break;
+      FrameProfiler profiler = FrameProfiler.getInstance();
+      boolean prof = profiler.isEnabled();
+      if (prof) {
+         profiler.begin("Event/" + var0.getClass().getSimpleName() + "/total");
+      }
+
+      try {
+         if (var1 != null) {
+            if (var0 instanceof EventStoppable var2) {
+               for (EventManager.MethodData var4 : var1) {
+                  invoke(var4, var0);
+                  if (var2.isStopped()) {
+                     break;
+                  }
+               }
+            } else {
+               for (EventManager.MethodData var8 : var1) {
+                  try {
+                     invoke(var8, var0);
+                  } catch (Exception var6) {
+                     if (Boolean.getBoolean("rich.debug.events")) {
+                        var6.printStackTrace();
+                     }
+                  }
                }
             }
-         } else {
-            for (EventManager.MethodData var8 : var1) {
-               try {
-                  invoke(var8, var0);
-               } catch (Exception var6) {
-                  var6.printStackTrace();
-               }
-            }
+         }
+      } finally {
+         if (prof) {
+            profiler.end();
          }
       }
 
@@ -125,6 +139,7 @@ public final class EventManager {
       FrameProfiler profiler = FrameProfiler.getInstance();
       boolean prof = profiler.isEnabled();
       long start = prof ? System.nanoTime() : 0L;
+
       try {
          var0.target().invoke(var0.source(), var1);
       } catch (IllegalAccessException | IllegalArgumentException | InvocationTargetException var3) {
@@ -133,7 +148,10 @@ public final class EventManager {
          }
       } finally {
          if (prof) {
-            profiler.record(var0.source().getClass().getSimpleName() + "#" + var1.getClass().getSimpleName(), System.nanoTime() - start);
+            String source = var0.source().getClass().getSimpleName();
+            String method = var0.target().getName();
+            String event = var1.getClass().getSimpleName();
+            profiler.record("Handler/" + source + "#" + method + "(" + event + ")", System.nanoTime() - start);
          }
       }
    }

@@ -16,27 +16,31 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.entity.Entity;
+import net.minecraft.entity.LivingEntity;
+import net.minecraft.entity.player.PlayerEntity;
 
 /**
- * Lightweight per-frame CPU profiler for the client.
+ * Detailed FPS profiler for finding real causes of drops.
  *
- * <p>Goal: find out WHAT is causing FPS drops by measuring how much time each
- * module / event handler / named section consumes per rendered frame, and dump
- * full statistics to a log file (and/or chat).
+ * What it logs:
+ * - frame time: avg / p95 / p99 / worst
+ * - FPS calculated from frame time
+ * - top hot sections: event handlers, HUD/world render modules, named sections
+ * - call counts, max single call, max per-frame cost
+ * - GC and memory stats
+ * - world/entity snapshot
+ * - separate spike log with top sections for the exact bad frame
  *
- * <p>Design notes:
- * <ul>
- *   <li>{@link #record(String, long)} accumulates a measured duration for a named
- *       section. {@link #begin(String)}/{@link #end()} measure a (possibly nested)
- *       section on the current thread.</li>
- *   <li>{@link #frameEnd()} is called once per rendered frame. It computes frame
- *       time / FPS, detects spikes, folds the per-frame section totals into rolling
- *       aggregates and clears the per-frame counters.</li>
- *   <li>Frames rendered while the OS window is unfocused are discarded: MC's
- *       inactivity limiter throttles those to ~10 FPS and they are not real drops.</li>
- *   <li>Hot-path work is allocation free; reports allocate.</li>
- *   <li>Disabled by default; when disabled begin/end/record are cheap no-ops.</li>
- * </ul>
+ * Commands:
+ * - .profiler on [autoDumpSeconds]
+ * - .profiler off
+ * - .profiler reset
+ * - .profiler top [n]
+ * - .profiler dump
+ * - .profiler interval <seconds>
+ * - .profiler spike <ms>
+ * - .profiler status
  */
 public final class FrameProfiler {
    private static final FrameProfiler INSTANCE = new FrameProfiler();
@@ -45,34 +49,26 @@ public final class FrameProfiler {
       return INSTANCE;
    }
 
-   // ---- configuration ----
    private volatile boolean enabled = false;
-   /** How often (ms) to auto-dump a report to the log file. 0 disables auto-dump. */
-   private volatile long autoDumpIntervalMs = 10_000L;
-   /** How many recent frames to keep for frame-time percentiles. */
-   private static final int FRAME_WINDOW = 1200;
-   /** Absolute frame-time (ms) above which a frame is treated as a spike. */
-   private static final long SPIKE_MIN_MS = 50L;
-   /** Relative threshold: frame slower than avg * factor is a spike. */
-   private static final double SPIKE_FACTOR = 3.0;
-   /** Minimum gap (ms) between two spike log lines to avoid spamming. */
-   private static final long SPIKE_LOG_MIN_GAP_MS = 200L;
+   private volatile long autoDumpIntervalMs = 5_000L;
+   private volatile long spikeMinMs = 45L;
+   private volatile double spikeFactor = 2.25;
+   private volatile long spikeLogMinGapMs = 150L;
 
+   private static final int FRAME_WINDOW = 2400;
    private static final String LOG_DIR = "logs";
    private static final String REPORT_FILE = "rich-fps-profile.log";
    private static final String SPIKE_FILE = "rich-fps-spikes.log";
 
    private static final class Section {
       final String name;
-      // accumulated within the current (not yet ended) frame
       long frameNanos;
       int frameCalls;
-      // rolling totals across all frames since last reset
       long totalNanos;
       long totalCalls;
-      long maxCallNanos;  // worst single invocation
-      long maxFrameNanos; // worst single-frame total
-      long framesPresent; // number of frames in which this section ran
+      long maxCallNanos;
+      long maxFrameNanos;
+      long framesPresent;
 
       Section(String name) {
          this.name = name;
@@ -82,7 +78,6 @@ public final class FrameProfiler {
    private final Map<String, Section> sections = new ConcurrentHashMap<>();
    private final ThreadLocal<ArrayDeque<Object[]>> stack = ThreadLocal.withInitial(ArrayDeque::new);
 
-   // frame timing
    private long renderStartNano = 0L;
    private long lastFrameEndNano = 0L;
    private final long[] frameTimes = new long[FRAME_WINDOW];
@@ -91,17 +86,13 @@ public final class FrameProfiler {
    private long windowFrameCount = 0L;
    private long worstFrameNanos = 0L;
 
-   // throttle detection: frames rendered while the OS window is unfocused are
-   // throttled by MC's inactivity FPS limiter (~10 FPS) and must NOT pollute stats.
    private boolean frameFocused = true;
    private long skippedUnfocusedFrames = 0L;
 
-   // window bookkeeping
    private long windowStartMs = 0L;
    private long lastDumpMs = 0L;
    private long lastSpikeLogMs = 0L;
 
-   // gc baseline
    private long gcBaseCount = 0L;
    private long gcBaseTime = 0L;
 
@@ -112,11 +103,43 @@ public final class FrameProfiler {
       return this.enabled;
    }
 
+   public long getAutoDumpIntervalMs() {
+      return this.autoDumpIntervalMs;
+   }
+
+   public long getSpikeMinMs() {
+      return this.spikeMinMs;
+   }
+
+   public double getSpikeFactor() {
+      return this.spikeFactor;
+   }
+
    public synchronized void setEnabled(boolean value) {
       if (value && !this.enabled) {
          this.resetInternal();
+         this.appendLine(REPORT_FILE, "==== PROFILER START " + new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date()) + " ====");
       }
       this.enabled = value;
+      if (!value) {
+         this.appendLine(REPORT_FILE, "==== PROFILER STOP " + new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date()) + " ====");
+      }
+   }
+
+   public synchronized void setAutoDumpIntervalSeconds(long seconds) {
+      if (seconds <= 0L) {
+         this.autoDumpIntervalMs = 0L;
+      } else {
+         this.autoDumpIntervalMs = Math.max(1000L, seconds * 1000L);
+      }
+   }
+
+   public synchronized void setSpikeMinMs(long ms) {
+      this.spikeMinMs = Math.max(5L, ms);
+   }
+
+   public synchronized void setSpikeFactor(double factor) {
+      this.spikeFactor = Math.max(1.1, factor);
    }
 
    public synchronized void reset() {
@@ -125,15 +148,18 @@ public final class FrameProfiler {
 
    private void resetInternal() {
       this.sections.clear();
+      this.stack.remove();
       this.frameTimeIdx = 0;
       this.frameTimeCount = 0;
       this.windowFrameCount = 0L;
       this.worstFrameNanos = 0L;
       this.lastFrameEndNano = 0L;
+      this.renderStartNano = 0L;
       this.skippedUnfocusedFrames = 0L;
       long now = System.currentTimeMillis();
       this.windowStartMs = now;
       this.lastDumpMs = now;
+      this.lastSpikeLogMs = 0L;
       this.gcBaseCount = gcCount();
       this.gcBaseTime = gcTime();
    }
@@ -150,7 +176,6 @@ public final class FrameProfiler {
       return s;
    }
 
-   /** Record a measured duration (nanos) for a named section. */
    public void record(String name, long nanos) {
       if (!this.enabled || nanos < 0L || name == null) {
          return;
@@ -165,7 +190,6 @@ public final class FrameProfiler {
       }
    }
 
-   /** Begin a (possibly nested) timed section on the current thread. */
    public void begin(String name) {
       if (!this.enabled || name == null) {
          return;
@@ -173,7 +197,6 @@ public final class FrameProfiler {
       this.stack.get().push(new Object[]{name, System.nanoTime()});
    }
 
-   /** End the most recently begun section on the current thread. */
    public void end() {
       if (!this.enabled) {
          return;
@@ -183,11 +206,9 @@ public final class FrameProfiler {
       if (top == null) {
          return;
       }
-      long nanos = System.nanoTime() - (Long) top[1];
-      this.record((String) top[0], nanos);
+      this.record((String) top[0], System.nanoTime() - (Long) top[1]);
    }
 
-   /** Called at render() HEAD. */
    public void beginFrame() {
       if (!this.enabled) {
          return;
@@ -202,22 +223,20 @@ public final class FrameProfiler {
       this.frameFocused = focused;
    }
 
-   /** Called at render() TAIL: rolls up the frame. */
    public synchronized void frameEnd() {
       if (!this.enabled) {
          return;
       }
+
       long now = System.nanoTime();
       if (!this.frameFocused) {
-         // Window unfocused -> MC throttles to ~10 FPS via the inactivity limiter.
-         // These flat ~100ms frames are not real drops; discard them so they do not
-         // dominate the spike log / skew averages.
          this.clearFrameAccumulators();
          this.lastFrameEndNano = now;
          this.renderStartNano = 0L;
          this.skippedUnfocusedFrames++;
          return;
       }
+
       if (this.renderStartNano > 0L) {
          this.record("Frame/render(total)", now - this.renderStartNano);
       }
@@ -229,9 +248,9 @@ public final class FrameProfiler {
          double avgMs = this.averageFrameMs();
          double frameMs = frameNanos / 1_000_000.0;
          long gapMs = System.currentTimeMillis() - this.lastSpikeLogMs;
-         boolean absSpike = frameMs >= SPIKE_MIN_MS;
-         boolean relSpike = this.frameTimeCount > 30 && avgMs > 0.0 && frameMs >= avgMs * SPIKE_FACTOR;
-         if (gapMs >= SPIKE_LOG_MIN_GAP_MS && (absSpike || relSpike)) {
+         boolean absSpike = frameMs >= this.spikeMinMs;
+         boolean relSpike = this.frameTimeCount > 30 && avgMs > 0.0 && frameMs >= avgMs * this.spikeFactor;
+         if (gapMs >= this.spikeLogMinGapMs && (absSpike || relSpike)) {
             this.logSpike(frameMs, avgMs);
             this.lastSpikeLogMs = System.currentTimeMillis();
          }
@@ -247,7 +266,6 @@ public final class FrameProfiler {
          this.windowFrameCount++;
       }
 
-      // fold per-frame section totals into rolling aggregates
       for (Section s : this.sections.values()) {
          synchronized (s) {
             if (s.frameCalls > 0) {
@@ -273,7 +291,6 @@ public final class FrameProfiler {
       }
    }
 
-   /** Zero the per-frame accumulators without folding them into the rolling totals. */
    private void clearFrameAccumulators() {
       for (Section s : this.sections.values()) {
          synchronized (s) {
@@ -301,7 +318,7 @@ public final class FrameProfiler {
       long[] copy = new long[this.frameTimeCount];
       System.arraycopy(this.frameTimes, 0, copy, 0, this.frameTimeCount);
       Arrays.sort(copy);
-      int idx = (int) Math.ceil(p / 100.0 * this.frameTimeCount) - 1;
+      int idx = (int)Math.ceil(p / 100.0 * this.frameTimeCount) - 1;
       if (idx < 0) {
          idx = 0;
       }
@@ -317,17 +334,18 @@ public final class FrameProfiler {
       return list;
    }
 
-   /** Top N sections formatted for chat output (Russian). */
    public synchronized List<String> topLines(int n) {
       List<String> out = new ArrayList<>();
       if (!this.enabled && this.sections.isEmpty()) {
-         out.add("Профилировщик выключен и данных нет. Включите: .profiler on");
+         out.add("Профилировщик выключен и данных нет. Включить: .profiler on");
          return out;
       }
+
       double avgMs = this.averageFrameMs();
       double fps = avgMs > 0.0 ? 1000.0 / avgMs : 0.0;
-      out.add(String.format("FPS avg=%.1f  кадр avg=%.2fms p95=%.2fms худший=%.1fms  кадров=%d (пропущено неактивных=%d)",
-            fps, avgMs, this.percentileFrameMs(95), this.worstFrameNanos / 1_000_000.0, this.windowFrameCount, this.skippedUnfocusedFrames));
+      out.add(String.format("FPS avg=%.1f | frame avg=%.2fms p95=%.2f p99=%.2f worst=%.1fms | кадров=%d",
+            fps, avgMs, this.percentileFrameMs(95), this.percentileFrameMs(99), this.worstFrameNanos / 1_000_000.0, this.windowFrameCount));
+
       List<Section> list = this.sortedSections();
       long denom = this.windowFrameCount > 0L ? this.windowFrameCount : 1L;
       int i = 0;
@@ -336,15 +354,25 @@ public final class FrameProfiler {
             break;
          }
          i++;
-         double perFrame = (s.totalNanos / (double) denom) / 1_000_000.0;
+         double perFrame = (s.totalNanos / (double)denom) / 1_000_000.0;
          double pct = avgMs > 0.0 ? perFrame / avgMs * 100.0 : 0.0;
-         out.add(String.format("%2d. %s  %.2fms/кадр (%.0f%%) max=%.2fms",
-               i, trim(s.name, 32), perFrame, pct, s.maxFrameNanos / 1_000_000.0));
+         double callsPerFrame = s.totalCalls / (double)denom;
+         out.add(String.format("%2d. %s | %.3fms/f %.1f%% | maxF %.2f | maxCall %.3f | calls/f %.1f",
+               i, trim(s.name, 42), perFrame, pct, s.maxFrameNanos / 1_000_000.0, s.maxCallNanos / 1_000_000.0, callsPerFrame));
       }
+
       if (list.isEmpty()) {
-         out.add("Нет данных (поиграйте несколько секунд при включённом профайлере).");
+         out.add("Нет данных: включите профайлер и поиграйте 10-20 секунд.");
       }
       return out;
+   }
+
+   public synchronized String statusLine() {
+      double avgMs = this.averageFrameMs();
+      double fps = avgMs > 0.0 ? 1000.0 / avgMs : 0.0;
+      return String.format("enabled=%s | FPS avg=%.1f | avg=%.2fms p95=%.2fms worst=%.1fms | autoDump=%sms | spike=%sms factor=%.2f | frames=%d",
+            this.enabled, fps, avgMs, this.percentileFrameMs(95), this.worstFrameNanos / 1_000_000.0,
+            this.autoDumpIntervalMs, this.spikeMinMs, this.spikeFactor, this.windowFrameCount);
    }
 
    private String buildReport() {
@@ -355,84 +383,138 @@ public final class FrameProfiler {
       double fps = avgMs > 0.0 ? 1000.0 / avgMs : 0.0;
       Runtime rt = Runtime.getRuntime();
       long used = (rt.totalMemory() - rt.freeMemory()) / (1024L * 1024L);
+      long total = rt.totalMemory() / (1024L * 1024L);
       long max = rt.maxMemory() / (1024L * 1024L);
       long gcc = gcCount() - this.gcBaseCount;
       long gct = gcTime() - this.gcBaseTime;
 
-      sb.append("==== RICH FPS PROFILE [").append(fmt.format(new Date())).append("] окно=")
-            .append(String.format("%.1f", windowSec)).append("s кадров=").append(this.windowFrameCount).append(" ====\n");
-      sb.append(String.format("FPS avg=%.1f  кадр: avg=%.2fms p95=%.2fms p99=%.2fms худший=%.1fms\n",
-            fps, avgMs, this.percentileFrameMs(95), this.percentileFrameMs(99), this.worstFrameNanos / 1_000_000.0));
-      sb.append(String.format("Память: %dMB / %dMB   GC за окно: count=%d time=%dms\n", used, max, gcc, gct));
-      sb.append(String.format("Пропущено кадров (окно неактивно / лимит FPS): %d\n", this.skippedUnfocusedFrames));
-      sb.append("-- Топ секций по суммарному CPU за окно (инклюзивно) --\n");
+      sb.append("==== RICH FPS PROFILE [").append(fmt.format(new Date())).append("] window=")
+            .append(String.format("%.1f", windowSec)).append("s frames=").append(this.windowFrameCount).append(" ====\n");
+      sb.append(String.format("FPS avg=%.1f | frame avg=%.2fms p50=%.2fms p95=%.2fms p99=%.2fms worst=%.1fms\n",
+            fps, avgMs, this.percentileFrameMs(50), this.percentileFrameMs(95), this.percentileFrameMs(99), this.worstFrameNanos / 1_000_000.0));
+      sb.append(String.format("Memory used=%dMB total=%dMB max=%dMB | GC count=%d time=%dms | skipped unfocused=%d\n",
+            used, total, max, gcc, gct, this.skippedUnfocusedFrames));
+      sb.append("World: ").append(this.worldSnapshot()).append("\n");
+      sb.append(String.format("Config: autoDump=%dms spikeMin=%dms spikeFactor=%.2f\n",
+            this.autoDumpIntervalMs, this.spikeMinMs, this.spikeFactor));
+      sb.append("-- TOP SECTIONS (inclusive CPU time) --\n");
+      sb.append(" #  section                                      totalMs  ms/frame   %frame  maxFrame  maxCall  calls  calls/f  frames%\n");
 
       List<Section> list = this.sortedSections();
       long denom = this.windowFrameCount > 0L ? this.windowFrameCount : 1L;
       int i = 0;
       for (Section s : list) {
-         if (i >= 40) {
+         if (i >= 80) {
             break;
          }
          i++;
          double tot = s.totalNanos / 1_000_000.0;
-         double perFrame = (s.totalNanos / (double) denom) / 1_000_000.0;
+         double perFrame = (s.totalNanos / (double)denom) / 1_000_000.0;
          double pct = avgMs > 0.0 ? perFrame / avgMs * 100.0 : 0.0;
-         sb.append(String.format("%2d. %-38s tot=%8.1fms  avg=%6.3fms/f (%4.1f%%)  maxf=%6.2fms  maxcall=%6.3fms  calls=%d\n",
-               i, trim(s.name, 38), tot, perFrame, pct, s.maxFrameNanos / 1_000_000.0, s.maxCallNanos / 1_000_000.0, s.totalCalls));
+         double callsPerFrame = s.totalCalls / (double)denom;
+         double framesPct = s.framesPresent * 100.0 / (double)denom;
+         sb.append(String.format("%2d. %-42s %8.1f %8.3f %7.1f %9.2f %8.3f %6d %8.2f %7.1f\n",
+               i, trim(s.name, 42), tot, perFrame, pct, s.maxFrameNanos / 1_000_000.0,
+               s.maxCallNanos / 1_000_000.0, s.totalCalls, callsPerFrame, framesPct));
       }
+
       if (list.isEmpty()) {
-         sb.append("(нет данных)\n");
+         sb.append("(no data)\n");
       }
+
       sb.append("\n");
       return sb.toString();
    }
 
-   /** Build a report and append it to the log file; returns the relative path. */
    public synchronized String dumpToFile() {
       writeReport(this.buildReport());
       return LOG_DIR + "/" + REPORT_FILE;
+   }
+
+   private String worldSnapshot() {
+      try {
+         MinecraftClient mc = MinecraftClient.getInstance();
+         if (mc == null) {
+            return "mc=null";
+         }
+         if (mc.world == null) {
+            return "world=null screen=" + (mc.currentScreen == null ? "null" : mc.currentScreen.getClass().getSimpleName());
+         }
+
+         int entities = 0;
+         int living = 0;
+         int players = 0;
+         int visibleLiving = 0;
+         for (Entity e : mc.world.getEntities()) {
+            entities++;
+            if (e instanceof LivingEntity) {
+               living++;
+               if (!e.isInvisible()) {
+                  visibleLiving++;
+               }
+            }
+            if (e instanceof PlayerEntity) {
+               players++;
+            }
+         }
+
+         String screen = mc.currentScreen == null ? "null" : mc.currentScreen.getClass().getSimpleName();
+         String player = mc.player == null ? "null" : mc.player.getName().getString();
+         return "entities=" + entities + " living=" + living + " visibleLiving=" + visibleLiving + " players=" + players + " screen=" + screen + " player=" + player;
+      } catch (Throwable t) {
+         return "snapshot-error=" + t.getClass().getSimpleName();
+      }
    }
 
    private void logSpike(double frameMs, double avgMs) {
       try {
          List<Section> list = new ArrayList<>();
          for (Section s : this.sections.values()) {
-            if (s.frameNanos > 0L) {
-               list.add(s);
+            synchronized (s) {
+               if (s.frameNanos > 0L) {
+                  list.add(s);
+               }
             }
          }
          list.sort(Comparator.comparingLong((Section s) -> s.frameNanos).reversed());
+
          SimpleDateFormat fmt = new SimpleDateFormat("HH:mm:ss.SSS");
          StringBuilder sb = new StringBuilder();
-         sb.append(String.format("[%s] СПАЙК %.1fms (avg %.1fms) -> ", fmt.format(new Date()), frameMs, avgMs));
+         sb.append(String.format("[%s] SPIKE %.1fms (avg %.1fms, p95 %.1fms) | %s\n",
+               fmt.format(new Date()), frameMs, avgMs, this.percentileFrameMs(95), this.worldSnapshot()));
+
          int i = 0;
          for (Section s : list) {
-            if (i >= 6) {
+            if (i >= 12) {
                break;
             }
             i++;
-            sb.append(String.format("%s=%.2fms; ", trim(s.name, 30), s.frameNanos / 1_000_000.0));
+            synchronized (s) {
+               sb.append(String.format("  %2d. %-42s frame=%.3fms calls=%d maxCall=%.3fms\n",
+                     i, trim(s.name, 42), s.frameNanos / 1_000_000.0, s.frameCalls, s.maxCallNanos / 1_000_000.0));
+            }
          }
          sb.append("\n");
-         File dir = new File(LOG_DIR);
-         if (!dir.exists()) {
-            dir.mkdirs();
-         }
-         try (PrintWriter w = new PrintWriter(new FileWriter(new File(dir, SPIKE_FILE), true))) {
-            w.print(sb);
-         }
+         appendText(SPIKE_FILE, sb.toString());
       } catch (Throwable ignored) {
       }
    }
 
    private static void writeReport(String text) {
+      appendText(REPORT_FILE, text);
+   }
+
+   private void appendLine(String fileName, String line) {
+      appendText(fileName, line + "\n");
+   }
+
+   private static void appendText(String fileName, String text) {
       try {
          File dir = new File(LOG_DIR);
          if (!dir.exists()) {
             dir.mkdirs();
          }
-         try (PrintWriter w = new PrintWriter(new FileWriter(new File(dir, REPORT_FILE), true))) {
+         try (PrintWriter w = new PrintWriter(new FileWriter(new File(dir, fileName), true))) {
             w.print(text);
          }
       } catch (IOException ignored) {
