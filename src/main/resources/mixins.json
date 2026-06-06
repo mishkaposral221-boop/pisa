@@ -33,6 +33,7 @@
     "IClientWorld",
     "InGameHudMixin",
     "InGameHudProfilingMixin",
+    "InGameHudRootLayerProfilingMixin",
     "InGameOverlayRendererMixin",
     "IScreen",
     "KeyboardInputMixin",
