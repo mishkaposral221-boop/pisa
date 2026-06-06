@@ -77,6 +77,7 @@ public class Particle3D implements IMinecraft {
    private boolean spinning = true;
    private RenderLayer cachedGlowLayer1;
    private RenderLayer cachedGlowLayer2;
+   private RenderLayer cachedTextureLayer;
 
    public Particle3D(Vec3d var1, Vec3d var2, int var3, float var4, float var5) {
       this.start = System.currentTimeMillis();
@@ -124,6 +125,7 @@ public class Particle3D implements IMinecraft {
 
    public Particle3D setMode(Particle3D.ParticleMode var1) {
       this.actualMode = var1 == Particle3D.ParticleMode.RANDOM ? RANDOM_MODES[ThreadLocalRandom.current().nextInt(RANDOM_MODES.length)] : var1;
+      this.cachedTextureLayer = this.buildTextureLayer();
       return this;
    }
 
@@ -131,6 +133,11 @@ public class Particle3D implements IMinecraft {
       this.glowMode = var1;
       this.rebuildGlowLayers();
       return this;
+   }
+
+   private RenderLayer buildTextureLayer() {
+      Identifier texture = this.getTexture();
+      return texture == null ? null : ClientPipelines.WORLD_PARTICLES_GLOW.apply(texture);
    }
 
    private void rebuildGlowLayers() {
@@ -261,17 +268,23 @@ public class Particle3D implements IMinecraft {
       ParticleRenderer.drawCube(var2.getBuffer(LAYER_QUADS), var14, ColorUtil.d(this.color, var6 * 0.2F), var13);
       ParticleRenderer.drawLines(var2.getBuffer(LAYER_LINES), var14, ColorUtil.d(this.color, var6 * 0.4F), var13);
       var1.pop();
-      var1.push();
-      var1.translate(var3, var4, var5);
-      var1.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(-var8));
-      var1.multiply(RotationAxis.POSITIVE_X.rotationDegrees(var9));
-      this.renderGlowEffect(var2, var1.peek().getPositionMatrix(), ColorUtil.d(this.color, var6), var6, var13 * var7, var13 * (var7 / 3.0F));
-      var1.pop();
+      if (var7 > 0.01F) {
+         var1.push();
+         var1.translate(var3, var4, var5);
+         var1.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(-var8));
+         var1.multiply(RotationAxis.POSITIVE_X.rotationDegrees(var9));
+         this.renderGlowEffect(var2, var1.peek().getPositionMatrix(), ColorUtil.d(this.color, var6), var6, var13 * var7, var13 * (var7 / 3.0F));
+         var1.pop();
+      }
    }
 
    private void renderTextured(MatrixStack var1, VertexConsumerProvider var2, float var3, float var4, float var5, float var6, float var7, float var8, float var9) {
-      Identifier var10 = this.getTexture();
-      if (var10 != null) {
+      RenderLayer textureLayer = this.cachedTextureLayer;
+      if (textureLayer == null) {
+         textureLayer = this.buildTextureLayer();
+         this.cachedTextureLayer = textureLayer;
+      }
+      if (textureLayer != null) {
          int var11 = ColorUtil.d(this.color, var6);
          float var12 = this.scale * 0.5F;
          float var13 = var12 / 2.0F;
@@ -288,18 +301,20 @@ public class Particle3D implements IMinecraft {
          }
 
          Matrix4f var18 = var1.peek().getPositionMatrix();
-         VertexConsumer var19 = var2.getBuffer(ClientPipelines.WORLD_PARTICLES_GLOW.apply(var10));
+         VertexConsumer var19 = var2.getBuffer(textureLayer);
          var19.vertex(var18, -var13, -var13, 0.0F).texture(0.0F, 0.0F).color(var14, var15, var16, var17);
          var19.vertex(var18, -var13, var13, 0.0F).texture(0.0F, 1.0F).color(var14, var15, var16, var17);
          var19.vertex(var18, var13, var13, 0.0F).texture(1.0F, 1.0F).color(var14, var15, var16, var17);
          var19.vertex(var18, var13, -var13, 0.0F).texture(1.0F, 0.0F).color(var14, var15, var16, var17);
          var1.pop();
-         var1.push();
-         var1.translate(var3, var4, var5);
-         var1.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(-var8));
-         var1.multiply(RotationAxis.POSITIVE_X.rotationDegrees(var9));
-         this.renderGlowEffect(var2, var1.peek().getPositionMatrix(), var11, var6, var12 * var7 * 0.5F, var12 * var7 * 0.2F);
-         var1.pop();
+         if (var7 > 0.01F) {
+            var1.push();
+            var1.translate(var3, var4, var5);
+            var1.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(-var8));
+            var1.multiply(RotationAxis.POSITIVE_X.rotationDegrees(var9));
+            this.renderGlowEffect(var2, var1.peek().getPositionMatrix(), var11, var6, var12 * var7 * 0.5F, var12 * var7 * 0.2F);
+            var1.pop();
+         }
       }
    }
 
