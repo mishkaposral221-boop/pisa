@@ -59,6 +59,10 @@ public abstract class GameRendererMixin {
    private FogRenderer fogRenderer;
    @Unique
    private final MatrixStack matrices = new MatrixStack();
+   @Unique
+   private boolean richProfilerPreHandOpen = false;
+   @Unique
+   private boolean richProfilerPostHandOpen = false;
 
    @Shadow
    protected abstract void bobView(MatrixStack var1, float var2);
@@ -90,12 +94,29 @@ public abstract class GameRendererMixin {
 
    @Inject(method = "renderWorld", at = @At("HEAD"), require = 0)
    private void richProfileRenderWorldStart(RenderTickCounter var1, CallbackInfo var2) {
-      FrameProfiler.getInstance().begin("Minecraft/GameRenderer.renderWorld");
+      FrameProfiler profiler = FrameProfiler.getInstance();
+      if (profiler.isEnabled()) {
+         profiler.begin("Minecraft/GameRenderer.renderWorld");
+         profiler.begin("Minecraft/renderWorld/beforeHand");
+         this.richProfilerPreHandOpen = true;
+         this.richProfilerPostHandOpen = false;
+      }
    }
 
    @Inject(method = "renderWorld", at = @At("RETURN"), require = 0)
    private void richProfileRenderWorldEnd(RenderTickCounter var1, CallbackInfo var2) {
-      FrameProfiler.getInstance().end();
+      FrameProfiler profiler = FrameProfiler.getInstance();
+      if (profiler.isEnabled()) {
+         if (this.richProfilerPostHandOpen) {
+            profiler.end();
+            this.richProfilerPostHandOpen = false;
+         }
+         if (this.richProfilerPreHandOpen) {
+            profiler.end();
+            this.richProfilerPreHandOpen = false;
+         }
+         profiler.end();
+      }
    }
 
    @ModifyReturnValue(method = "getFov", at = @At("RETURN"))
@@ -131,6 +152,10 @@ public abstract class GameRendererMixin {
    ) {
       FrameProfiler profiler = FrameProfiler.getInstance();
       boolean prof = profiler.isEnabled();
+      if (prof && this.richProfilerPreHandOpen) {
+         profiler.end();
+         this.richProfilerPreHandOpen = false;
+      }
       if (prof) profiler.begin("Rich/GameRenderer/worldRenderHook");
       try {
          if (this.client.world != null && this.client.player != null) {
@@ -171,6 +196,10 @@ public abstract class GameRendererMixin {
          }
       } finally {
          if (prof) profiler.end();
+      }
+      if (prof) {
+         profiler.begin("Minecraft/renderWorld/afterHand");
+         this.richProfilerPostHandOpen = true;
       }
    }
 
