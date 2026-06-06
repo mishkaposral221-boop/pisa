@@ -27,7 +27,7 @@ import rich.util.c;
 import rich.util.profiler.FrameProfiler;
 
 public class Particles extends ModuleStructure {
-   private final List<Particle3D> particles = new ArrayList<>(96);
+   private final List<Particle3D> particles = new ArrayList<>(48);
    private final List<TotemEmitter> totemEmitters = new ArrayList<>(4);
    public SelectSetting mode = new SelectSetting("Режим", "Тип партиклов")
       .value("Кубы", "Корона", "Куб", "Доллар", "Сердце", "Молния", "Линия", "Ромб", "Снежинка", "Звезда", "Звезда 2", "Треугольник", "Рандом")
@@ -35,24 +35,24 @@ public class Particles extends ModuleStructure {
    public SelectSetting glowMode = new SelectSetting("Свечение", "Тип эффекта свечения").value("Bloom", "Bloom Sample", "Оба").selected("Bloom Sample");
    public MultiSelectSetting triggers = new MultiSelectSetting("Триггеры", "Когда спавнить партиклы")
       .value("Удар", "Тотем", "Ходьба", "Бросаемый предмет")
-      .selected("Удар", "Тотем");
-   public SliderSettings amount = new SliderSettings("Количество", "Кол-во партиклов при ударе").range(3, 18).setValue(10.0F);
+      .selected("Удар");
+   public SliderSettings amount = new SliderSettings("Количество", "Кол-во партиклов при ударе").range(1, 12).setValue(6.0F);
    public SliderSettings walkAmount = new SliderSettings("Кол-во при ходьбе", "Кол-во партиклов в секунду при ходьбе")
-      .range(1, 10)
-      .setValue(4.0F)
+      .range(1, 6)
+      .setValue(2.0F)
       .visible(() -> this.triggers.isSelected("Ходьба"));
    public SliderSettings spread = new SliderSettings("Разброс", "Сила разброса частиц в стороны").range(0.5F, 3.0F).setValue(1.0F);
-   public SliderSettings speed = new SliderSettings("Скорость", "Скорость движения частиц").range(0.1F, 3.0F).setValue(1.5F);
-   public SliderSettings lifeTime = new SliderSettings("Время жизни", "Время жизни частиц в секундах").range(0.5F, 5.0F).setValue(1.5F);
-   public SliderSettings size = new SliderSettings("Размер", "Размер частиц").range(0.1F, 1.0F).setValue(0.8F);
+   public SliderSettings speed = new SliderSettings("Скорость", "Скорость движения частиц").range(0.1F, 3.0F).setValue(1.2F);
+   public SliderSettings lifeTime = new SliderSettings("Время жизни", "Время жизни частиц в секундах").range(0.5F, 5.0F).setValue(1.0F);
+   public SliderSettings size = new SliderSettings("Размер", "Размер частиц").range(0.1F, 1.0F).setValue(0.7F);
    public BooleanSetting randomColor = new BooleanSetting("Рандомный цвет", "Каждый партикл получает случайный цвет").setValue(false);
    public ColorSetting color = new ColorSetting("Цвет", "Цвет партиклов").value(-7773880).visible(() -> !this.randomColor.isValue());
 
-   private static final float GLOW_SIZE = 6.0F;
-   private static final int TOTEM_DURATION = 16;
-   private static final int MAX_PARTICLES = 80;
-   private static final int MAX_RENDER_PER_FRAME = 80;
-   private static final long PROJECTILE_SCAN_MS = 120L;
+   private static final float GLOW_SIZE = 0.0F;
+   private static final int TOTEM_DURATION = 12;
+   private static final int MAX_PARTICLES = 40;
+   private static final int MAX_RENDER_PER_FRAME = 40;
+   private static final long PROJECTILE_SCAN_MS = 250L;
    private static final int[] RANDOM_COLORS = new int[]{-65536, -33024, -256, -16711936, -16711681, -16776961, -7667457, -65281, -60269, -1, -16711809, -40121};
    private static final int[] TOTEM_COLORS = new int[]{-8586240, -10496, -13447886, -23296, -16711936, -5374161};
 
@@ -89,9 +89,9 @@ public class Particles extends ModuleStructure {
       this.cachedMode = this.getParticleMode();
       this.cachedGlowMode = this.getGlowModeValue();
       this.cachedSpread = this.spread.getValue();
-      this.cachedSpeed = this.speed.getValue();
-      this.cachedLifeTime = Math.min(this.lifeTime.getValue(), 2.0F);
-      this.cachedSize = this.size.getValue();
+      this.cachedSpeed = Math.min(this.speed.getValue(), 1.5F);
+      this.cachedLifeTime = Math.min(this.lifeTime.getValue(), 1.25F);
+      this.cachedSize = Math.min(this.size.getValue(), 0.8F);
       this.cachedRandomColor = this.randomColor.isValue();
       this.cachedColor = this.color.getColor();
    }
@@ -124,11 +124,7 @@ public class Particles extends ModuleStructure {
    }
 
    private Particle3D.GlowMode getGlowModeValue() {
-      return switch (this.glowMode.getSelected()) {
-         case "Bloom" -> Particle3D.GlowMode.BLOOM;
-         case "Bloom Sample" -> Particle3D.GlowMode.BLOOM_SAMPLE;
-         default -> Particle3D.GlowMode.BLOOM_SAMPLE;
-      };
+      return Particle3D.GlowMode.BLOOM_SAMPLE;
    }
 
    private Particle3D spawnParticle(Vec3d var1, Vec3d var2, float var3, float var4) {
@@ -193,7 +189,7 @@ public class Particles extends ModuleStructure {
    private void handleWalkParticles() {
       double var1 = mc.player.getVelocity().lengthSquared();
       if (!(var1 <= 1.0E-4) && !mc.player.isSneaking()) {
-         float var3 = Math.min(this.walkAmount.getValue(), 6.0F) / 20.0F;
+         float var3 = Math.min(this.walkAmount.getValue(), 3.0F) / 20.0F;
          this.walkParticleAccumulator += var3;
          int var4 = Math.min((int)this.walkParticleAccumulator, 1);
          this.walkParticleAccumulator -= var4;
@@ -213,7 +209,7 @@ public class Particles extends ModuleStructure {
                Vec3d var22 = new Vec3d(
                   (var14.nextDouble() - 0.5) * var12 * var13, (var14.nextDouble() - 0.5) * var12 * 0.5 * var13, (var14.nextDouble() - 0.5) * var12 * var13
                );
-               this.particles.add(this.spawnParticle(new Vec3d(var16, var18, var20), var22, this.cachedSize * 0.6F, this.cachedLifeTime * 0.5F));
+               this.particles.add(this.spawnParticle(new Vec3d(var16, var18, var20), var22, this.cachedSize * 0.5F, this.cachedLifeTime * 0.5F));
             }
          }
       } else {
@@ -232,7 +228,7 @@ public class Particles extends ModuleStructure {
       int checked = 0;
 
       for (Entity var5 : mc.world.getEntities()) {
-         if (++checked > 96 || this.particles.size() >= MAX_PARTICLES) {
+         if (++checked > 64 || this.particles.size() >= MAX_PARTICLES) {
             break;
          }
 
@@ -252,7 +248,7 @@ public class Particles extends ModuleStructure {
                   (var3.nextDouble() - 0.5) * 2.0 * var1 * var2,
                   (var3.nextDouble() - 0.5) * 2.0 * var1 * var2
                );
-               this.particles.add(this.spawnParticle(var8, var9, this.cachedSize * 0.5F, this.cachedLifeTime * 0.3F));
+               this.particles.add(this.spawnParticle(var8, var9, this.cachedSize * 0.45F, this.cachedLifeTime * 0.25F));
             }
          }
       }
@@ -264,7 +260,7 @@ public class Particles extends ModuleStructure {
          Entity var2 = var1.getTarget();
          float var3 = this.cachedSpread * 0.15F;
          float var4 = this.cachedSpeed;
-         int var5 = Math.min(Math.min(this.amount.getInt(), 12), MAX_PARTICLES - this.particles.size());
+         int var5 = Math.min(Math.min(this.amount.getInt(), 6), MAX_PARTICLES - this.particles.size());
          ThreadLocalRandom var6 = ThreadLocalRandom.current();
 
          for (int var7 = 0; var7 < var5; var7++) {
@@ -289,7 +285,7 @@ public class Particles extends ModuleStructure {
          float var4 = this.cachedSpeed;
          ThreadLocalRandom var5 = ThreadLocalRandom.current();
 
-         for (int var6 = 0; var6 < 2 && this.particles.size() < MAX_PARTICLES; var6++) {
+         for (int var6 = 0; var6 < 1 && this.particles.size() < MAX_PARTICLES; var6++) {
             double var7 = var5.nextDouble() * 2.0 - 1.0;
             double var9 = var5.nextDouble() * 2.0 - 1.0;
             double var11 = var5.nextDouble() * 2.0 - 1.0;
@@ -300,12 +296,12 @@ public class Particles extends ModuleStructure {
                   var1.getZ() + var11 * var1.getWidth() * 0.5
                );
                double var14 = this.cachedSpread * 0.18 * var3 * var4;
-               double var16 = (var5.nextDouble() < 0.4 ? 0.15 + var5.nextDouble() * 0.2 : 0.03 + var5.nextDouble() * 0.07) * var4;
+               double var16 = (0.03 + var5.nextDouble() * 0.07) * var4;
                Vec3d var18 = new Vec3d(var7 * var14, var16, var11 * var14);
                int var19 = TOTEM_COLORS[var5.nextInt(TOTEM_COLORS.length)];
                this.particles
                   .add(
-                     new Particle3D(var13, var18, var19, this.cachedSize * 0.8F, this.cachedLifeTime * 0.8F)
+                     new Particle3D(var13, var18, var19, this.cachedSize * 0.7F, this.cachedLifeTime * 0.6F)
                         .setGravity(this.getGravity())
                         .setVelocityMultiplier(0.98F)
                         .setMode(this.cachedMode)

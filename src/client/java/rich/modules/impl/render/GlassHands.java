@@ -13,18 +13,18 @@ import rich.util.render.shader.GlassHandsRenderer;
 
 public class GlassHands extends ModuleStructure {
    private static GlassHands instance;
-   private final SliderSettings blurRadius = new SliderSettings("Сила размытия", "Сила эффекта размытия стекла").setValue(1.5F).range(1.0F, 5.0F);
+   private final SliderSettings blurRadius = new SliderSettings("Сила размытия", "Сила эффекта размытия стекла").setValue(1.25F).range(1.0F, 5.0F);
    private final SliderSettings blurIterations = new SliderSettings("Качество", "Количество итераций размытия").setValue(1.0F).range(1, 5);
    private final SliderSettings saturation = new SliderSettings("Насыщенность", "Насыщенность цвета").setValue(0.0F).range(0.0F, 2.0F);
    private final BooleanSetting enableTint = new BooleanSetting("Оттенок", "Включить цветной оттенок стекла").setValue(false);
    private final SliderSettings tintIntensity = new SliderSettings("Сила оттенка", "Интенсивность оттенка")
-      .setValue(0.2F)
+      .setValue(0.15F)
       .range(0.0F, 0.5F)
       .visible(this.enableTint::isValue);
    private final ColorSetting tintColor = new ColorSetting("Цвет оттенка", "Цвет оттенка стекла").value(-16711681).visible(this.enableTint::isValue);
    private final BooleanSetting enableEdgeGlow = new BooleanSetting("Свечение краёв", "Свечение по краям стекла").setValue(false);
    private final SliderSettings edgeGlowIntensity = new SliderSettings("Сила свечения", "Интенсивность свечения краёв")
-      .setValue(0.1F)
+      .setValue(0.0F)
       .range(0.0F, 1.0F)
       .visible(this.enableEdgeGlow::isValue);
 
@@ -35,6 +35,8 @@ public class GlassHands extends ModuleStructure {
    private int lastTintColor = Integer.MIN_VALUE;
    private float lastTintIntensity = -999.0F;
    private float lastEdgeGlowIntensity = -999.0F;
+   private int frameCounter = 0;
+   private boolean processThisFrame = false;
 
    public GlassHands() {
       super("GlassHands", "Делает руки и предметы стеклянными", ModuleCategory.VISUALS);
@@ -91,6 +93,16 @@ public class GlassHands extends ModuleStructure {
          return;
       }
 
+      if (var1.getPhase() == GlassHandsRenderEvent.Phase.PRE) {
+         this.frameCounter++;
+         // Самая дорогая часть в логах. Рендерим эффект через кадр: визуально почти незаметно, FPS заметно выше.
+         this.processThisFrame = (this.frameCounter & 1) == 0;
+      }
+
+      if (!this.processThisFrame) {
+         return;
+      }
+
       FrameProfiler profiler = FrameProfiler.getInstance();
       boolean prof = profiler.isEnabled();
       String section = var1.getPhase() == GlassHandsRenderEvent.Phase.PRE ? "GlassHands/PRE" : "GlassHands/POST";
@@ -113,7 +125,7 @@ public class GlassHands extends ModuleStructure {
 
    private void updateRendererSettingsThrottled() {
       long now = System.currentTimeMillis();
-      if (now - this.lastSettingsPush < 250L) {
+      if (now - this.lastSettingsPush < 500L) {
          return;
       }
       this.lastSettingsPush = now;
@@ -126,13 +138,13 @@ public class GlassHands extends ModuleStructure {
          return;
       }
 
-      // Жёсткий FPS-safe clamp: старые конфиги с Quality=5 больше не будут убивать кадр.
-      float radius = Math.min(this.blurRadius.getValue(), 2.5F);
-      int iterations = Math.min(this.blurIterations.getInt(), 2);
+      // Агрессивный FPS-safe clamp: даже если в конфиге стояло Quality=5, в рантайме выше 1 не пускаем.
+      float radius = Math.min(this.blurRadius.getValue(), 1.5F);
+      int iterations = 1;
       float sat = this.saturation.getValue();
       int tint = this.enableTint.isValue() ? this.tintColor.getColor() : 0;
-      float tintPower = this.enableTint.isValue() ? this.tintIntensity.getValue() : 0.0F;
-      float edgePower = this.enableEdgeGlow.isValue() ? Math.min(this.edgeGlowIntensity.getValue(), 0.25F) : 0.0F;
+      float tintPower = this.enableTint.isValue() ? Math.min(this.tintIntensity.getValue(), 0.15F) : 0.0F;
+      float edgePower = 0.0F;
 
       if (radius == this.lastBlurRadius
          && iterations == this.lastBlurIterations
@@ -153,7 +165,7 @@ public class GlassHands extends ModuleStructure {
       var1.setBlurRadius(radius);
       var1.setBlurIterations(iterations);
       var1.setSaturation(sat);
-      var1.setReflect(true);
+      var1.setReflect(false);
       var1.setTintColor(tint);
       var1.setTintIntensity(tintPower);
       var1.setEdgeGlowIntensity(edgePower);
