@@ -33,25 +33,30 @@ import rich.modules.impl.render.HitEffect;
 import rich.util.render.clientpipeline.ClientPipelines;
 
 /**
- * Chams rendering for enemy players:
+ * Chams rendering for enemy players.
  *
- * The body (skin) is drawn through walls by replacing getRenderLayer() with
- * CHAMS_ENTITY (a no-depth-test pipeline that still samples the real skin texture).
+ * <h3>Architecture</h3>
+ * <ol>
+ *   <li>Body (skin): {@link #rich$chamsBodyLayer} redirects {@code getRenderLayer()}
+ *       inside {@code render()} to return the unified {@code CHAMS} pipeline layer
+ *       for enemy player states.  This gives the skin a NO_DEPTH_TEST draw call
+ *       that renders through walls.</li>
+ *   <li>Armor: {@link ArmorChamsMixin} intercepts {@code RenderLayers.armorCutoutNoCull()}
+ *       (and related methods) when {@code RICH$EQUIPMENT_TARGET == true}.  The
+ *       flag is set at HEAD of {@code render()} and cleared at RETURN, so armor
+ *       feature renderers that run inside {@code render()} see it as {@code true}.</li>
+ * </ol>
  *
- * Armor is handled by ArmorChamsMixin (@Redirect on armorCutoutNoCull).
- *
- * Items in hands: MC 1.21 deferred-queue system prevents easy pipeline swap;
- * they render normally (visible only when not occluded).
- *
- * RICH$EQUIPMENT_TARGET is set true at the HEAD of render() when the entity
- * is a chams target, and reset to false at RETURN.  ArmorChamsMixin reads this
- * flag to decide whether to apply the chams pipeline to each armor layer.
+ * <h3>Why the unified CHAMS pipeline instead of CHAMS_ENTITY / CHAMS_ARMOR</h3>
+ * See {@link ClientPipelines#CHAMS} for the full explanation.  Short version:
+ * the old ENTITY_SNIPPET shader applies lightmap multiplication which blackens
+ * leggings.  The new custom chams shader skips the lightmap entirely.
  */
 @Mixin(LivingEntityRenderer.class)
 public abstract class LivingEntityRendererMixin<S extends LivingEntityRenderState, M extends EntityModel<? super S>>
         implements IMinecraft {
 
-    // Map render states -> entity IDs so we can identify "is this the local player?".
+    // Map render states -> entity IDs so we can check "is this the local player?".
     // WeakHashMap: entries are collected once the render state is no longer referenced.
     @Unique
     private static final Map<LivingEntityRenderState, Integer> RICH$STATE_ID =
@@ -77,8 +82,9 @@ public abstract class LivingEntityRendererMixin<S extends LivingEntityRenderStat
     }
 
     // ---------------------------------------------------------------------------
-    // 2) Set the RICH$EQUIPMENT_TARGET flag at the start of each player render.
-    //    ArmorChamsMixin reads this flag to apply (or skip) the chams pipeline.
+    // 2) Set RICH$EQUIPMENT_TARGET at HEAD of render() so that ArmorChamsMixin
+    //    can see the flag while processing armor feature renderers inside render().
+    //    Clear it at RETURN so it does not bleed into the next entity render.
     // ---------------------------------------------------------------------------
     @Inject(
         method = "render(Lnet/minecraft/client/render/entity/state/LivingEntityRenderState;Lnet/minecraft/client/util/math/MatrixStack;Lnet/minecraft/client/render/command/OrderedRenderCommandQueue;Lnet/minecraft/client/render/state/CameraRenderState;)V",
@@ -102,8 +108,8 @@ public abstract class LivingEntityRendererMixin<S extends LivingEntityRenderStat
 
     // ---------------------------------------------------------------------------
     // 3) Body (skin) through-wall rendering.
-    //    Redirect getRenderLayer() -> CHAMS_ENTITY pipeline for chams targets.
-    //    CHAMS_ENTITY uses depth-test=ALWAYS so it draws through geometry.
+    //    Redirect getRenderLayer() -> CHAMS pipeline for chams targets.
+    //    CHAMS uses NO_DEPTH_TEST + custom flat shader (full brightness, no lightmap).
     // ---------------------------------------------------------------------------
     @Redirect(
         method = "render(Lnet/minecraft/client/render/entity/state/LivingEntityRenderState;Lnet/minecraft/client/util/math/MatrixStack;Lnet/minecraft/client/render/command/OrderedRenderCommandQueue;Lnet/minecraft/client/render/state/CameraRenderState;)V",
@@ -119,18 +125,19 @@ public abstract class LivingEntityRendererMixin<S extends LivingEntityRenderStat
         Integer entityId = RICH$STATE_ID.get(state);
         Chams chams = Chams.getInstance();
 
-        // Draw enemy players through walls with real skin texture
+        // Draw enemy players through walls with their real skin texture.
+        // Use the unified CHAMS pipeline (no lightmap → no dark skin areas).
         if (chams != null && chams.isState() && state instanceof PlayerEntityRenderState) {
             boolean isSelf = (entityId != null && mc.player != null && entityId == mc.player.getId());
             if (!isSelf) {
                 Identifier texture = this.getTexture((S) state);
                 if (texture != null) {
-                    return ClientPipelines.CHAMS_ENTITY.apply(texture);
+                    return ClientPipelines.CHAMS.apply(texture);
                 }
             }
         }
 
-        // HitEffect tint: let the vanilla layer handle it but force glowing=true
+        // HitEffect tint: force glowing=true so vanilla applies the tint color.
         HitEffect hitEffect = HitEffect.getInstance();
         if (!glowing && entityId != null && hitEffect != null && hitEffect.shouldTintEntity(entityId)) {
             glowing = true;

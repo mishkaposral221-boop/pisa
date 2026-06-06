@@ -278,38 +278,66 @@ public class ClientPipelines {
       return RenderLayer.of("gui_arrow_blend", var1);
    });
 
-   // ── Body chams (skin through walls) ─────────────────────────────────────────
-   // withCull(true): body geometry always faces outward, culling is fine.
-   public static final RenderPipeline CHAMS_ENTITY_PIPELINE = RenderPipelines.register(
+   // ─────────────────────────────────────────────────────────────────────────────
+   // CHAMS - unified through-wall pipeline for body, armor, and leggings.
+   //
+   // ROOT CAUSE OF BLACK LEGGINGS (previous implementation):
+   //   Both CHAMS_ENTITY and CHAMS_ARMOR used ENTITY_SNIPPET which internally
+   //   runs the vanilla entity shader. That shader does:
+   //     color *= vertexColor * texelFetch(Sampler2, UV2, 0)
+   //   The HUMANOID_LEGGINGS (inner armor layer / layer_2) model is queued by
+   //   ArmorFeatureRenderer AFTER the feature setup step. At that point, UV2
+   //   (lightmap coords) is (0, 0), so texelFetch returns (0,0,0,1) - BLACK.
+   //   Result: texture * vertexColor * BLACK = BLACK.
+   //
+   // FIX:
+   //   Custom shaders (rich:core/chams.vsh + chams.fsh) that do NOT apply
+   //   the lightmap at all. They just sample Sampler0 (entity texture),
+   //   apply the hit overlay (Sampler1), and output at full brightness.
+   //   This works correctly for all geometry regardless of normal facing
+   //   direction or lightmap UV value.
+   //
+   // PIPELINE PROPERTIES:
+   //   - ENTITY_SNIPPET as base: provides entity vertex format (Position, Color,
+   //     UV0, UV1 overlay, UV2 lightmap, Normal) and transform uniforms.
+   //   - withVertexShader / withFragmentShader: overrides ENTITY_SNIPPET's
+   //     default shaders with our flat-shaded custom shaders.
+   //   - NO_DEPTH_TEST: renders through walls.
+   //   - depthWrite=true: writes depth so overlapping chams are self-consistent.
+   //   - cull=false: correct for inner-facing armor geometry (leggings).
+   // ─────────────────────────────────────────────────────────────────────────────
+   public static final RenderPipeline CHAMS_PIPELINE = RenderPipelines.register(
       RenderPipeline.builder(new Snippet[]{RenderPipelines.ENTITY_SNIPPET})
-         .withLocation("pipeline/chams_entity")
-         .withBlend(BlendFunction.TRANSLUCENT)
-         .withDepthTestFunction(DepthTestFunction.NO_DEPTH_TEST)
-         .withDepthWrite(true)
-         .withCull(true)
-         .build()
-   );
-   public static final Function<Identifier, RenderLayer> CHAMS_ENTITY = Util.memoize(var0 -> {
-      RenderSetup var1 = RenderSetup.builder(CHAMS_ENTITY_PIPELINE).texture("Sampler0", var0).useLightmap().useOverlay().translucent().expectedBufferSize(8192).build();
-      return RenderLayer.of("chams_entity", var1);
-   });
-
-   // ── Armor chams (armor through walls) ───────────────────────────────────────
-   // withCull(false): REQUIRED for leggings (HUMANOID_LEGGINGS / layer_2).
-   // The inner leg geometry has back-facing polygons that get culled with
-   // withCull(true), causing leggings to appear solid black.
-   // Using withCull(false) ensures all armor faces are rendered correctly.
-   public static final RenderPipeline CHAMS_ARMOR_PIPELINE = RenderPipelines.register(
-      RenderPipeline.builder(new Snippet[]{RenderPipelines.ENTITY_SNIPPET})
-         .withLocation("pipeline/chams_armor")
+         .withLocation("pipeline/chams")
+         .withVertexShader("rich:core/chams")
+         .withFragmentShader("rich:core/chams")
          .withBlend(BlendFunction.TRANSLUCENT)
          .withDepthTestFunction(DepthTestFunction.NO_DEPTH_TEST)
          .withDepthWrite(true)
          .withCull(false)
          .build()
    );
-   public static final Function<Identifier, RenderLayer> CHAMS_ARMOR = Util.memoize(var0 -> {
-      RenderSetup var1 = RenderSetup.builder(CHAMS_ARMOR_PIPELINE).texture("Sampler0", var0).useLightmap().useOverlay().translucent().expectedBufferSize(8192).build();
-      return RenderLayer.of("chams_armor", var1);
+
+   /**
+    * Unified chams render layer.
+    * Used for body (skin), outer armor (layer_1), and leggings (layer_2).
+    * Memoized per texture identifier.
+    */
+   public static final Function<Identifier, RenderLayer> CHAMS = Util.memoize(var0 -> {
+      RenderSetup var1 = RenderSetup.builder(CHAMS_PIPELINE)
+         .texture("Sampler0", var0)  // entity / armor texture
+         .useOverlay()               // Sampler1 = overlay (hit flash)
+         // intentionally NOT .useLightmap() - our shader ignores Sampler2
+         .translucent()
+         .expectedBufferSize(8192)
+         .build();
+      return RenderLayer.of("chams", var1);
    });
+
+   // Legacy aliases kept for any code that still references the old names.
+   // Both now delegate to the unified CHAMS pipeline.
+   /** @deprecated Use {@link #CHAMS} */
+   public static final Function<Identifier, RenderLayer> CHAMS_ENTITY = CHAMS;
+   /** @deprecated Use {@link #CHAMS} */
+   public static final Function<Identifier, RenderLayer> CHAMS_ARMOR  = CHAMS;
 }
