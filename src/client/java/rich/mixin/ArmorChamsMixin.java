@@ -14,13 +14,19 @@ import rich.util.render.clientpipeline.ClientPipelines;
 /**
  * Renders armor through walls by intercepting RenderLayers.armorCutoutNoCull().
  *
+ * WHY CHAMS_ARMOR (cull=false) INSTEAD OF CHAMS_ENTITY (cull=true):
+ *
+ * The original CHAMS_ENTITY_PIPELINE has withCull(true), which is correct for
+ * the player body model (all faces point outward). However, the leggings inner
+ * layer (HUMANOID_LEGGINGS / layer_2) has geometry with back-facing polygons.
+ * With backface culling ON, those polygons are discarded -> leggings render black.
+ *
+ * CHAMS_ARMOR_PIPELINE is identical to CHAMS_ENTITY but with withCull(false),
+ * so ALL armor faces render correctly including leggings.
+ *
  * IMPORTANT: RenderLayers.armorCutoutNoCull() is called during MC bootstrap
  * (TexturedRenderLayers.<clinit>) BEFORE our mod's Manager is initialized.
- * We MUST check that the manager is ready before calling Chams.getInstance(),
- * otherwise we get NullPointerException -> ExceptionInInitializerError -> crash.
- *
- * Guard: Initialization.getInstance().getManager() != null
- * This is cheap (no allocation) and safe to call at any time.
+ * Guard: check getManager() != null before calling Chams.getInstance().
  */
 @Mixin(RenderLayers.class)
 public class ArmorChamsMixin {
@@ -43,7 +49,8 @@ public class ArmorChamsMixin {
                 && chams.isState()
                 && Chams.RICH$EQUIPMENT_TARGET
                 && chams.showArmor.isValue()) {
-            cir.setReturnValue(ClientPipelines.CHAMS_ENTITY.apply(texture));
+            // CHAMS_ARMOR uses cull=false so leggings (back-facing geometry) render correctly
+            cir.setReturnValue(ClientPipelines.CHAMS_ARMOR.apply(texture));
         }
     }
 }
