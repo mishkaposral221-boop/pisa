@@ -11,6 +11,7 @@ import rich.screens.clickgui.impl.settingsrender.MultiSelectComponent;
 import rich.screens.clickgui.impl.settingsrender.SelectComponent;
 import rich.theme.ClientTheme;
 import rich.util.interfaces.AbstractSettingComponent;
+import rich.util.profiler.FrameProfiler;
 import rich.util.render.Render2D;
 import rich.util.render.font.Fonts;
 import rich.util.render.shader.Scissor;
@@ -42,8 +43,21 @@ public class SettingsPanelRenderer {
       ModuleScrollHandler var13,
       ModuleAnimationHandler var14
    ) {
-      var14.updateSettingAnimations(var3);
-      var14.updateVisibilityAnimations(var3);
+      FrameProfiler var10000 = FrameProfiler.getInstance();
+      boolean var10001 = var10000.isEnabled();
+      if (var10001) {
+         var10000.begin("ClickGui/settingsPanel/updateAnimations");
+      }
+
+      try {
+         var14.updateSettingAnimations(var3);
+         var14.updateVisibilityAnimations(var3);
+      } finally {
+         if (var10001) {
+            var10000.end();
+         }
+      }
+
       int var15 = (int)(15.0F * var12);
       int var16 = (int)(215.0F * var12);
       Render2D.rect(var4, var5, var6, var7, ClientTheme.panel(var15), 7.0F);
@@ -74,50 +88,79 @@ public class SettingsPanelRenderer {
          ArrayList var24 = new ArrayList();
          ArrayList var25 = new ArrayList();
          float var26 = var5 + 38.0F + (float)var13.getSettingDisplayScroll();
+         if (var10001) {
+            var10000.begin("ClickGui/settingsPanel/layoutComponents");
+         }
 
-         for (AbstractSettingComponent var28 : var3) {
-            float var29 = var14.getHeightAnimations().getOrDefault(var28, var28.getSetting().isVisible() ? 1.0F : 0.0F);
-            if (var29 <= 0.001F) {
-               var24.add(null);
-               var25.add(0.0F);
-            } else {
-               var24.add(var26);
-               float var30 = this.getComponentBaseHeight(var28);
-               float var31 = var30 * var29;
-               var25.add(var31);
-               var26 += var31 + 2.0F * var29;
+         try {
+            for (AbstractSettingComponent var28 : var3) {
+               float var29 = var14.getHeightAnimations().getOrDefault(var28, var28.getSetting().isVisible() ? 1.0F : 0.0F);
+               if (var29 <= 0.001F) {
+                  var24.add(null);
+                  var25.add(0.0F);
+               } else {
+                  var24.add(var26);
+                  float var30 = this.getComponentBaseHeight(var28);
+                  float var31 = var30 * var29;
+                  var25.add(var31);
+                  var26 += var31 + 2.0F * var29;
+               }
+            }
+         } finally {
+            if (var10001) {
+               var10000.end();
             }
          }
 
          float var45 = var20;
          float var46 = var20 + var21;
+         if (var10001) {
+            var10000.begin("ClickGui/settingsPanel/renderVisibleComponents");
+         }
 
-         for (int var47 = 0; var47 < var3.size(); var47++) {
-            AbstractSettingComponent var49 = (AbstractSettingComponent)var3.get(var47);
-            Float var52 = (Float)var24.get(var47);
-            if (var52 != null) {
-               float var32 = var14.getVisibilityAnimations().getOrDefault(var49, var49.getSetting().isVisible() ? 1.0F : 0.0F);
-               float var33 = var14.getHeightAnimations().getOrDefault(var49, var49.getSetting().isVisible() ? 1.0F : 0.0F);
-               if (!(var32 <= 0.001F) || !(var33 <= 0.001F)) {
-                  float var34 = (Float)var25.get(var47);
-                  float var35 = var14.getSettingAnimations().getOrDefault(var49, 1.0F);
-                  float var36 = var35 * var32 * var12;
-                  var49.position(var4 + 8.0F, var52);
-                  var49.size(var6 - 16.0F, 16.0F);
-                  var49.setAlphaMultiplier(var36);
-                  if (var52 + var34 >= var45 && var52 <= var46 && var36 > 0.01F) {
-                     float var37 = Math.max(var52, var45);
-                     float var38 = Math.min(var52 + var34, var46);
-                     float var39 = var38 - var37;
-                     if (var39 > 0.5F) {
-                        Scissor.enable(var22, var37, var23, var39, var11);
-                        var1.getMatrices().pushMatrix();
-                        var49.render(var1, (int)var8, (int)var9, var10);
-                        var1.getMatrices().popMatrix();
-                        Scissor.disable();
+         try {
+            for (int var47 = 0; var47 < var3.size(); var47++) {
+               AbstractSettingComponent var49 = (AbstractSettingComponent)var3.get(var47);
+               Float var52 = (Float)var24.get(var47);
+               if (var52 != null) {
+                  float var32 = var14.getVisibilityAnimations().getOrDefault(var49, var49.getSetting().isVisible() ? 1.0F : 0.0F);
+                  float var33 = var14.getHeightAnimations().getOrDefault(var49, var49.getSetting().isVisible() ? 1.0F : 0.0F);
+                  if (!(var32 <= 0.001F) || !(var33 <= 0.001F)) {
+                     float var34 = (Float)var25.get(var47);
+                     float var35 = var14.getSettingAnimations().getOrDefault(var49, 1.0F);
+                     float var36 = var35 * var32 * var12;
+                     var49.position(var4 + 8.0F, var52);
+                     var49.size(var6 - 16.0F, 16.0F);
+                     var49.setAlphaMultiplier(var36);
+                     if (var52 + var34 >= var45 && var52 <= var46 && var36 > 0.01F) {
+                        float var37 = Math.max(var52, var45);
+                        float var38 = Math.min(var52 + var34, var46);
+                        float var39 = var38 - var37;
+                        if (var39 > 0.5F) {
+                           Scissor.enable(var22, var37, var23, var39, var11);
+                           var1.getMatrices().pushMatrix();
+                           if (var10001) {
+                              var10000.begin("ClickGui/settingsPanel/component/" + var49.getClass().getSimpleName());
+                           }
+
+                           try {
+                              var49.render(var1, (int)var8, (int)var9, var10);
+                           } finally {
+                              if (var10001) {
+                                 var10000.end();
+                              }
+                           }
+
+                           var1.getMatrices().popMatrix();
+                           Scissor.disable();
+                        }
                      }
                   }
                }
+            }
+         } finally {
+            if (var10001) {
+               var10000.end();
             }
          }
 
