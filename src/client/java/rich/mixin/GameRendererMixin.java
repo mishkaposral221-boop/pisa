@@ -60,9 +60,7 @@ public abstract class GameRendererMixin {
    @Unique
    private final MatrixStack matrices = new MatrixStack();
    @Unique
-   private boolean richProfilerPreHandOpen = false;
-   @Unique
-   private boolean richProfilerPostHandOpen = false;
+   private boolean richWorldPhaseOpen = false;
 
    @Shadow
    protected abstract void bobView(MatrixStack var1, float var2);
@@ -97,9 +95,7 @@ public abstract class GameRendererMixin {
       FrameProfiler profiler = FrameProfiler.getInstance();
       if (profiler.isEnabled()) {
          profiler.begin("Minecraft/GameRenderer.renderWorld");
-         profiler.begin("Minecraft/renderWorld/beforeHand");
-         this.richProfilerPreHandOpen = true;
-         this.richProfilerPostHandOpen = false;
+         this.richBeginWorldPhase("Minecraft/renderWorld/start");
       }
    }
 
@@ -107,16 +103,92 @@ public abstract class GameRendererMixin {
    private void richProfileRenderWorldEnd(RenderTickCounter var1, CallbackInfo var2) {
       FrameProfiler profiler = FrameProfiler.getInstance();
       if (profiler.isEnabled()) {
-         if (this.richProfilerPostHandOpen) {
-            profiler.end();
-            this.richProfilerPostHandOpen = false;
-         }
-         if (this.richProfilerPreHandOpen) {
-            profiler.end();
-            this.richProfilerPreHandOpen = false;
-         }
+         this.richEndWorldPhase();
          profiler.end();
       }
+   }
+
+   @Unique
+   private void richBeginWorldPhase(String name) {
+      FrameProfiler profiler = FrameProfiler.getInstance();
+      if (!profiler.isEnabled()) {
+         return;
+      }
+      if (this.richWorldPhaseOpen) {
+         profiler.end();
+         this.richWorldPhaseOpen = false;
+      }
+      profiler.begin(name);
+      this.richWorldPhaseOpen = true;
+   }
+
+   @Unique
+   private void richEndWorldPhase() {
+      FrameProfiler profiler = FrameProfiler.getInstance();
+      if (profiler.isEnabled() && this.richWorldPhaseOpen) {
+         profiler.end();
+         this.richWorldPhaseOpen = false;
+      }
+   }
+
+   @Inject(method = "renderWorld", at = @At(value = "INVOKE_STRING", target = "Lnet/minecraft/util/profiler/Profiler;swap(Ljava/lang/String;)V", args = "ldc=sky"), require = 0)
+   private void richPhaseSky(RenderTickCounter var1, CallbackInfo var2) {
+      this.richBeginWorldPhase("Minecraft/renderWorld/sky");
+   }
+
+   @Inject(method = "renderWorld", at = @At(value = "INVOKE_STRING", target = "Lnet/minecraft/util/profiler/Profiler;swap(Ljava/lang/String;)V", args = "ldc=terrain"), require = 0)
+   private void richPhaseTerrain(RenderTickCounter var1, CallbackInfo var2) {
+      this.richBeginWorldPhase("Minecraft/renderWorld/terrain");
+   }
+
+   @Inject(method = "renderWorld", at = @At(value = "INVOKE_STRING", target = "Lnet/minecraft/util/profiler/Profiler;swap(Ljava/lang/String;)V", args = "ldc=entities"), require = 0)
+   private void richPhaseEntities(RenderTickCounter var1, CallbackInfo var2) {
+      this.richBeginWorldPhase("Minecraft/renderWorld/entities");
+   }
+
+   @Inject(method = "renderWorld", at = @At(value = "INVOKE_STRING", target = "Lnet/minecraft/util/profiler/Profiler;swap(Ljava/lang/String;)V", args = "ldc=blockentities"), require = 0)
+   private void richPhaseBlockEntities(RenderTickCounter var1, CallbackInfo var2) {
+      this.richBeginWorldPhase("Minecraft/renderWorld/blockEntities");
+   }
+
+   @Inject(method = "renderWorld", at = @At(value = "INVOKE_STRING", target = "Lnet/minecraft/util/profiler/Profiler;swap(Ljava/lang/String;)V", args = "ldc=destroyProgress"), require = 0)
+   private void richPhaseDestroyProgress(RenderTickCounter var1, CallbackInfo var2) {
+      this.richBeginWorldPhase("Minecraft/renderWorld/destroyProgress");
+   }
+
+   @Inject(method = "renderWorld", at = @At(value = "INVOKE_STRING", target = "Lnet/minecraft/util/profiler/Profiler;swap(Ljava/lang/String;)V", args = "ldc=outline"), require = 0)
+   private void richPhaseOutline(RenderTickCounter var1, CallbackInfo var2) {
+      this.richBeginWorldPhase("Minecraft/renderWorld/outline");
+   }
+
+   @Inject(method = "renderWorld", at = @At(value = "INVOKE_STRING", target = "Lnet/minecraft/util/profiler/Profiler;swap(Ljava/lang/String;)V", args = "ldc=debug"), require = 0)
+   private void richPhaseDebug(RenderTickCounter var1, CallbackInfo var2) {
+      this.richBeginWorldPhase("Minecraft/renderWorld/debug");
+   }
+
+   @Inject(method = "renderWorld", at = @At(value = "INVOKE_STRING", target = "Lnet/minecraft/util/profiler/Profiler;swap(Ljava/lang/String;)V", args = "ldc=weather"), require = 0)
+   private void richPhaseWeather(RenderTickCounter var1, CallbackInfo var2) {
+      this.richBeginWorldPhase("Minecraft/renderWorld/weather");
+   }
+
+   @Inject(method = "renderWorld", at = @At(value = "INVOKE_STRING", target = "Lnet/minecraft/util/profiler/Profiler;swap(Ljava/lang/String;)V", args = "ldc=clouds"), require = 0)
+   private void richPhaseClouds(RenderTickCounter var1, CallbackInfo var2) {
+      this.richBeginWorldPhase("Minecraft/renderWorld/clouds");
+   }
+
+   @Inject(method = "renderWorld", at = @At(value = "INVOKE_STRING", target = "Lnet/minecraft/util/profiler/Profiler;swap(Ljava/lang/String;)V", args = "ldc=particles"), require = 0)
+   private void richPhaseParticles(RenderTickCounter var1, CallbackInfo var2) {
+      this.richBeginWorldPhase("Minecraft/renderWorld/vanillaParticles");
+   }
+
+   @Inject(method = "renderWorld", at = @At(value = "INVOKE_STRING", target = "Lnet/minecraft/util/profiler/Profiler;swap(Ljava/lang/String;)V", args = "ldc=translucent"), require = 0)
+   private void richPhaseTranslucent(RenderTickCounter var1, CallbackInfo var2) {
+      this.richBeginWorldPhase("Minecraft/renderWorld/translucent");
+   }
+
+   @Inject(method = "renderWorld", at = @At(value = "INVOKE_STRING", target = "Lnet/minecraft/util/profiler/Profiler;swap(Ljava/lang/String;)V", args = "ldc=worldborder"), require = 0)
+   private void richPhaseWorldBorder(RenderTickCounter var1, CallbackInfo var2) {
+      this.richBeginWorldPhase("Minecraft/renderWorld/worldBorder");
    }
 
    @ModifyReturnValue(method = "getFov", at = @At("RETURN"))
@@ -152,9 +224,8 @@ public abstract class GameRendererMixin {
    ) {
       FrameProfiler profiler = FrameProfiler.getInstance();
       boolean prof = profiler.isEnabled();
-      if (prof && this.richProfilerPreHandOpen) {
-         profiler.end();
-         this.richProfilerPreHandOpen = false;
+      if (prof) {
+         this.richEndWorldPhase();
       }
       if (prof) profiler.begin("Rich/GameRenderer/worldRenderHook");
       try {
@@ -198,8 +269,7 @@ public abstract class GameRendererMixin {
          if (prof) profiler.end();
       }
       if (prof) {
-         profiler.begin("Minecraft/renderWorld/afterHand");
-         this.richProfilerPostHandOpen = true;
+         this.richBeginWorldPhase("Minecraft/renderWorld/afterHand");
       }
    }
 
