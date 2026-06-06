@@ -46,7 +46,8 @@
     "SplashOverlayMixin",
     "StatusEffectFogModifierMixin",
     "TitleScreenMixin",
-    "WindowMixin"
+    "WindowMixin",
+    "WorldRendererMixin"
   ],
   "injectors": {
     "defaultRequire": 1
