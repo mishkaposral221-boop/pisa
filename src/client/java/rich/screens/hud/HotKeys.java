@@ -44,7 +44,7 @@ public class HotKeys extends AbstractHudElement {
             .getModuleProvider()
             .getModuleStructures()
             .stream()
-            .filter(var0 -> var0.isState() && var0.getKey() != -1)
+            .filter(var0 -> var0.getKey() != -1)
             .toList();
          boolean var1 = !this.keysList.isEmpty();
          boolean var2 = this.isChat(this.mc.currentScreen);
