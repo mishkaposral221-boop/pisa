@@ -1,5 +1,7 @@
 package rich.modules.impl.render.particles;
 
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
 import net.minecraft.client.render.RenderLayer;
 import net.minecraft.util.math.BlockPos;
@@ -49,6 +51,7 @@ public class Particle3D implements IMinecraft {
    private static final Identifier GLOW_BLOOM_SAMPLE = Identifier.of("rich", "textures/world/dashbloomsample.png");
    private static final RenderLayer LAYER_QUADS = ParticleRenderer.getQuadsLayer();
    private static final RenderLayer LAYER_LINES = ParticleRenderer.getLinesLayer();
+   private static final Map<Identifier, RenderLayer> WORLD_PARTICLE_LAYER_CACHE = new ConcurrentHashMap<>();
    private double x;
    private double y;
    private double z;
@@ -135,24 +138,28 @@ public class Particle3D implements IMinecraft {
       return this;
    }
 
+   private static RenderLayer cachedWorldParticleLayer(Identifier texture) {
+      return WORLD_PARTICLE_LAYER_CACHE.computeIfAbsent(texture, ClientPipelines.WORLD_PARTICLES_GLOW::apply);
+   }
+
    private RenderLayer buildTextureLayer() {
       Identifier texture = this.getTexture();
-      return texture == null ? null : ClientPipelines.WORLD_PARTICLES_GLOW.apply(texture);
+      return texture == null ? null : cachedWorldParticleLayer(texture);
    }
 
    private void rebuildGlowLayers() {
       switch (this.glowMode) {
          case BLOOM:
-            this.cachedGlowLayer1 = ClientPipelines.WORLD_PARTICLES_GLOW.apply(GLOW_BLOOM);
+            this.cachedGlowLayer1 = cachedWorldParticleLayer(GLOW_BLOOM);
             this.cachedGlowLayer2 = null;
             break;
          case BLOOM_SAMPLE:
-            this.cachedGlowLayer1 = ClientPipelines.WORLD_PARTICLES_GLOW.apply(GLOW_BLOOM_SAMPLE);
+            this.cachedGlowLayer1 = cachedWorldParticleLayer(GLOW_BLOOM_SAMPLE);
             this.cachedGlowLayer2 = null;
             break;
          case BOTH:
-            this.cachedGlowLayer1 = ClientPipelines.WORLD_PARTICLES_GLOW.apply(GLOW_BLOOM);
-            this.cachedGlowLayer2 = ClientPipelines.WORLD_PARTICLES_GLOW.apply(GLOW_BLOOM_SAMPLE);
+            this.cachedGlowLayer1 = cachedWorldParticleLayer(GLOW_BLOOM);
+            this.cachedGlowLayer2 = cachedWorldParticleLayer(GLOW_BLOOM_SAMPLE);
       }
    }
 

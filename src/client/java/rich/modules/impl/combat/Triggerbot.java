@@ -36,12 +36,15 @@ public class Triggerbot extends ModuleStructure {
     public static volatile boolean SUPPRESS_SPRINT  = false;
 
     private static final Logger LOG = LoggerFactory.getLogger("Triggerbot");
+    private static final boolean DEBUG_LOGS = Boolean.getBoolean("rich.debug.triggerbot");
+    private static final long DEBUG_LOG_MIN_GAP_MS = 1000L;
 
     private Entity  pendingTarget      = null;
     private int     preAttackCountdown = 0;
     private boolean pendingWasForward  = false;
 
     private String lastDiag = "";
+    private long lastDiagLogMs = 0L;
     private int ticksOutOfWater = 10;
     private int ticksOnGround   = 0;
 
@@ -80,6 +83,7 @@ public class Triggerbot extends ModuleStructure {
         ticksOutOfWater  = 0;
         ticksOnGround    = 0;
         lastDiag = "";
+        lastDiagLogMs = 0L;
     }
 
     @EventHandler
@@ -256,10 +260,19 @@ public class Triggerbot extends ModuleStructure {
     }
 
     private void diag(String key, String msg) {
-        if (!key.equals(lastDiag)) {
-            lastDiag = key;
-            LOG.info("[Triggerbot] " + msg);
+        if (key.equals(lastDiag)) {
+            return;
         }
+        lastDiag = key;
+        if (!DEBUG_LOGS) {
+            return;
+        }
+        long now = System.currentTimeMillis();
+        if (now - this.lastDiagLogMs < DEBUG_LOG_MIN_GAP_MS) {
+            return;
+        }
+        this.lastDiagLogMs = now;
+        LOG.info("[Triggerbot] " + msg);
     }
 
     private static String fmt(double v) {

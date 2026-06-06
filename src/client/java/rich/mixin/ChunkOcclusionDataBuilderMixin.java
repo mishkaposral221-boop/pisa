@@ -16,35 +16,43 @@ import rich.util.profiler.FrameProfiler;
 @Mixin(ChunkOcclusionDataBuilder.class)
 public abstract class ChunkOcclusionDataBuilderMixin {
    @Unique
-   private boolean richProfileMarkClosedOpen = false;
+   private static final long RICH_OCCLUSION_EVENT_CACHE_NS = 50_000_000L;
+   @Unique
+   private static long richLastOcclusionEventCheckNs = 0L;
+   @Unique
+   private static boolean richCachedOcclusionCancelled = false;
    @Unique
    private boolean richProfileBuildOpen = false;
 
    @Inject(method = "markClosed", at = @At("HEAD"), cancellable = true, require = 0)
    private void onMarkClosed(BlockPos var1, CallbackInfo var2) {
-      FrameProfiler profiler = FrameProfiler.getInstance();
-      boolean prof = profiler.isEnabled();
-      if (prof) {
-         profiler.begin("Minecraft/chunkOcclusion/markClosed");
-         this.richProfileMarkClosedOpen = true;
-      }
-
-      ChunkOcclusionEvent var3 = ChunkOcclusionEvent.get();
-      EventManager.callEvent(var3);
-      if (var3.isCancelled()) {
-         if (prof && this.richProfileMarkClosedOpen) {
-            profiler.end();
-            this.richProfileMarkClosedOpen = false;
-         }
+      if (this.richIsOcclusionCancelledCached()) {
          var2.cancel();
       }
    }
 
-   @Inject(method = "markClosed", at = @At("RETURN"), require = 0)
-   private void onMarkClosedReturn(BlockPos var1, CallbackInfo var2) {
-      if (this.richProfileMarkClosedOpen) {
-         FrameProfiler.getInstance().end();
-         this.richProfileMarkClosedOpen = false;
+   @Unique
+   private boolean richIsOcclusionCancelledCached() {
+      long now = System.nanoTime();
+      if (now - richLastOcclusionEventCheckNs < RICH_OCCLUSION_EVENT_CACHE_NS) {
+         return richCachedOcclusionCancelled;
+      }
+
+      FrameProfiler profiler = FrameProfiler.getInstance();
+      boolean prof = profiler.isEnabled();
+      if (prof) {
+         profiler.begin("Minecraft/chunkOcclusion/eventRefresh");
+      }
+      try {
+         ChunkOcclusionEvent event = ChunkOcclusionEvent.get();
+         EventManager.callEvent(event);
+         richCachedOcclusionCancelled = event.isCancelled();
+         richLastOcclusionEventCheckNs = now;
+         return richCachedOcclusionCancelled;
+      } finally {
+         if (prof) {
+            profiler.end();
+         }
       }
    }
 
