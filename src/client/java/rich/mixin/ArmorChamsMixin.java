@@ -13,44 +13,48 @@ import rich.util.render.clientpipeline.ClientPipelines;
 /**
  * Renders other players' armor through walls (chams).
  *
- * Uses a simple @Redirect on armorCutoutNoCull which is called for EVERY
- * armor layer including the inner layer (leggings, layer_2.png).
- * This avoids the null-texture issue that caused leggings to appear black.
+ * WHY THE OLD VERSION HAD BLACK LEGGINGS:
+ * The previous @Redirect used a hard-coded method descriptor (RICH$RENDER string)
+ * that matched only ONE overload of EquipmentRenderer.render().
+ * In MC 1.21, leggings (HUMANOID_LEGGINGS layer type) are rendered via a
+ * DIFFERENT overload whose descriptor didn't match, so the redirect never fired
+ * for leggings. Leggings then used the default pipeline but the surrounding
+ * CHAMS_ENTITY state caused them to render as solid black.
+ *
+ * FIX:
+ * Use method = "render" WITHOUT a full descriptor.
+ * Mixin will apply this @Redirect to ALL methods named "render" in the class,
+ * capturing every call to armorCutoutNoCull() regardless of which overload
+ * triggered it. allow = 10 / require = 0 prevents crashes if the number of
+ * injection points varies across MC versions.
  */
 @Mixin(EquipmentRenderer.class)
 public class ArmorChamsMixin {
 
-	private static final String RICH$RENDER =
-		"render(Lnet/minecraft/client/render/entity/equipment/EquipmentModel$LayerType;"
-		+ "Lnet/minecraft/registry/RegistryKey;"
-		+ "Lnet/minecraft/client/model/Model;"
-		+ "Ljava/lang/Object;"
-		+ "Lnet/minecraft/item/ItemStack;"
-		+ "Lnet/minecraft/client/util/math/MatrixStack;"
-		+ "Lnet/minecraft/client/render/command/OrderedRenderCommandQueue;"
-		+ "I"
-		+ "Lnet/minecraft/util/Identifier;"
-		+ "II)V";
-
-	/**
-	 * Redirect armorCutoutNoCull for both outer (layer_1) and inner (layer_2 = leggings)
-	 * armor layers. The textureId is the ACTUAL armor texture that Minecraft resolved,
-	 * so passing it directly to CHAMS_ENTITY avoids any null-texture issue.
-	 */
-	@Redirect(
-		method = RICH$RENDER,
-		at = @At(
-			value = "INVOKE",
-			target = "Lnet/minecraft/client/render/RenderLayers;armorCutoutNoCull(Lnet/minecraft/util/Identifier;)Lnet/minecraft/client/render/RenderLayer;"
-		)
-	)
-	private RenderLayer rich$armorChams(Identifier textureId) {
-		Chams chams = Chams.getInstance();
-		if (chams != null && chams.isState() && Chams.RICH$EQUIPMENT_TARGET && chams.showArmor.isValue()) {
-			if (textureId != null) {
-				return ClientPipelines.CHAMS_ENTITY.apply(textureId);
-			}
-		}
-		return RenderLayers.armorCutoutNoCull(textureId);
-	}
+    /**
+     * Redirect armorCutoutNoCull for EVERY armor layer.
+     * This fires for: helmet, chestplate, boots (HUMANOID / layer_1)
+     *                 leggings                  (HUMANOID_LEGGINGS / layer_2)
+     *                 any future layer types
+     *
+     * No method descriptor = applies to all 'render' overloads in EquipmentRenderer.
+     */
+    @Redirect(
+        method = "render",
+        at = @At(
+            value = "INVOKE",
+            target = "Lnet/minecraft/client/render/RenderLayers;armorCutoutNoCull(Lnet/minecraft/util/Identifier;)Lnet/minecraft/client/render/RenderLayer;"
+        ),
+        require = 0,   // don't crash if inject point count changes
+        allow   = 10   // allow up to 10 call sites (outer + inner + possible dyeable variants)
+    )
+    private RenderLayer rich$armorChams(Identifier textureId) {
+        Chams chams = Chams.getInstance();
+        if (chams != null && chams.isState() && Chams.RICH$EQUIPMENT_TARGET && chams.showArmor.isValue()) {
+            if (textureId != null) {
+                return ClientPipelines.CHAMS_ENTITY.apply(textureId);
+            }
+        }
+        return RenderLayers.armorCutoutNoCull(textureId);
+    }
 }
