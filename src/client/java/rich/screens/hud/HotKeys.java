@@ -7,6 +7,7 @@ import net.minecraft.client.gui.DrawContext;
 import rich.Initialization;
 import rich.client.draggables.AbstractHudElement;
 import rich.modules.module.ModuleStructure;
+import rich.screens.clickgui.ClickGui;
 import rich.theme.ClientTheme;
 import rich.util.animations.Direction;
 import rich.util.render.Render2D;
@@ -43,7 +44,8 @@ public class HotKeys extends AbstractHudElement {
             .stream()
             .filter(var0 -> var0.getKey() != -1)
             .toList();
-         if (this.keysList.isEmpty()) {
+         boolean var1 = this.mc.currentScreen != null && !(this.mc.currentScreen instanceof ClickGui);
+         if (this.keysList.isEmpty() || var1) {
             this.stopAnimation();
          } else {
             this.startAnimation();
