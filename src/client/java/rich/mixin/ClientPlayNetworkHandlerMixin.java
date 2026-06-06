@@ -23,6 +23,7 @@ import rich.events.impl.GameLeftEvent;
 import rich.events.impl.WorldChangeEvent;
 import rich.modules.impl.misc.PanicMode;
 import rich.modules.impl.render.Particles;
+import rich.util.profiler.ProfilerAutoSession;
 
 @Mixin(ClientPlayNetworkHandler.class)
 public abstract class ClientPlayNetworkHandlerMixin implements IMinecraft {
@@ -60,6 +61,7 @@ public abstract class ClientPlayNetworkHandlerMixin implements IMinecraft {
    @Inject(method = "onGameJoin", at = @At("RETURN"))
    private void onGameJoin(GameJoinS2CPacket var1, CallbackInfo var2) {
       EventManager.callEvent(WorldChangeEvent.get());
+      ProfilerAutoSession.onServerJoin();
    }
 
    /**

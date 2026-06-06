@@ -32,6 +32,7 @@ import rich.update.UpdateChecker;
 import rich.util.config.ConfigSystem;
 import rich.util.config.impl.account.AccountConfig;
 import rich.util.profiler.FrameProfiler;
+import rich.util.profiler.ProfilerAutoSession;
 import rich.util.render.font.FontRenderer;
 import rich.util.session.SessionChanger;
 import rich.util.window.WindowStyle;
@@ -84,6 +85,7 @@ public abstract class MinecraftClientMixin {
 
    @Inject(method = "stop", at = @At("HEAD"))
    private void onStop(CallbackInfo var1) {
+      ProfilerAutoSession.onServerDisconnect();
       OnlineTracker.getInstance().stop();
       UpdateChecker.getInstance().stop();
       ConfigSystem var2 = ConfigSystem.getInstance();
@@ -130,6 +132,7 @@ public abstract class MinecraftClientMixin {
    @Inject(method = "disconnect(Lnet/minecraft/text/Text;)V", at = @At("HEAD"))
    private void onDisconnect(net.minecraft.text.Text var1, CallbackInfo var3) {
       if (this.world != null) {
+         ProfilerAutoSession.onServerDisconnect();
          EventManager.callEvent(GameLeftEvent.get());
       }
    }
