@@ -217,49 +217,45 @@ public abstract class InGameHudMixin implements IMinecraft {
          if (this.client.world != null && this.client.player != null) {
             if (this.client.getOverlay() == null) {
                Screen var4 = this.client.currentScreen;
-               if (!this.isLoadingScreen(var4) && this.shouldRenderHud(var4)) {
+               if (!this.isLoadingScreen(var4)) {
                   var1.createNewRootLayer();
                   Render2D.beginOverlay();
-
-                  try {
-                     var1.getMatrices().pushMatrix();
-
-                     try {
-                        DrawEvent var5 = new DrawEvent(var1, drawEngine, var2.getTickProgress(false));
-                        EventManager.callEvent(var5);
-                     } finally {
-                        var1.getMatrices().popMatrix();
-                     }
-
+                  var1.getMatrices().pushMatrix();
+                  DrawEvent var5 = new DrawEvent(var1, drawEngine, var2.getTickProgress(false));
+                  EventManager.callEvent(var5);
+                  var1.getMatrices().popMatrix();
+                  if (this.shouldRenderHud(var4)) {
                      int var6 = (int)this.client.mouse.getScaledX(this.client.getWindow());
                      int var7 = (int)this.client.mouse.getScaledY(this.client.getWindow());
                      float var8 = var2.getTickProgress(false);
-                     Hud var9 = Hud.getInstance();
-                     if (var9 != null
-                        && var9.isState()
-                        && Initialization.getInstance() != null
-                        && Initialization.getInstance().getManager() != null
-                        && Initialization.getInstance().getManager().getHudManager() != null) {
-                        Initialization.getInstance().getManager().getHudManager().render(var1, var8, var6, var7);
+                     if (!this.client.options.hudHidden) {
+                        Hud var9 = Hud.getInstance();
+                        if (var9 != null
+                           && var9.isState()
+                           && Initialization.getInstance() != null
+                           && Initialization.getInstance().getManager() != null
+                           && Initialization.getInstance().getManager().getHudManager() != null) {
+                           Initialization.getInstance().getManager().getHudManager().render(var1, var8, var6, var7);
+                        }
                      }
-
-                     UpdateChecker var12 = UpdateChecker.getInstance();
-                     UpdateChecker.UpdateInfo var13 = var12.getPendingUpdate();
-                     if (var13 != null && !var12.isNotified() && !this.richIngameUpdateNotif.isVisible()) {
-                        this.richIngameUpdateNotif.show();
-                        var12.markNotified();
-                     }
-
-                     if (this.richIngameUpdateNotif.isVisible() && var13 != null) {
-                        int var14 = this.client.getWindow().getScaledWidth();
-                        int var15 = this.client.getWindow().getScaledHeight();
-                        float var10 = (float)this.client.mouse.getScaledX(this.client.getWindow());
-                        float var11 = (float)this.client.mouse.getScaledY(this.client.getWindow());
-                        this.richIngameUpdateNotif.render(var14, var15, var10, var11, var13);
-                     }
-                  } finally {
-                     Render2D.endOverlay();
                   }
+
+                  UpdateChecker var12 = UpdateChecker.getInstance();
+                  UpdateChecker.UpdateInfo var13 = var12.getPendingUpdate();
+                  if (var13 != null && !var12.isNotified() && !this.richIngameUpdateNotif.isVisible()) {
+                     this.richIngameUpdateNotif.show();
+                     var12.markNotified();
+                  }
+
+                  if (this.richIngameUpdateNotif.isVisible() && var13 != null) {
+                     int var14 = this.client.getWindow().getScaledWidth();
+                     int var15 = this.client.getWindow().getScaledHeight();
+                     float var10 = (float)this.client.mouse.getScaledX(this.client.getWindow());
+                     float var11 = (float)this.client.mouse.getScaledY(this.client.getWindow());
+                     this.richIngameUpdateNotif.render(var14, var15, var10, var11, var13);
+                  }
+
+                  Render2D.endOverlay();
                }
             }
          }
@@ -272,10 +268,8 @@ public abstract class InGameHudMixin implements IMinecraft {
          return true;
       } else if (var1 instanceof ClickGui) {
          return false;
-      } else if (var1 instanceof ChatScreen) {
-         return false;
       } else {
-         return false;
+         return var1 instanceof ChatScreen ? false : !this.isLoadingScreen(var1);
       }
    }
 
