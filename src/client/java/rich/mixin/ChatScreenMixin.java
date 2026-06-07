@@ -12,7 +12,6 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 import rich.Initialization;
 import rich.client.draggables.Drag;
-import rich.util.render.Render2D;
 
 @Mixin(ChatScreen.class)
 public abstract class ChatScreenMixin extends Screen {
@@ -22,18 +21,7 @@ public abstract class ChatScreenMixin extends Screen {
 
    @Inject(method = "render", at = @At("TAIL"))
    private void onRender(DrawContext var1, int var2, int var3, float var4, CallbackInfo var5) {
-      var1.disableScissor();
-      var1.createNewRootLayer();
-      Render2D.beginOverlay();
-      var1.getMatrices().pushMatrix();
-
-      try {
-         Drag.onDraw(var1, var2, var3, var4, true);
-      } finally {
-         var1.getMatrices().popMatrix();
-         Render2D.endOverlay();
-         var1.disableScissor();
-      }
+      Drag.onDraw(var1, var2, var3, var4, true);
    }
 
    @Inject(method = "mouseClicked", at = @At("HEAD"), cancellable = true)

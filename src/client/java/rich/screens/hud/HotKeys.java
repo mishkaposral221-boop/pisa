@@ -3,27 +3,27 @@ package rich.screens.hud;
 import java.awt.Color;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Random;
 import net.minecraft.client.gui.DrawContext;
 import rich.Initialization;
 import rich.client.draggables.AbstractHudElement;
 import rich.modules.module.ModuleStructure;
+import rich.theme.ClientTheme;
 import rich.util.animations.Direction;
+import rich.util.render.Render2D;
+import rich.util.render.font.Fonts;
 import rich.util.string.KeyHelper;
 
 public class HotKeys extends AbstractHudElement {
    private List<ModuleStructure> keysList = new ArrayList<>();
-   private long lastKeyChange = 0L;
-   private String currentRandomKey = "NONE";
-   private float animatedWidth = 96.0F;
-   private float animatedHeight = 24.0F;
+   private float animatedWidth = 80.0F;
+   private float animatedHeight = 23.0F;
    private long lastUpdateTime = System.currentTimeMillis();
+   private long lastTickLog = 0L;
+   private long lastDrawLog = 0L;
    private static final float ANIMATION_SPEED = 8.0F;
-   private static final int ROW_HEIGHT = 12;
-   private static final int HEADER_HEIGHT = 24;
 
    public HotKeys() {
-      super("HotKeys", 300, 40, 96, 24, true);
+      super("HotKeys", 300, 40, 80, 23, true);
       this.stopAnimation();
    }
 
@@ -34,32 +34,33 @@ public class HotKeys extends AbstractHudElement {
 
    @Override
    public void tick() {
+      long now = System.currentTimeMillis();
+      boolean dbg = now - this.lastTickLog > 2000L;
       if (Initialization.getInstance() != null
          && Initialization.getInstance().getManager() != null
          && Initialization.getInstance().getManager().getModuleProvider() != null) {
+         int total = Initialization.getInstance().getManager().getModuleProvider().getModuleStructures().size();
          this.keysList = Initialization.getInstance()
             .getManager()
             .getModuleProvider()
             .getModuleStructures()
             .stream()
-            .filter(var0 -> var0.isState() && var0.getKey() != -1)
+            .filter(var0 -> var0.getKey() != -1)
             .toList();
-         boolean var1 = !this.keysList.isEmpty();
-         boolean var2 = this.isChat(this.mc.currentScreen);
-         if (!var1 && !var2) {
+         if (dbg) {
+            this.lastTickLog = now;
+            System.out.println("[HotKeysDBG] tick boundCount=" + this.keysList.size()
+               + " totalModules=" + total
+               + " visible=" + this.visible());
+         }
+         if (this.keysList.isEmpty()) {
             this.stopAnimation();
          } else {
             this.startAnimation();
          }
-
-         if (!var1 && var2) {
-            long var3 = System.currentTimeMillis();
-            if (var3 - this.lastKeyChange >= 1000L) {
-               List<String> var5 = List.of("A", "B", "C", "D", "E");
-               this.currentRandomKey = var5.get(new Random().nextInt(var5.size()));
-               this.lastKeyChange = var3;
-            }
-         }
+      } else if (dbg) {
+         this.lastTickLog = now;
+         System.out.println("[HotKeysDBG] tick: Initialization/manager/moduleProvider is NULL");
       }
    }
 
@@ -68,103 +69,86 @@ public class HotKeys extends AbstractHudElement {
       return var1 + (var2 - var1) * var4;
    }
 
-   private int textWidth(String var1) {
-      return this.mc.textRenderer.getWidth(var1);
-   }
-
-   private int argb(int var1, int var2, int var3, int var4) {
-      return new Color(var1, var2, var3, Math.max(0, Math.min(255, var4))).getRGB();
-   }
-
-   private void fill(DrawContext var1, float var2, float var3, float var4, float var5, int var6) {
-      var1.fill((int)var2, (int)var3, (int)(var2 + var4), (int)(var3 + var5), var6);
-   }
-
-   private void drawText(DrawContext var1, String var2, float var3, float var4, int var5) {
-      var1.drawText(this.mc.textRenderer, var2, (int)var3, (int)var4, var5, false);
-   }
-
    @Override
    public void drawDraggable(DrawContext var1, int var2) {
-      if (var2 > 0) {
+      long nowDbg = System.currentTimeMillis();
+      boolean dbg = nowDbg - this.lastDrawLog > 2000L;
+      if (dbg) {
+         this.lastDrawLog = nowDbg;
+         System.out.println("[HotKeysDBG] enter drawDraggable alpha=" + var2
+            + " keysListSize=" + this.keysList.size()
+            + " x=" + this.getX() + " y=" + this.getY()
+            + " w=" + this.getWidth() + " h=" + this.getHeight()
+            + " animW=" + this.animatedWidth + " animH=" + this.animatedHeight
+            + " scale=" + this.getScale());
+      }
+      if (var2 > 0 && !this.keysList.isEmpty()) {
          float var3 = var2 / 255.0F;
          long var4 = System.currentTimeMillis();
          float var6 = (float)(var4 - this.lastUpdateTime) / 1000.0F;
          this.lastUpdateTime = var4;
          var6 = Math.min(var6, 0.1F);
-
          float var7 = this.getX();
          float var8 = this.getY();
-         boolean var9 = !this.keysList.isEmpty();
-         boolean var10 = !var9 && this.isChat(this.mc.currentScreen);
+         byte var11 = 23;
+         float var12 = 80.0F;
 
-         int var11 = HEADER_HEIGHT;
-         float var12 = 96.0F;
-         if (var10) {
-            String var13 = "Example Module";
-            String var14 = "[" + this.currentRandomKey + "]";
-            var11 += ROW_HEIGHT;
-            var12 = Math.max(this.textWidth(var13) + this.textWidth(var14) + 38.0F, var12);
-         } else {
-            for (ModuleStructure var15 : this.keysList) {
-               String var16 = "[" + KeyHelper.getKeyName(var15.getKey()) + "]";
-               var11 += ROW_HEIGHT;
-               var12 = Math.max(this.textWidth(var15.getName()) + this.textWidth(var16) + 38.0F, var12);
-            }
+         for (ModuleStructure var33 : this.keysList) {
+            var11 += 11;
+            String var35 = "[" + KeyHelper.getKeyName(var33.getKey()) + "]";
+            float var37 = Fonts.BOLD.getWidth(var35, 6.0F);
+            float var17 = Fonts.BOLD.getWidth(var33.getName(), 6.0F);
+            var12 = Math.max(var17 + var37 + 50.0F, var12);
          }
 
+         float var32 = var11 + 2;
          this.animatedWidth = this.lerp(this.animatedWidth, var12, var6);
-         this.animatedHeight = this.lerp(this.animatedHeight, var11, var6);
+         this.animatedHeight = this.lerp(this.animatedHeight, var32, var6);
          if (Math.abs(this.animatedWidth - var12) < 0.3F) {
             this.animatedWidth = var12;
          }
 
-         if (Math.abs(this.animatedHeight - var11) < 0.3F) {
-            this.animatedHeight = var11;
+         if (Math.abs(this.animatedHeight - var32) < 0.3F) {
+            this.animatedHeight = var32;
          }
 
          this.setWidth((int)Math.ceil(this.animatedWidth));
          this.setHeight((int)Math.ceil(this.animatedHeight));
+         float var34 = this.animatedHeight;
+         int var36 = (int)(255.0F * var3);
+         if (dbg) {
+            System.out.println("[HotKeysDBG] DRAW box w=" + this.getWidth() + " h=" + var34
+               + " var36(alpha)=" + var36
+               + " bindsTextAt x=" + (var7 + 8.0F) + " y=" + (var8 + 6.5F)
+               + " names=" + this.keysList.stream().map(ModuleStructure::getName).toList());
+         }
+         if (var34 > 0.0F) {
+            Render2D.gradientRect(var7, var8, this.getWidth(), var34, ClientTheme.bgGradient(var36), 5.0F);
+            Render2D.outline(var7, var8, this.getWidth(), var34, 0.35F, ClientTheme.outline(var36), 5.0F);
+         }
 
-         int var17 = (int)(230.0F * var3);
-         int var18 = (int)(255.0F * var3);
-         int var19 = (int)(170.0F * var3);
-         int var20 = this.argb(12, 8, 12, var17);
-         int var21 = this.argb(42, 19, 34, Math.min(255, var17 + 10));
-         int var22 = this.argb(255, 255, 255, var18);
-         int var23 = this.argb(165, 165, 165, var19);
-         int var24 = this.argb(70, 35, 60, Math.min(210, var17));
+         long var38 = this.keysList.size();
+         String var18 = String.valueOf(var38);
+         float var19 = Fonts.BOLD.getWidth(var18, 6.0F);
+         float var20 = Fonts.BOLD.getWidth("Active:", 6.0F);
+         Render2D.gradientRect(var7 + this.getWidth() - var19 - var20 + 2.0F, var8 + 5.0F, 14.0F, 12.0F, ClientTheme.panelGradient(var36), 3.0F);
+         Fonts.HUD_ICONS.draw("g", var7 + this.getWidth() - var19 - var20 + 4.0F, var8 + 6.0F, 10.0F, new Color(165, 165, 165, var36).getRGB());
+         Fonts.BOLD.draw("Binds", var7 + 8.0F, var8 + 6.5F, 6.0F, new Color(255, 255, 255, var36).getRGB());
+         byte var21 = 23;
 
-         this.fill(var1, var7, var8, this.getWidth(), this.getHeight(), var20);
-         this.fill(var1, var7, var8, this.getWidth(), 1.0F, var24);
-         this.fill(var1, var7, var8 + this.getHeight() - 1.0F, this.getWidth(), 1.0F, var24);
-         this.fill(var1, var7, var8, 1.0F, this.getHeight(), var24);
-         this.fill(var1, var7 + this.getWidth() - 1.0F, var8, 1.0F, this.getHeight(), var24);
-
-         String var25 = String.valueOf(this.keysList.size());
-         this.fill(var1, var7 + this.getWidth() - this.textWidth(var25) - 18.0F, var8 + 5.0F, this.textWidth(var25) + 10.0F, 12.0F, var21);
-         this.drawText(var1, "Binds", var7 + 8.0F, var8 + 7.0F, var22);
-         this.drawText(var1, var25, var7 + this.getWidth() - this.textWidth(var25) - 13.0F, var8 + 7.0F, var23);
-
-         int var26 = HEADER_HEIGHT;
-         if (var10) {
-            String var27 = "Example Module";
-            String var28 = "[" + this.currentRandomKey + "]";
-            int var29 = this.textWidth(var28);
-            float var30 = var7 + this.getWidth() - var29 - 10.0F;
-            this.fill(var1, var7 + 8.0F, var8 + var26 + 1.0F, 1.0F, 7.0F, var23);
-            this.drawText(var1, var27, var7 + 13.0F, var8 + var26, var22);
-            this.drawText(var1, var28, var30, var8 + var26, var23);
-         } else {
-            for (ModuleStructure var31 : this.keysList) {
-               String var32 = "[" + KeyHelper.getKeyName(var31.getKey()) + "]";
-               int var33 = this.textWidth(var32);
-               float var34 = var7 + this.getWidth() - var33 - 10.0F;
-               this.fill(var1, var7 + 8.0F, var8 + var26 + 1.0F, 1.0F, 7.0F, var23);
-               this.drawText(var1, var31.getName(), var7 + 13.0F, var8 + var26, var22);
-               this.drawText(var1, var32, var34, var8 + var26, var23);
-               var26 += ROW_HEIGHT;
-            }
+         for (ModuleStructure var40 : this.keysList) {
+            String var41 = "[" + KeyHelper.getKeyName(var40.getKey()) + "]";
+            float var42 = Fonts.BOLD.getWidth(var41, 6.0F);
+            int var26 = ClientTheme.text(var36);
+            int var27 = ClientTheme.textSub(var36);
+            int var28 = ClientTheme.textSub((int)(128.0F * var3));
+            float var29 = var7 + this.getWidth() - var42 - 11.5F;
+            Render2D.gradientRect(var29, var8 + var21 - 2.0F, var42 + 4.0F, 9.0F, ClientTheme.panelGradient(var36), 3.0F);
+            Render2D.outline(var29, var8 + var21 - 2.0F, var42 + 4.0F, 9.0F, 0.05F, ClientTheme.outline(var36), 2.0F);
+            Render2D.rect(var7 + 8.0F, var8 + var21 - 1.0F, 1.0F, 7.0F, var28, 1.0F);
+            Fonts.BOLD.draw(var40.getName(), var7 + 13.0F, var8 + var21 - 1.5F, 6.0F, var26);
+            Fonts.BOLD.draw(var41, var29 + 2.0F, var8 + var21 - 1.0F, 6.0F, var27);
+            var21 += 11;
          }
       }
    }
