@@ -12,6 +12,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 import rich.Initialization;
 import rich.client.draggables.Drag;
+import rich.util.render.Render2D;
 
 @Mixin(ChatScreen.class)
 public abstract class ChatScreenMixin extends Screen {
@@ -21,7 +22,19 @@ public abstract class ChatScreenMixin extends Screen {
 
    @Inject(method = "render", at = @At("TAIL"))
    private void onRender(DrawContext var1, int var2, int var3, float var4, CallbackInfo var5) {
-      Drag.onDraw(var1, var2, var3, var4, true);
+      // Render draggable HUD elements the same way as the in-game HUD overlay.
+      // Without a fresh root layer / overlay reset, ChatScreen can leave render state
+      // that makes custom font quads get clipped or disappear while the panel background remains.
+      var1.createNewRootLayer();
+      Render2D.beginOverlay();
+      var1.getMatrices().pushMatrix();
+
+      try {
+         Drag.onDraw(var1, var2, var3, var4, true);
+      } finally {
+         var1.getMatrices().popMatrix();
+         Render2D.endOverlay();
+      }
    }
 
    @Inject(method = "mouseClicked", at = @At("HEAD"), cancellable = true)
