@@ -217,27 +217,23 @@ public abstract class InGameHudMixin implements IMinecraft {
          if (this.client.world != null && this.client.player != null) {
             if (this.client.getOverlay() == null) {
                Screen var4 = this.client.currentScreen;
-               if (!this.isLoadingScreen(var4)) {
+               if (!this.isLoadingScreen(var4) && this.shouldRenderHud(var4)) {
                   var1.createNewRootLayer();
                   Render2D.beginOverlay();
                   var1.getMatrices().pushMatrix();
                   DrawEvent var5 = new DrawEvent(var1, drawEngine, var2.getTickProgress(false));
                   EventManager.callEvent(var5);
                   var1.getMatrices().popMatrix();
-                  if (this.shouldRenderHud(var4)) {
-                     int var6 = (int)this.client.mouse.getScaledX(this.client.getWindow());
-                     int var7 = (int)this.client.mouse.getScaledY(this.client.getWindow());
-                     float var8 = var2.getTickProgress(false);
-                     if (!this.client.options.hudHidden) {
-                        Hud var9 = Hud.getInstance();
-                        if (var9 != null
-                           && var9.isState()
-                           && Initialization.getInstance() != null
-                           && Initialization.getInstance().getManager() != null
-                           && Initialization.getInstance().getManager().getHudManager() != null) {
-                           Initialization.getInstance().getManager().getHudManager().render(var1, var8, var6, var7);
-                        }
-                     }
+                  int var6 = (int)this.client.mouse.getScaledX(this.client.getWindow());
+                  int var7 = (int)this.client.mouse.getScaledY(this.client.getWindow());
+                  float var8 = var2.getTickProgress(false);
+                  Hud var9 = Hud.getInstance();
+                  if (var9 != null
+                     && var9.isState()
+                     && Initialization.getInstance() != null
+                     && Initialization.getInstance().getManager() != null
+                     && Initialization.getInstance().getManager().getHudManager() != null) {
+                     Initialization.getInstance().getManager().getHudManager().render(var1, var8, var6, var7);
                   }
 
                   UpdateChecker var12 = UpdateChecker.getInstance();
@@ -268,8 +264,10 @@ public abstract class InGameHudMixin implements IMinecraft {
          return true;
       } else if (var1 instanceof ClickGui) {
          return false;
+      } else if (var1 instanceof ChatScreen) {
+         return false;
       } else {
-         return var1 instanceof ChatScreen ? false : !this.isLoadingScreen(var1);
+         return false;
       }
    }
 
