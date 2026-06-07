@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "id": "copyright",
+  "version": "1.0.01",
+  "name": "RunTime Visuals",
+  "description": "Custom Minecraft client with shader-based rendering",
+  "authors": [
+    "vavilovsky"
+  ],
+  "contact": {},
+  "license": "MIT",
+  "icon": "assets/rich/textures/capes/cape.png",
+  "environment": "client",
+  "entrypoints": {
+    "preLaunch": [
+      "rich.util.mods.config.wave.WaveCapesConfigOverride"
+    ],
+    "client": [
+      "rich.Initialization"
+    ]
+  },
+  "mixins": [
+    "mixins.json",
+    "mixins.sodium.json"
+  ],
+  "accessWidener": "runtime_visuals.accesswidener",
+  "depends": {
+    "fabricloader": "\u003e\u003d0.18.4",
+    "fabric-api": "*",
+    "minecraft": "1.21.11",
+    "java": "\u003e\u003d21"
+  },
+  "jars": [
+    {
+      "file": "META-INF/jars/netty-codec-socks-4.1.82.Final.jar"
+    },
+    {
+      "file": "META-INF/jars/netty-handler-proxy-4.1.82.Final.jar"
+    }
+  ]
+}

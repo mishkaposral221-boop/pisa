@@ -1,0 +1,205 @@
+package rich.mixin;
+
+import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.session.Session;
+import net.minecraft.client.gui.screen.Screen;
+import net.minecraft.client.gui.screen.TitleScreen;
+import net.minecraft.client.network.ClientPlayerInteractionManager;
+import net.minecraft.client.world.ClientWorld;
+import net.minecraft.client.network.ClientPlayerEntity;
+import net.minecraft.client.render.GameRenderer;
+import org.jetbrains.annotations.Nullable;
+import org.spongepowered.asm.mixin.Final;
+import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Mutable;
+import org.spongepowered.asm.mixin.Shadow;
+import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
+import rich.IMinecraft;
+import rich.Initialization;
+import rich.events.api.EventManager;
+import rich.events.impl.ClientTickStartEvent;
+import rich.events.impl.GameLeftEvent;
+import rich.events.impl.HotBarUpdateEvent;
+import rich.events.impl.SetScreenEvent;
+import rich.modules.impl.render.Hud;
+import rich.online.OnlineTracker;
+import rich.screens.clickgui.ClickGui;
+import rich.screens.menu.MainMenuScreen;
+import rich.update.UpdateChecker;
+import rich.util.config.ConfigSystem;
+import rich.util.config.impl.account.AccountConfig;
+import rich.util.profiler.FrameProfiler;
+import rich.util.profiler.ProfilerAutoSession;
+import rich.util.render.font.FontRenderer;
+import rich.util.session.SessionChanger;
+import rich.util.window.WindowStyle;
+
+@Mixin(MinecraftClient.class)
+public abstract class MinecraftClientMixin {
+   private static boolean initialized = false;
+   @Shadow
+   @Nullable
+   public ClientPlayerEntity player;
+   @Shadow
+   @Nullable
+   public ClientPlayerInteractionManager interactionManager;
+   @Shadow
+   @Final
+   public GameRenderer gameRenderer;
+   @Shadow
+   public ClientWorld world;
+   private static boolean fontsInitialized = false;
+   @Shadow
+   @Mutable
+   private Session session;
+
+   @Inject(method = "run", at = @At("HEAD"))
+   private void onRun(CallbackInfo var1) {
+      if (!initialized) {
+         Initialization.getInstance().init();
+         initialized = true;
+      }
+   }
+
+   private void setSession(Session var1) {
+      this.session = var1;
+   }
+
+   @Inject(method = "<init>", at = @At("TAIL"))
+   private void onInit(CallbackInfo var1) {
+      SessionChanger.setSessionSetter(this::setSession);
+   }
+
+   @Inject(method = "render", at = @At("HEAD"))
+   private void richProfilerRenderStart(CallbackInfo var1) {
+      FrameProfiler.getInstance().beginFrame();
+   }
+
+   @Inject(method = "render", at = @At("TAIL"))
+   private void richProfilerRenderEnd(CallbackInfo var1) {
+      FrameProfiler.getInstance().frameEnd();
+   }
+
+   @Inject(method = "stop", at = @At("HEAD"))
+   private void onStop(CallbackInfo var1) {
+      ProfilerAutoSession.onServerDisconnect();
+      OnlineTracker.getInstance().stop();
+      UpdateChecker.getInstance().stop();
+      ConfigSystem var2 = ConfigSystem.getInstance();
+      if (var2 != null) {
+         var2.shutdown();
+      }
+
+      (new Thread(() -> {
+         try {
+            Thread.sleep(2000L);
+         } catch (InterruptedException var1x) {
+         }
+
+         Runtime.getRuntime().halt(0);
+      }, "force-exit") {
+         {
+            this.setDaemon(true);
+         }
+      }).start();
+   }
+
+   @Inject(method = "setScreen", at = @At("HEAD"))
+   private void onSetScreen(Screen var1, CallbackInfo var2) {
+      if (!fontsInitialized && var1 != null) {
+         try {
+            FontRenderer var3 = Initialization.getInstance().getManager().getRenderCore().getFontRenderer();
+            if (var3 != null && !var3.isInitialized()) {
+               var3.initialize();
+               fontsInitialized = true;
+            }
+         } catch (Exception var4) {
+         }
+      }
+   }
+
+   @Inject(method = "setScreen", at = @At("HEAD"), cancellable = true)
+   private void redirectTitleScreen(Screen var1, CallbackInfo var2) {
+      if (var1 instanceof TitleScreen && !(var1 instanceof MainMenuScreen)) {
+         var2.cancel();
+         ((MinecraftClient)(Object)this).setScreen(new MainMenuScreen());
+      }
+   }
+
+   @Inject(method = "disconnect(Lnet/minecraft/text/Text;)V", at = @At("HEAD"))
+   private void onDisconnect(net.minecraft.text.Text var1, CallbackInfo var3) {
+      if (this.world != null) {
+         ProfilerAutoSession.onServerDisconnect();
+         EventManager.callEvent(GameLeftEvent.get());
+      }
+   }
+
+   @Inject(method = "tick", at = @At("HEAD"))
+   private void onTick(CallbackInfo var1) {
+      if (initialized) {
+         MinecraftClient var2 = MinecraftClient.getInstance();
+         if (var2.player != null && var2.world != null) {
+            EventManager.callEvent(new ClientTickStartEvent());
+            OnlineTracker.getInstance().setUsername(var2.getSession().getUsername());
+            Hud var3 = Hud.getInstance();
+            if (var3 != null
+               && var3.isState()
+               && Initialization.getInstance() != null
+               && Initialization.getInstance().getManager() != null
+               && Initialization.getInstance().getManager().getHudManager() != null) {
+               Initialization.getInstance().getManager().getHudManager().tick();
+            }
+         }
+      }
+   }
+
+   @Inject(method = "setScreen", at = @At("HEAD"), cancellable = true)
+   public void setScreenHook(Screen var1, CallbackInfo var2) {
+      MinecraftClient var3 = (MinecraftClient)(Object)this;
+      if (var3.currentScreen instanceof ClickGui var4 && var4.isClosing() && var1 == null) {
+         var2.cancel();
+      } else {
+         SetScreenEvent var7 = new SetScreenEvent(var1);
+         EventManager.callEvent(var7);
+         Initialization var8 = Initialization.getInstance();
+         Screen var6 = var7.getScreen();
+         if (var1 != var6) {
+            IMinecraft.mc.setScreen(var6);
+            var2.cancel();
+         }
+      }
+   }
+
+   @Inject(method = "getWindowTitle", at = @At("RETURN"), cancellable = true)
+   private void getWindowTitle(CallbackInfoReturnable<String> var1) {
+      String var2 = AccountConfig.getInstance().getActiveAccountName();
+      String var3 = var2 != null && !var2.isEmpty() ? var2 : "Unknown";
+      var1.setReturnValue(String.format("RunTime Visuals (%s)", var3));
+   }
+
+   @Inject(
+      method = "handleInputEvents",
+      at = @At(value = "INVOKE", target = "Lnet/minecraft/client/network/ClientPlayerEntity;getInventory()Lnet/minecraft/entity/player/PlayerInventory;"),
+      cancellable = true
+   )
+   public void handleInputEventsHook(CallbackInfo var1) {
+      HotBarUpdateEvent var2 = new HotBarUpdateEvent();
+      EventManager.callEvent(var2);
+      if (var2.isCancelled()) {
+         var1.cancel();
+      }
+   }
+
+   @Inject(method = "doItemUse", at = @At(value = "INVOKE", target = "Lnet/minecraft/util/Hand;values()[Lnet/minecraft/util/Hand;"), cancellable = true)
+   public void doItemUseHook(CallbackInfo var1) {
+   }
+
+   @Inject(method = "onResolutionChanged", at = @At("TAIL"))
+   private void applyDarkMode(CallbackInfo var1) {
+      MinecraftClient var2 = MinecraftClient.getInstance();
+      WindowStyle.setDarkMode(var2.getWindow().getHandle());
+   }
+}

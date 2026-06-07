@@ -1,0 +1,169 @@
+package rich.util.render.pipeline;
+
+import com.mojang.blaze3d.buffers.GpuBuffer;
+import com.mojang.blaze3d.buffers.GpuBufferSlice;
+import com.mojang.blaze3d.pipeline.BlendFunction;
+import com.mojang.blaze3d.pipeline.RenderPipeline;
+import com.mojang.blaze3d.pipeline.RenderPipeline.Snippet;
+import com.mojang.blaze3d.platform.DepthTestFunction;
+import com.mojang.blaze3d.systems.CommandEncoder;
+import com.mojang.blaze3d.systems.RenderPass;
+import com.mojang.blaze3d.systems.RenderSystem;
+import com.mojang.blaze3d.vertex.VertexFormat;
+
+import java.nio.ByteBuffer;
+import java.util.OptionalDouble;
+import java.util.OptionalInt;
+import net.minecraft.client.gl.UniformType;
+import net.minecraft.client.gl.RenderPipelines;
+import net.minecraft.client.render.VertexFormats;
+import net.minecraft.util.Identifier;
+import net.minecraft.client.MinecraftClient;
+import org.joml.Matrix4f;
+import org.joml.Vector3f;
+import org.joml.Vector4f;
+import org.lwjgl.system.MemoryUtil;
+
+public class GlowOutlinePipeline {
+   private static final Identifier PIPELINE_ID = Identifier.of("rich", "pipeline/glow_outline");
+   private static final Identifier VERTEX_SHADER = Identifier.of("rich", "core/glow_outline");
+   private static final Identifier FRAGMENT_SHADER = Identifier.of("rich", "core/glow_outline");
+   private static final Vector3f MODEL_OFFSET = new Vector3f(0.0F, 0.0F, 0.0F);
+   private static final Matrix4f TEXTURE_MATRIX = new Matrix4f();
+   private static final float FIXED_GUI_SCALE = 2.0F;
+   private static final RenderPipeline PIPELINE = RenderPipelines.register(
+      RenderPipeline.builder(new Snippet[]{RenderPipelines.TRANSFORMS_AND_PROJECTION_SNIPPET})
+         .withLocation(PIPELINE_ID)
+         .withVertexShader(VERTEX_SHADER)
+         .withFragmentShader(FRAGMENT_SHADER)
+         .withVertexFormat(VertexFormats.EMPTY, VertexFormat.DrawMode.TRIANGLES)
+         .withUniform("GlowOutlineData", UniformType.UNIFORM_BUFFER)
+         .withBlend(BlendFunction.TRANSLUCENT)
+         .withDepthTestFunction(DepthTestFunction.NO_DEPTH_TEST)
+         .withDepthWrite(false)
+         .withCull(false)
+         .build()
+   );
+   private static final Vector4f COLOR_MODULATOR = new Vector4f(1.0F, 1.0F, 1.0F, 1.0F);
+   private static final int BUFFER_SIZE = 128;
+   private GpuBuffer uniformBuffer;
+   private GpuBuffer dummyVertexBuffer;
+   private ByteBuffer dataBuffer;
+   private boolean initialized = false;
+
+   private void ensureInitialized() {
+      if (!this.initialized) {
+         this.dataBuffer = MemoryUtil.memAlloc(128);
+         ByteBuffer var1 = MemoryUtil.memAlloc(4);
+         var1.putInt(0);
+         var1.flip();
+         this.dummyVertexBuffer = RenderSystem.getDevice().createBuffer(() -> "minecraft:glow_outline_dummy_vertex", 32, var1);
+         MemoryUtil.memFree(var1);
+         this.initialized = true;
+      }
+   }
+
+   public void drawGlowOutline(float var1, float var2, float var3, float var4, int var5, float var6, float[] var7, float var8, float var9) {
+      MinecraftClient var10 = MinecraftClient.getInstance();
+      if (var10.getFramebuffer() != null) {
+         this.ensureInitialized();
+         int var11 = var10.getWindow().getFramebufferWidth();
+         int var12 = var10.getWindow().getFramebufferHeight();
+         float var13 = var11 / 2.0F;
+         float var14 = var12 / 2.0F;
+         this.prepareUniformData(var1, var2, var3, var4, var13, var14, 2.0F, var5, var6, var7, var8, var9);
+         this.uploadAndDraw(var10);
+      }
+   }
+
+   private void prepareUniformData(
+      float var1, float var2, float var3, float var4, float var5, float var6, float var7, int var8, float var9, float[] var10, float var11, float var12
+   ) {
+      this.dataBuffer.clear();
+      this.dataBuffer.putFloat(var1);
+      this.dataBuffer.putFloat(var2);
+      this.dataBuffer.putFloat(var3);
+      this.dataBuffer.putFloat(var4);
+      this.dataBuffer.putFloat(var5);
+      this.dataBuffer.putFloat(var6);
+      this.dataBuffer.putFloat(var7);
+      this.dataBuffer.putFloat(var9);
+      this.dataBuffer.putFloat(var10[0]);
+      this.dataBuffer.putFloat(var10[1]);
+      this.dataBuffer.putFloat(var10[2]);
+      this.dataBuffer.putFloat(var10[3]);
+      this.dataBuffer.putFloat(var11);
+      this.dataBuffer.putFloat(var12);
+      this.dataBuffer.putFloat(0.0F);
+      this.dataBuffer.putFloat(0.0F);
+      float var13 = (var8 >> 24 & 0xFF) / 255.0F;
+      float var14 = (var8 >> 16 & 0xFF) / 255.0F;
+      float var15 = (var8 >> 8 & 0xFF) / 255.0F;
+      float var16 = (var8 & 0xFF) / 255.0F;
+      this.dataBuffer.putFloat(var14);
+      this.dataBuffer.putFloat(var15);
+      this.dataBuffer.putFloat(var16);
+      this.dataBuffer.putFloat(var13);
+      this.dataBuffer.flip();
+   }
+
+   private void uploadAndDraw(MinecraftClient var1) {
+      int var2 = this.dataBuffer.remaining();
+      if (this.uniformBuffer == null || this.uniformBuffer.size() < var2) {
+         if (this.uniformBuffer != null) {
+            this.uniformBuffer.close();
+         }
+
+         this.uniformBuffer = RenderSystem.getDevice().createBuffer(() -> "minecraft:glow_outline_uniform", 136, var2);
+      }
+
+      CommandEncoder var3 = RenderSystem.getDevice().createCommandEncoder();
+      var3.writeToBuffer(this.uniformBuffer.slice(), this.dataBuffer);
+      GpuBufferSlice var4 = RenderSystem.getDynamicUniforms().write(RenderSystem.getModelViewMatrix(), COLOR_MODULATOR, MODEL_OFFSET, TEXTURE_MATRIX);
+      RenderPass var5 = var3.createRenderPass(
+         () -> "minecraft:glow_outline_pass", var1.getFramebuffer().getColorAttachmentView(), OptionalInt.empty(), var1.getFramebuffer().getDepthAttachmentView(), OptionalDouble.empty()
+      );
+
+      try {
+         var5.setPipeline(PIPELINE);
+         var5.setVertexBuffer(0, this.dummyVertexBuffer);
+         RenderSystem.bindDefaultUniforms(var5);
+         var5.setUniform("DynamicTransforms", var4);
+         var5.setUniform("GlowOutlineData", this.uniformBuffer);
+         var5.draw(0, 6);
+      } catch (Throwable var9) {
+         if (var5 != null) {
+            try {
+               var5.close();
+            } catch (Throwable var8) {
+               var9.addSuppressed(var8);
+            }
+         }
+
+         throw var9;
+      }
+
+      if (var5 != null) {
+         var5.close();
+      }
+   }
+
+   public void close() {
+      if (this.uniformBuffer != null) {
+         this.uniformBuffer.close();
+         this.uniformBuffer = null;
+      }
+
+      if (this.dummyVertexBuffer != null) {
+         this.dummyVertexBuffer.close();
+         this.dummyVertexBuffer = null;
+      }
+
+      if (this.dataBuffer != null) {
+         MemoryUtil.memFree(this.dataBuffer);
+         this.dataBuffer = null;
+      }
+
+      this.initialized = false;
+   }
+}
