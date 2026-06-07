@@ -18,6 +18,8 @@ public class HotKeys extends AbstractHudElement {
    private float animatedWidth = 80.0F;
    private float animatedHeight = 23.0F;
    private long lastUpdateTime = System.currentTimeMillis();
+   private long lastTickLog = 0L;
+   private long lastDrawLog = 0L;
    private static final float ANIMATION_SPEED = 8.0F;
 
    public HotKeys() {
@@ -32,9 +34,12 @@ public class HotKeys extends AbstractHudElement {
 
    @Override
    public void tick() {
+      long now = System.currentTimeMillis();
+      boolean dbg = now - this.lastTickLog > 2000L;
       if (Initialization.getInstance() != null
          && Initialization.getInstance().getManager() != null
          && Initialization.getInstance().getManager().getModuleProvider() != null) {
+         int total = Initialization.getInstance().getManager().getModuleProvider().getModuleStructures().size();
          this.keysList = Initialization.getInstance()
             .getManager()
             .getModuleProvider()
@@ -42,11 +47,20 @@ public class HotKeys extends AbstractHudElement {
             .stream()
             .filter(var0 -> var0.getKey() != -1)
             .toList();
+         if (dbg) {
+            this.lastTickLog = now;
+            System.out.println("[HotKeysDBG] tick boundCount=" + this.keysList.size()
+               + " totalModules=" + total
+               + " visible=" + this.visible());
+         }
          if (this.keysList.isEmpty()) {
             this.stopAnimation();
          } else {
             this.startAnimation();
          }
+      } else if (dbg) {
+         this.lastTickLog = now;
+         System.out.println("[HotKeysDBG] tick: Initialization/manager/moduleProvider is NULL");
       }
    }
 
@@ -57,6 +71,17 @@ public class HotKeys extends AbstractHudElement {
 
    @Override
    public void drawDraggable(DrawContext var1, int var2) {
+      long nowDbg = System.currentTimeMillis();
+      boolean dbg = nowDbg - this.lastDrawLog > 2000L;
+      if (dbg) {
+         this.lastDrawLog = nowDbg;
+         System.out.println("[HotKeysDBG] enter drawDraggable alpha=" + var2
+            + " keysListSize=" + this.keysList.size()
+            + " x=" + this.getX() + " y=" + this.getY()
+            + " w=" + this.getWidth() + " h=" + this.getHeight()
+            + " animW=" + this.animatedWidth + " animH=" + this.animatedHeight
+            + " scale=" + this.getScale());
+      }
       if (var2 > 0 && !this.keysList.isEmpty()) {
          float var3 = var2 / 255.0F;
          long var4 = System.currentTimeMillis();
@@ -91,6 +116,12 @@ public class HotKeys extends AbstractHudElement {
          this.setHeight((int)Math.ceil(this.animatedHeight));
          float var34 = this.animatedHeight;
          int var36 = (int)(255.0F * var3);
+         if (dbg) {
+            System.out.println("[HotKeysDBG] DRAW box w=" + this.getWidth() + " h=" + var34
+               + " var36(alpha)=" + var36
+               + " bindsTextAt x=" + (var7 + 8.0F) + " y=" + (var8 + 6.5F)
+               + " names=" + this.keysList.stream().map(ModuleStructure::getName).toList());
+         }
          if (var34 > 0.0F) {
             Render2D.gradientRect(var7, var8, this.getWidth(), var34, ClientTheme.bgGradient(var36), 5.0F);
             Render2D.outline(var7, var8, this.getWidth(), var34, 0.35F, ClientTheme.outline(var36), 5.0F);
