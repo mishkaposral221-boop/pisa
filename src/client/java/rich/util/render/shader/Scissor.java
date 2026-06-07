@@ -2,8 +2,8 @@ package rich.util.render.shader;
 
 import java.util.ArrayDeque;
 import java.util.Deque;
+import com.mojang.blaze3d.systems.RenderSystem;
 import net.minecraft.client.MinecraftClient;
-import org.lwjgl.opengl.GL11;
 
 public class Scissor {
    private static final MinecraftClient mc = MinecraftClient.getInstance();
@@ -36,8 +36,7 @@ public class Scissor {
       }
 
       scissorStack.push(new int[]{var6, var7, var8, var9});
-      GL11.glEnable(3089);
-      GL11.glScissor(var6, var7, var8, var9);
+      RenderSystem.enableScissor(var6, var7, var8, var9);
    }
 
    public static void enable(float var0, float var1, float var2, float var3) {
@@ -51,15 +50,15 @@ public class Scissor {
       }
 
       if (scissorStack.isEmpty()) {
-         GL11.glDisable(3089);
+         RenderSystem.disableScissor();
       } else {
          int[] var0 = scissorStack.peek();
-         GL11.glScissor(var0[0], var0[1], var0[2], var0[3]);
+         RenderSystem.enableScissor(var0[0], var0[1], var0[2], var0[3]);
       }
    }
 
    public static void reset() {
       scissorStack.clear();
-      GL11.glDisable(3089);
+      RenderSystem.disableScissor();
    }
 }
