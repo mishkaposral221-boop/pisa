@@ -22,9 +22,10 @@ public abstract class ChatScreenMixin extends Screen {
 
    @Inject(method = "render", at = @At("TAIL"))
    private void onRender(DrawContext var1, int var2, int var3, float var4, CallbackInfo var5) {
-      // Render draggable HUD elements the same way as the in-game HUD overlay.
-      // Without a fresh root layer / overlay reset, ChatScreen can leave render state
-      // that makes custom font quads get clipped or disappear while the panel background remains.
+      // ChatScreen can leave a DrawContext scissor active for its input/suggestion area.
+      // Custom HUD panels are rendered after chat, so that stale scissor clips the HUD text
+      // while our direct Render2D background still remains visible. Clear it before drawing HUD.
+      var1.disableScissor();
       var1.createNewRootLayer();
       Render2D.beginOverlay();
       var1.getMatrices().pushMatrix();
@@ -34,6 +35,7 @@ public abstract class ChatScreenMixin extends Screen {
       } finally {
          var1.getMatrices().popMatrix();
          Render2D.endOverlay();
+         var1.disableScissor();
       }
    }
 
