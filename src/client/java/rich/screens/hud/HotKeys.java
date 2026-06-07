@@ -121,7 +121,10 @@ public class HotKeys extends AbstractHudElement {
             Render2D.outline(var7, var8, this.getWidth(), var34, 0.35F, ClientTheme.outline(var36), 5.0F);
          }
 
-         Scissor.enable(var7, var8, this.getWidth(), var34);
+         // The custom HUD renderer uses a fixed 2x framebuffer coordinate system
+         // (see Render2D/FontPipeline). Using the Minecraft GUI scale here clips
+         // text on non-2x GUI scales, which is why only the tail of "Binds" was visible.
+         Scissor.enable(var7, var8, this.getWidth(), var34, Render2D.getFixedGuiScale());
 
          try {
             long var38 = this.keysList.size();
