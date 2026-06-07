@@ -1,29 +1,12 @@
-accessWidener	v2	named
-
-# --- TEMP DISABLED: эти строки в неверных маппингах (НЕ yarn 1.21.11) и ломали validateAccessWidener / genSources / build.
-# Впишем корректные yarn-имена после genSources, когда будут декомпилированные исходники. ---
-# accessible	field	net/minecraft/client/multiplayer/PlayerControllerMP	gameMode	I
-# accessible	field	net/minecraft/client/multiplayer/PlayerControllerMP	connection	Lnet/minecraft/client/network/ClientConnection;
-# accessible	field	net/minecraft/client/multiplayer/PlayerControllerMP	localPlayer	Lnet/minecraft/client/player/LocalPlayer;
-# accessible	field	net/minecraft/client/player/LocalPlayer	input	Lnet/minecraft/client/input/KeyboardInput;
-# accessible	field	net/minecraft/client/player/LocalPlayer	tickCount	I
-# accessible	field	net/minecraft/world/entity/Entity	xOld	D
-# accessible	field	net/minecraft/world/entity/Entity	yOld	D
-# accessible	field	net/minecraft/world/entity/Entity	zOld	D
-# accessible	field	net/minecraft/world/entity/Entity	noCulling	Z
-# accessible	field	net/minecraft/client/renderer/GameRenderer	lightTexture	Lnet/minecraft/client/texture/NativeImageBackedTexture;
-# accessible	class	net/minecraft/client/multiplayer/PlayerControllerMP
-# accessible	class	net/minecraft/client/player/LocalPlayer
-# --- end TEMP DISABLED ---
-
-accessible	method	net/minecraft/entity/Entity	movementInputToVelocity	(Lnet/minecraft/util/math/Vec3d;FF)Lnet/minecraft/util/math/Vec3d;
-accessible	method	net/minecraft/client/input/KeyboardInput	getMovementMultiplier	(ZZ)F
-accessible	method	net/minecraft/client/render/entity/LivingEntityRenderer	addFeature	(Lnet/minecraft/client/render/entity/feature/FeatureRenderer;)Z
-accessible	method	net/minecraft/client/gui/screen/ingame/HandledScreen	getSlotAt	(DD)Lnet/minecraft/screen/slot/Slot;
-accessible	field	net/minecraft/entity/LivingEntity	jumpingCooldown	I
-accessible	field	net/minecraft/entity/LivingEntity	jumping	Z
-accessible	field	net/minecraft/entity/Entity	fluidHeight	Lit/unimi/dsi/fastutil/objects/Object2DoubleMap;
-accessible	field	net/minecraft/entity/Entity	submergedFluidTag	Ljava/util/Set;
-accessible	field	net/minecraft/client/gui/hud/BossBarHud	bossBars	Ljava/util/Map;
-accessible	method	net/minecraft/client/network/ClientPlayerInteractionManager	sendSequencedPacket	(Lnet/minecraft/client/world/ClientWorld;Lnet/minecraft/client/network/SequencedPacketCreator;)V
-accessible	field	net/minecraft/client/gl/RenderPipelines	ENTITY_SNIPPET	Lcom/mojang/blaze3d/pipeline/RenderPipeline$Snippet;
+accessWidener	v2	intermediary
+accessible	method	net/minecraft/class_1297	method_18795	(Lnet/minecraft/class_243;FF)Lnet/minecraft/class_243;
+accessible	method	net/minecraft/class_743	method_40218	(ZZ)F
+accessible	method	net/minecraft/class_922	method_4046	(Lnet/minecraft/class_3887;)Z
+accessible	method	net/minecraft/class_465	method_64240	(DD)Lnet/minecraft/class_1735;
+accessible	field	net/minecraft/class_1309	field_6228	I
+accessible	field	net/minecraft/class_1309	field_6282	Z
+accessible	field	net/minecraft/class_1297	field_5964	Lit/unimi/dsi/fastutil/objects/Object2DoubleMap;
+accessible	field	net/minecraft/class_1297	field_25599	Ljava/util/Set;
+accessible	field	net/minecraft/class_337	field_2060	Ljava/util/Map;
+accessible	method	net/minecraft/class_636	method_41931	(Lnet/minecraft/class_638;Lnet/minecraft/class_7204;)V
+accessible	field	net/minecraft/class_10799	field_56854	Lcom/mojang/blaze3d/pipeline/RenderPipeline$Snippet;
