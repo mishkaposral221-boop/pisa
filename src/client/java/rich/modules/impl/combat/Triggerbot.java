@@ -12,17 +12,22 @@ import rich.events.api.EventHandler;
 import rich.events.impl.TickEvent;
 import rich.modules.module.ModuleStructure;
 import rich.modules.module.category.ModuleCategory;
+import rich.modules.module.setting.implement.BooleanSetting;
 import rich.modules.module.setting.implement.SliderSettings;
 import rich.util.c;
 
 /**
  * Triggerbot: auto-attacks targeted living entities.
  *
- * W-release mechanic (air crit):
+ * W-release mechanic (air crit) -- ВКЛЮЧАЕТСЯ ТОЛЬКО при wTap=true:
  *   Tick N   : crit ready -> save target, suppress W (SUPPRESS_FORWARD=true), return
  *   Tick N   : onInputTick clears forward/sprint from playerInput
  *   Tick N   : sendMovementPackets sends pos with W=false, sprint=false
  *   Tick N+1 : pendingTarget set, countdown=0 -> attack(), then resume W
+ *
+ * По умолчанию (wTap=false) триггербот НЕ вмешивается в пакеты движения:
+ * это убирает рассинхрон/руббербэндинг на сервере. Крит обеспечивается
+ * одиночным снятием спринта прямо в момент удара (см. doAttack).
  *
  * Charge thresholds (lowered for faster hitting):
  *   GROUND_ATTACK_CHARGE  0.93  (was 1.0)  - hit ground targets at 93%
@@ -63,13 +68,21 @@ public class Triggerbot extends ModuleStructure {
             "Min charge before held-jump fires")
             .setValue(0.50F).range(0.0F, 1.0F);
 
+    // Когда выключено (по умолчанию) -- триггербот НЕ трогает ввод движения
+    // (не гасит W / спринт / прыжок). Это убирает рассинхрон с сервером.
+    // Когда включено -- возвращается агрессивная механика "W-release",
+    // которая может вызывать откаты позиции (rubber-band) на сервере.
+    public BooleanSetting wTap = new BooleanSetting("W-tap crits",
+            "Гасит W/спринт перед ударом ради крита. Может вызывать рассинхрон на сервере")
+            .setValue(false);
+
     public static Triggerbot getInstance() {
         return c.a(Triggerbot.class);
     }
 
     public Triggerbot() {
         super("Triggerbot", "Auto-attack targeted entities", ModuleCategory.VISUALS);
-        this.settings(this.noCritCharge, this.jumpCharge);
+        this.settings(this.noCritCharge, this.jumpCharge, this.wTap);
     }
 
     @Override
@@ -104,6 +117,7 @@ public class Triggerbot extends ModuleStructure {
             else { ticksOnGround = 0; }
 
             // --- Pending pre-attack (W release + 1 tick delay for crit) ---
+            // Достижимо только в режиме wTap (см. ветку air-crit ниже).
             if (pendingTarget != null) {
                 if (!isEntityValid(pendingTarget)) {
                     pendingTarget = null;
@@ -154,11 +168,19 @@ public class Triggerbot extends ModuleStructure {
             if (!mc.player.isOnGround()) {
                 String blocker = critBlocker();
                 if (blocker == null && charge >= CRIT_CHARGE) {
-                    pendingTarget      = target;
-                    preAttackCountdown = 0;
-                    pendingWasForward  = mc.options.forwardKey.isPressed();
-                    wantSuppressForward = true;
-                    diag("CRIT_Q", "CRIT queue charge=" + fmt(charge));
+                    if (wTap.isValue()) {
+                        // Старая механика: гасим W на 1 тик, потом бьём.
+                        pendingTarget      = target;
+                        preAttackCountdown = 0;
+                        pendingWasForward  = mc.options.forwardKey.isPressed();
+                        wantSuppressForward = true;
+                        diag("CRIT_Q", "CRIT queue charge=" + fmt(charge));
+                    } else {
+                        // Анти-рассинхрон: не трогаем движение. Спринт снимается
+                        // прямо в doAttack -- этого достаточно для крита.
+                        doAttack(target, mc.options.forwardKey.isPressed());
+                        diag("CRIT_DIRECT", "CRIT direct charge=" + fmt(charge));
+                    }
                 } else {
                     diag("AIR_BLOCK", "block=" + blocker + " charge=" + fmt(charge));
                 }
@@ -167,7 +189,8 @@ public class Triggerbot extends ModuleStructure {
 
             // --- Ground jump-crit gate ---
             if (this.isJumpHeld() || mc.player.getVelocity().y > 0.0) {
-                if (this.isJumpHeld() && charge < jumpCharge.getValue()) {
+                if (wTap.isValue() && this.isJumpHeld() && charge < jumpCharge.getValue()) {
+                    // Подавление прыжка только в агрессивном режиме.
                     wantSuppressJump = true;
                     diag("JUMP_GATE", "JUMP gate charge=" + fmt(charge));
                 } else {
@@ -192,10 +215,16 @@ public class Triggerbot extends ModuleStructure {
     }
 
     private void doAttack(Entity target, boolean wasForward) {
-        mc.player.setSprinting(false);
+        // Снимаем спринт только если реально спринтовали: крит требует
+        // отсутствия спринта в момент удара, но дёргать состояние впустую
+        // (лишние ENTITY_ACTION пакеты) не нужно.
+        boolean wasSprinting = mc.player.isSprinting();
+        if (wasSprinting) {
+            mc.player.setSprinting(false);
+        }
         mc.interactionManager.attackEntity(mc.player, target);
         mc.player.swingHand(Hand.MAIN_HAND);
-        if (wasForward && mc.options.forwardKey.isPressed()) {
+        if (wasSprinting && wasForward && mc.options.forwardKey.isPressed()) {
             mc.player.setSprinting(true);
         }
     }

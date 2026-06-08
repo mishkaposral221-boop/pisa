@@ -3,6 +3,7 @@ package rich.mixin;
 import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
 import com.mojang.authlib.GameProfile;
 import net.minecraft.util.PlayerInput;
+import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.Vec2f;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.client.MinecraftClient;
@@ -36,6 +37,12 @@ public abstract class ClientPlayerEntityMixin extends AbstractClientPlayerEntity
    private double prevX = 0.0;
    private double prevZ = 0.0;
    private float prevBodyYaw = 0.0F;
+
+   // Максимальная дельта yaw, которую silent rotation может отправить серверу
+   // за один тик. Защищает от мгновенных "телепортов" головы (>700 deg/sec),
+   // на которые анти-чит реагирует откатом позиции. NaN = подмена не активна.
+   private static final float MAX_SILENT_YAW_STEP = 35.0F;
+   private float prevSentYaw = Float.NaN;
 
    @Shadow public abstract boolean isUsingItem();
 
@@ -134,10 +141,23 @@ public abstract class ClientPlayerEntityMixin extends AbstractClientPlayerEntity
    @ModifyExpressionValue(method = {"sendMovementPackets", "tick"},
                           at = @At(value = "INVOKE", target = "Lnet/minecraft/client/network/ClientPlayerEntity;getYaw()F"))
    private float hookSilentRotationYaw(float original) {
-      if (IMinecraft.mc.player != null && AngleConnection.INSTANCE.getRotation() != null) {
-         float yaw = AngleConnection.INSTANCE.getRotation().getYaw();
+      // Подмену включаем ТОЛЬКО при реально установленном угле (getCurrentAngle),
+      // а не при null-фолбэке getRotation() на камеру -- иначе хук срабатывал
+      // каждый тик и зря дёргал setBodyYaw даже без активного вращения.
+      if (IMinecraft.mc.player != null && AngleConnection.INSTANCE.getCurrentAngle() != null) {
+         float targetYaw = AngleConnection.INSTANCE.getRotation().getYaw();
+         // Ограничиваем дельту поворота между тиками: серверу нельзя слать
+         // мгновенный скачок головы, иначе ловим откат от анти-чита.
+         float sentYaw = targetYaw;
+         if (!Float.isNaN(prevSentYaw)) {
+            float delta = MathHelper.wrapDegrees(targetYaw - prevSentYaw);
+            if (delta > MAX_SILENT_YAW_STEP) delta = MAX_SILENT_YAW_STEP;
+            else if (delta < -MAX_SILENT_YAW_STEP) delta = -MAX_SILENT_YAW_STEP;
+            sentYaw = prevSentYaw + delta;
+         }
+         prevSentYaw = sentYaw;
          float body = MoveUtil.calculateBodyYaw(
-            yaw, prevBodyYaw, prevX, prevZ,
+            sentYaw, prevBodyYaw, prevX, prevZ,
             IMinecraft.mc.player.getX(), IMinecraft.mc.player.getZ(),
             IMinecraft.mc.player.handSwingProgress
          );
@@ -145,15 +165,16 @@ public abstract class ClientPlayerEntityMixin extends AbstractClientPlayerEntity
          prevX = IMinecraft.mc.player.getX();
          prevZ = IMinecraft.mc.player.getZ();
          IMinecraft.mc.player.setBodyYaw(body);
-         return yaw;
+         return sentYaw;
       }
+      prevSentYaw = Float.NaN;
       return original;
    }
 
    @ModifyExpressionValue(method = {"sendMovementPackets", "tick"},
                           at = @At(value = "INVOKE", target = "Lnet/minecraft/client/network/ClientPlayerEntity;getPitch()F"))
    private float hookSilentRotationPitch(float original) {
-      return AngleConnection.INSTANCE.getRotation() != null
+      return AngleConnection.INSTANCE.getCurrentAngle() != null
          ? AngleConnection.INSTANCE.getRotation().getPitch()
          : original;
    }
