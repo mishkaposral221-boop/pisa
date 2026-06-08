@@ -2,7 +2,6 @@ package rich.mixin;
 
 import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
 import com.mojang.authlib.GameProfile;
-import net.minecraft.entity.MovementType;
 import net.minecraft.util.PlayerInput;
 import net.minecraft.util.math.Vec2f;
 import net.minecraft.util.math.Vec3d;
@@ -22,7 +21,6 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import rich.IMinecraft;
 import rich.events.api.EventManager;
 import rich.events.impl.CloseScreenEvent;
-import rich.events.impl.MoveEvent;
 import rich.events.impl.PlayerTravelEvent;
 import rich.events.impl.PushEvent;
 import rich.events.impl.TickEvent;
@@ -39,7 +37,6 @@ public abstract class ClientPlayerEntityMixin extends AbstractClientPlayerEntity
    private double prevZ = 0.0;
    private float prevBodyYaw = 0.0F;
 
-   @Shadow protected abstract void autoJump(float dx, float dz);
    @Shadow public abstract boolean isUsingItem();
 
    public ClientPlayerEntityMixin(ClientWorld world, GameProfile profile) {
@@ -128,17 +125,11 @@ public abstract class ClientPlayerEntityMixin extends AbstractClientPlayerEntity
       if (e.isCancelled()) ci.cancel();
    }
 
-   // В 1.21.11 этот метод может не находиться в ClientPlayerEntity напрямую.
-   // require=0 не даст клиенту падать на старте, а в логах профайлера всё равно будет видно остальные причины просадок.
-   @Inject(method = "move", at = @At("HEAD"), cancellable = true, require = 0)
-   public void onMoveHook(MovementType type, Vec3d movement, CallbackInfo ci) {
-      MoveEvent e = new MoveEvent(movement);
-      EventManager.callEvent(e);
-      double ox = getX(), oz = getZ();
-      super.move(type, e.getMovement());
-      autoJump((float)(getX() - ox), (float)(getZ() - oz));
-      ci.cancel();
-   }
+   // ВНИМАНИЕ: прежний onMoveHook с @Inject(method = "move", ...) удалён.
+   // В 1.21.11 ClientPlayerEntity НЕ переопределяет move(MovementType, Vec3d),
+   // поэтому Mixin не находил целевой метод (Scanned 0 targets) и инъекция падала.
+   // Событие движения теперь фаерится из EntityMixin через устойчивый @ModifyVariable
+   // на Entity.move, отфильтрованный по локальному игроку.
 
    @ModifyExpressionValue(method = {"sendMovementPackets", "tick"},
                           at = @At(value = "INVOKE", target = "Lnet/minecraft/client/network/ClientPlayerEntity;getYaw()F"))
