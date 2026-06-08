@@ -57,11 +57,11 @@ public class Triggerbot extends ModuleStructure {
 
     public SliderSettings noCritCharge = new SliderSettings("Charge under debuff",
             "Min weapon charge when crit is impossible")
-            .setValue(0.78F).range(0.3F, 1.0F);
+            .setValue(0.78F).range(0.0F, 1.0F);
 
     public SliderSettings jumpCharge = new SliderSettings("Jump charge",
             "Min charge before held-jump fires")
-            .setValue(0.50F).range(0.3F, 1.0F);
+            .setValue(0.50F).range(0.0F, 1.0F);
 
     public static Triggerbot getInstance() {
         return c.a(Triggerbot.class);
