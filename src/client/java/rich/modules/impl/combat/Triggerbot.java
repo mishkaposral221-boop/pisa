@@ -6,6 +6,7 @@ import net.minecraft.entity.effect.StatusEffects;
 import net.minecraft.item.Item;
 import net.minecraft.registry.tag.ItemTags;
 import net.minecraft.util.Hand;
+import net.minecraft.util.math.Vec3d;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import rich.events.api.EventHandler;
@@ -19,15 +20,20 @@ import rich.util.c;
 /**
  * Triggerbot: auto-attacks targeted living entities.
  *
- * W-release mechanic (air crit) -- ВКЛЮЧАЕТСЯ ТОЛЬКО при wTap=true:
- *   Tick N   : crit ready -> save target, suppress W (SUPPRESS_FORWARD=true), return
- *   Tick N   : onInputTick clears forward/sprint from playerInput
- *   Tick N   : sendMovementPackets sends pos with W=false, sprint=false
- *   Tick N+1 : pendingTarget set, countdown=0 -> attack(), then resume W
+ * Крит-механика (air crit): удар всегда наносится в ОДИН тик.
+ * Спринт снимается прямо перед attackEntity и возвращается тут же в
+ * doAttack, поэтому в sendMovementPackets состояние спринта не меняется и
+ * лишние START/STOP_SPRINTING пакеты НЕ уходят.
  *
- * По умолчанию (wTap=false) триггербот НЕ вмешивается в пакеты движения:
- * это убирает рассинхрон/руббербэндинг на сервере. Крит обеспечивается
- * одиночным снятием спринта прямо в момент удара (см. doAttack).
+ * Раньше при wTap=true цель копилась на тик с подавлением W
+ * (SUPPRESS_FORWARD), из-за чего спринт снимался через границу тика:
+ * STOP_SPRINTING в конце тика N и START_SPRINTING в тике N+1 -> ~2 лишних
+ * ENTITY_ACTION пакета на КАЖДЫЙ удар -> сервер кикал за "слишком много
+ * пакетов". Эта кросс-тиковая механика убрана.
+ *
+ * wTap (W-tap crits) теперь лишь дополнительно мягко гасит горизонтальную
+ * скорость в момент удара (для более стабильного крита) и подавляет лишний
+ * прыжок на земле -- всё это без отправки дополнительных пакетов.
  *
  * Charge thresholds (lowered for faster hitting):
  *   GROUND_ATTACK_CHARGE  0.93  (was 1.0)  - hit ground targets at 93%
@@ -43,10 +49,6 @@ public class Triggerbot extends ModuleStructure {
     private static final Logger LOG = LoggerFactory.getLogger("Triggerbot");
     private static final boolean DEBUG_LOGS = Boolean.getBoolean("rich.debug.triggerbot");
     private static final long DEBUG_LOG_MIN_GAP_MS = 1000L;
-
-    private Entity  pendingTarget      = null;
-    private int     preAttackCountdown = 0;
-    private boolean pendingWasForward  = false;
 
     private String lastDiag = "";
     private long lastDiagLogMs = 0L;
@@ -68,12 +70,11 @@ public class Triggerbot extends ModuleStructure {
             "Min charge before held-jump fires")
             .setValue(0.50F).range(0.0F, 1.0F);
 
-    // Когда выключено (по умолчанию) -- триггербот НЕ трогает ввод движения
-    // (не гасит W / спринт / прыжок). Это убирает рассинхрон с сервером.
-    // Когда включено -- возвращается агрессивная механика "W-release",
-    // которая может вызывать откаты позиции (rubber-band) на сервере.
+    // Когда выключено (по умолчанию) -- триггербот НЕ трогает ввод движения.
+    // Когда включено -- дополнительно гасит горизонтальную скорость в момент
+    // удара и подавляет лишний прыжок на земле -- без лишних пакетов.
     public BooleanSetting wTap = new BooleanSetting("W-tap crits",
-            "Гасит W/спринт перед ударом ради крита. Может вызывать рассинхрон на сервере")
+            "Гасит скорость/прыжок ради крита. Без лишних пакетов")
             .setValue(false);
 
     public static Triggerbot getInstance() {
@@ -91,8 +92,6 @@ public class Triggerbot extends ModuleStructure {
         SUPPRESS_FORWARD = false;
         SUPPRESS_SPRINT  = false;
         SUPPRESS_JUMP    = false;
-        pendingTarget    = null;
-        preAttackCountdown = 0;
         ticksOutOfWater  = 0;
         ticksOnGround    = 0;
         lastDiag = "";
@@ -106,7 +105,6 @@ public class Triggerbot extends ModuleStructure {
         try {
             if (mc.player == null || mc.world == null || mc.currentScreen != null) {
                 ticksOnGround = 0;
-                pendingTarget = null;
                 return;
             }
 
@@ -115,28 +113,6 @@ public class Triggerbot extends ModuleStructure {
 
             if (mc.player.isOnGround()) { if (ticksOnGround < 100) ticksOnGround++; }
             else { ticksOnGround = 0; }
-
-            // --- Pending pre-attack (W release + 1 tick delay for crit) ---
-            // Достижимо только в режиме wTap (см. ветку air-crit ниже).
-            if (pendingTarget != null) {
-                if (!isEntityValid(pendingTarget)) {
-                    pendingTarget = null;
-                    preAttackCountdown = 0;
-                    return;
-                }
-                if (preAttackCountdown > 0) {
-                    preAttackCountdown--;
-                    wantSuppressForward = true;
-                    return;
-                }
-                Entity t = pendingTarget;
-                boolean wasForward = pendingWasForward;
-                pendingTarget = null;
-                preAttackCountdown = 0;
-                doAttack(t, wasForward);
-                diag("CRIT_FIRE", "CRIT FIRE fw=" + wasForward);
-                return;
-            }
 
             // --- Normal detection ---
             Entity target = mc.targetedEntity;
@@ -168,19 +144,16 @@ public class Triggerbot extends ModuleStructure {
             if (!mc.player.isOnGround()) {
                 String blocker = critBlocker();
                 if (blocker == null && charge >= CRIT_CHARGE) {
-                    if (wTap.isValue()) {
-                        // Старая механика: гасим W на 1 тик, потом бьём.
-                        pendingTarget      = target;
-                        preAttackCountdown = 0;
-                        pendingWasForward  = mc.options.forwardKey.isPressed();
-                        wantSuppressForward = true;
-                        diag("CRIT_Q", "CRIT queue charge=" + fmt(charge));
-                    } else {
-                        // Анти-рассинхрон: не трогаем движение. Спринт снимается
-                        // прямо в doAttack -- этого достаточно для крита.
-                        doAttack(target, mc.options.forwardKey.isPressed());
-                        diag("CRIT_DIRECT", "CRIT direct charge=" + fmt(charge));
-                    }
+                    // И обычный, и W-reset режим бьют в ЭТОТ ЖЕ тик. Спринт
+                    // снимается и возвращается внутри одного тика прямо в doAttack,
+                    // поэтому сервер НЕ получает лишних START/STOP_SPRINTING
+                    // пакетов. Раньше wTap копил цель и гасил W через тик ->
+                    // ~2 лишних пакета на каждый удар и кик "слишком много пакетов".
+                    // wTap дополнительно мягко гасит горизонтальную скорость
+                    // для более стабильного крита (без отправки пакетов).
+                    doAttack(target, mc.options.forwardKey.isPressed(), wTap.isValue());
+                    diag(wTap.isValue() ? "CRIT_WTAP" : "CRIT_DIRECT",
+                         "CRIT charge=" + fmt(charge));
                 } else {
                     diag("AIR_BLOCK", "block=" + blocker + " charge=" + fmt(charge));
                 }
@@ -215,12 +188,24 @@ public class Triggerbot extends ModuleStructure {
     }
 
     private void doAttack(Entity target, boolean wasForward) {
+        doAttack(target, wasForward, false);
+    }
+
+    private void doAttack(Entity target, boolean wasForward, boolean scrubVelocity) {
         // Снимаем спринт только если реально спринтовали: крит требует
-        // отсутствия спринта в момент удара, но дёргать состояние впустую
-        // (лишние ENTITY_ACTION пакеты) не нужно.
+        // отсутствия спринта в момент удара. Снятие и возврат происходят
+        // в пределах ОДНОГО тика -> в sendMovementPackets состояние спринта
+        // не меняется и лишний START/STOP_SPRINTING пакет не уходит.
         boolean wasSprinting = mc.player.isSprinting();
         if (wasSprinting) {
             mc.player.setSprinting(false);
+        }
+        // W-reset: мягко гасим горизонтальную скорость в этот же тик, чтобы
+        // удар читался как стоячий крит. Это меняет лишь значение в обычном
+        // тиковом пакете движения -- НЕ создаёт дополнительных пакетов.
+        if (scrubVelocity) {
+            Vec3d v = mc.player.getVelocity();
+            mc.player.setVelocity(v.x * 0.2, v.y, v.z * 0.2);
         }
         mc.interactionManager.attackEntity(mc.player, target);
         mc.player.swingHand(Hand.MAIN_HAND);
