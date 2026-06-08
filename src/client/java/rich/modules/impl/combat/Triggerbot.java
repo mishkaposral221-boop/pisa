@@ -24,16 +24,17 @@ import rich.util.c;
  * и возвращается внутри тика в doAttack -> нет лишних START/STOP_SPRINTING
  * пакетов.
  *
- * АНТИ-ФЛАГ (humanize): раньше бот бил детерминированно -- ровно в
- * первый тик, когда заряд переходил фиксированный порог (0.84/0.93).
- * Идеальная периодичность -> античит за несколько минут набивал
- * violation level. Теперь на КАЖДЫЙ удар случайно разбрасываются:
- * пороги заряда, задержка наземного комбо и лишняя микро-пауза между
- * ударами (0..3 тика). Разбросом управляет слайдер "Humanize"
- * (0 = старое детерминированное поведение).
+ * АНТИ-ФЛАГ (humanize):
+ *   1) Случайный разброс порогов заряда и микро-паузы между ударами
+ *      (убирает робо-периодичность autoclicker/killaura-тайминга).
+ *   2) Задержка РЕАКЦИИ на новую цель (~1..6 тиков, 50..300мс):
+ *      раньше с AimAssist «аим навёл -> триггер бьёт в тот же тик»
+ *      давало нулевое время реакции -> явный признак ауры для анти-чита.
+ *   Всё управляется слайдером "Humanize" (0 = старое мгновенное
+ *   детерминированное поведение).
  *
- * wTap (W-tap crits): дополнительно мягко гасит горизонтальную скорость
- * в момент удара и подавляет лишний прыжок -- без лишних пакетов.
+ * wTap (W-tap crits): доп. мягко гасит горизонтальную скорость в момент
+ * удара и подавляет лишний прыжок -- без лишних пакетов.
  *
  * Charge thresholds (базовые, дальше +jitter):
  *   GROUND_ATTACK_CHARGE  0.93
@@ -56,10 +57,10 @@ public class Triggerbot extends ModuleStructure {
     private int ticksOnGround   = 0;
 
     // --- Гуманизация таймингов (анти-флаг) ---
-    // Пороги/задержки пере-роллятся после каждого удара, чтобы тайминг
-    // атак не был периодичным. Инициализированы литералами (= базовые пороги).
     private final java.util.Random rng = new java.util.Random();
     private int   attackDelayTicks       = 0;
+    private int   targetReactionTicks    = 0;   // задержка реакции на новую цель
+    private int   lastTargetId           = -1;  // id предыдущей цели (для детекта смены)
     private float critChargeTarget       = 0.84F;
     private float groundChargeTarget     = 0.93F;
     private float waterChargeTarget      = 0.93F;
@@ -81,10 +82,10 @@ public class Triggerbot extends ModuleStructure {
             "Min charge before held-jump fires")
             .setValue(0.50F).range(0.0F, 1.0F);
 
-    // Случайность таймингов атаки. 0 = жёсткий детерминизм (как раньше),
-    // больше = сильнее разброс -> меньше флагов, но чуть медленнее бьёт.
+    // Случайность таймингов + задержка реакции. 0 = жёсткий детерминизм,
+    // больше = сильнее «очеловечивание» -> меньше флагов, но медленнее реакция.
     public SliderSettings randomness = new SliderSettings("Humanize",
-            "Случайность таймингов атаки (анти-флаг)")
+            "Случайность таймингов и задержка реакции (анти-флаг)")
             .setValue(0.5F).range(0.0F, 1.0F);
 
     // Когда выключено (по умолчанию) -- триггербот НЕ трогает ввод движения.
@@ -105,6 +106,8 @@ public class Triggerbot extends ModuleStructure {
     public void activate() {
         super.activate();
         rollTargets();
+        lastTargetId = -1;
+        targetReactionTicks = 0;
     }
 
     @Override
@@ -116,6 +119,8 @@ public class Triggerbot extends ModuleStructure {
         ticksOutOfWater  = 0;
         ticksOnGround    = 0;
         attackDelayTicks = 0;
+        targetReactionTicks = 0;
+        lastTargetId     = -1;
         lastDiag = "";
         lastDiagLogMs = 0L;
     }
@@ -127,10 +132,10 @@ public class Triggerbot extends ModuleStructure {
         try {
             if (mc.player == null || mc.world == null || mc.currentScreen != null) {
                 ticksOnGround = 0;
+                lastTargetId  = -1;
                 return;
             }
 
-            // Отсчёт случайной микро-паузы между ударами (анти-флаг).
             if (attackDelayTicks > 0) attackDelayTicks--;
 
             if (isInWater()) { ticksOutOfWater = 0; }
@@ -141,7 +146,22 @@ public class Triggerbot extends ModuleStructure {
 
             // --- Normal detection ---
             Entity target = mc.targetedEntity;
-            if (!canHit(target)) return;
+            if (!canHit(target)) { lastTargetId = -1; return; }
+
+            // --- Задержка реакции на НОВУЮ цель (анти-флаг для trigger+aim) ---
+            // Без этого AimAssist наводит и триггер бьёт в тот же тик ->
+            // нулевое время реакции -> анти-чит кидает на проверку.
+            int tid = target.getId();
+            if (tid != lastTargetId) {
+                lastTargetId = tid;
+                float rr = clamp(randomness.getValue(), 0.0F, 1.0F);
+                targetReactionTicks = (rr > 0.0F) ? (1 + Math.round(rng.nextFloat() * (5.0F * rr))) : 0;
+            }
+            if (targetReactionTicks > 0) {
+                targetReactionTicks--;
+                diag("REACT", "react=" + targetReactionTicks);
+                return;
+            }
 
             boolean critPossible = critAchievable();
             float charge = charge();
@@ -167,9 +187,6 @@ public class Triggerbot extends ModuleStructure {
             if (!mc.player.isOnGround()) {
                 String blocker = critBlocker();
                 if (blocker == null && charge >= critChargeTarget) {
-                    // И обычный, и W-reset режим бьют в ЭТОТ ЖЕ тик. Спринт
-                    // снимается/возвращается внутри тика в doAttack -> нет лишних
-                    // START/STOP_SPRINTING пакетов. wTap доп. гасит гориз. скорость.
                     if (fire(target, fwd, wTap.isValue())) {
                         diag(wTap.isValue() ? "CRIT_WTAP" : "CRIT_DIRECT", "CRIT charge=" + fmt(charge));
                     }
@@ -204,8 +221,6 @@ public class Triggerbot extends ModuleStructure {
         }
     }
 
-    // Единая точка атаки: уважает случайную микро-паузу и пере-роллит
-    // пороги/задержки после успешного удара.
     private boolean fire(Entity target, boolean wasForward, boolean scrub) {
         if (attackDelayTicks > 0) return false;
         doAttack(target, wasForward, scrub);
@@ -213,7 +228,6 @@ public class Triggerbot extends ModuleStructure {
         return true;
     }
 
-    // Пере-ролл случайных порогов и задержек. Масштаб -- слайдер "Humanize".
     private void rollTargets() {
         float r = clamp(randomness.getValue(), 0.0F, 1.0F);
         critChargeTarget       = clamp(CRIT_CHARGE          + rng.nextFloat() * (0.12F * r), 0.80F, 0.99F);
@@ -229,13 +243,10 @@ public class Triggerbot extends ModuleStructure {
     }
 
     private void doAttack(Entity target, boolean wasForward, boolean scrubVelocity) {
-        // Снятие/возврат спринта в пределах ОДНОГО тика -> sendMovementPackets
-        // не видит изменения и лишний START/STOP_SPRINTING пакет не уходит.
         boolean wasSprinting = mc.player.isSprinting();
         if (wasSprinting) {
             mc.player.setSprinting(false);
         }
-        // W-reset: мягко гасим горизонтальную скорость в этот же тик (без пакетов).
         if (scrubVelocity) {
             Vec3d v = mc.player.getVelocity();
             mc.player.setVelocity(v.x * 0.2, v.y, v.z * 0.2);
