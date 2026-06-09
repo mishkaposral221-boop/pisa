@@ -1,1 +1,356 @@
-cGFja2FnZSByaWNoLm1vZHVsZXMuaW1wbC5jb21iYXQ7CgppbXBvcnQgamF2YS51dGlsLlJhbmRvbTsKaW1wb3J0IGphdmEudXRpbC5jb25jdXJyZW50LlRocmVhZExvY2FsUmFuZG9tOwppbXBvcnQgbmV0Lm1pbmVjcmFmdC5jbGllbnQubmV0d29yay5DbGllbnRQbGF5ZXJFbnRpdHk7CmltcG9ydCBuZXQubWluZWNyYWZ0LmVudGl0eS5FbnRpdHk7CmltcG9ydCBuZXQubWluZWNyYWZ0LmVudGl0eS5MaXZpbmdFbnRpdHk7CmltcG9ydCBuZXQubWluZWNyYWZ0LmVudGl0eS5lZmZlY3QuU3RhdHVzRWZmZWN0czsKaW1wb3J0IG5ldC5taW5lY3JhZnQuZW50aXR5LnBsYXllci5QbGF5ZXJFbnRpdHk7CmltcG9ydCBuZXQubWluZWNyYWZ0Lml0ZW0uSXRlbTsKaW1wb3J0IG5ldC5taW5lY3JhZnQucmVnaXN0cnkudGFnLkl0ZW1UYWdzOwppbXBvcnQgbmV0Lm1pbmVjcmFmdC51dGlsLkhhbmQ7CmltcG9ydCBuZXQubWluZWNyYWZ0LnV0aWwuaGl0LkJsb2NrSGl0UmVzdWx0OwppbXBvcnQgbmV0Lm1pbmVjcmFmdC51dGlsLmhpdC5IaXRSZXN1bHQ7CmltcG9ydCBuZXQubWluZWNyYWZ0LnV0aWwubWF0aC5Cb3g7CmltcG9ydCBuZXQubWluZWNyYWZ0LnV0aWwubWF0aC5NYXRoSGVscGVyOwppbXBvcnQgbmV0Lm1pbmVjcmFmdC51dGlsLm1hdGguVmVjM2Q7CmltcG9ydCBuZXQubWluZWNyYWZ0LndvcmxkLlJheWNhc3RDb250ZXh0OwppbXBvcnQgcmljaC5ldmVudHMuYXBpLkV2ZW50SGFuZGxlcjsKaW1wb3J0IHJpY2guZXZlbnRzLmltcGwuUGxheWVyVmVsb2NpdHlTdHJhZmVFdmVudDsKaW1wb3J0IHJpY2guZXZlbnRzLmltcGwuVGlja0V2ZW50OwppbXBvcnQgcmljaC5tb2R1bGVzLmltcGwuY29tYmF0LmF1cmEuQW5nbGU7CmltcG9ydCByaWNoLm1vZHVsZXMuaW1wbC5jb21iYXQuYXVyYS5BbmdsZUNvbm5lY3Rpb247CmltcG9ydCByaWNoLm1vZHVsZXMubW9kdWxlLk1vZHVsZVN0cnVjdHVyZTsKaW1wb3J0IHJpY2gubW9kdWxlcy5tb2R1bGUuY2F0ZWdvcnkuTW9kdWxlQ2F0ZWdvcnk7CmltcG9ydCByaWNoLm1vZHVsZXMubW9kdWxlLnNldHRpbmcuaW1wbGVtZW50LkJvb2xlYW5TZXR0aW5nOwppbXBvcnQgcmljaC5tb2R1bGVzLm1vZHVsZS5zZXR0aW5nLmltcGxlbWVudC5TbGlkZXJTZXR0aW5nczsKaW1wb3J0IHJpY2gudXRpbC5jOwoKLyoqCiAqIEtpbGxBdXJhU3Bvb2t5IC0tIFNQQW5nbGUgcHJvZmlsZSAoU3Bvb2t5VGltZSBieXBhc3MpICsgbW92ZUNvcnJlY3Rpb24uCiAqCiAqIFNpbGVudDogQW5nbGVDb25uZWN0aW9uLklOU1RBTkNFLnNldFJvdGF0aW9uKCkgLS0KICogICBDbGllbnRQbGF5ZXJFbnRpdHlNaXhpbi5ob29rU2lsZW50Um90YXRpb25ZYXcvUGl0Y2ggKEBNb2RpZnlFeHByZXNzaW9uVmFsdWUpCiAqICAgcGVyZWtoYXR5dmFldCBnZXRZYXcoKS9nZXRQaXRjaCgpIHRvbGtvIHZudXRyaSBzZW5kTW92ZW1lbnRQYWNrZXRzKCkuCiAqICAgTkUgdHJvZ2F5YSBwbGF5ZXIueWF3IC0tIGthbWVyYSB2c2VnZGEgcG9rYXp5dmFldCByZWFsbnl5IHlhdyBteXNoa2kuCiAqCiAqIE1vdmVDb3JyZWN0aW9uOiBwcmkgc2lsZW50IHJlemhpbWUgdmVrdG9yIGR2aXpoZW5peWEgcGVyZXNjaGl0eXZhZXRzeWEKICogICBwb2QgYWltLXlhdywgY2h0b2J5IHNlcnZlciBuZSB2aWRlbCBkdml6aGVuaWUgcGVyZWQgcG9kIG5lcHJhdmlsbnltCiAqICAgdWdsb20gLT4gZmxhZ2kuCiAqCiAqIFJvdGF0aW9uQnlwYXNzIChieS1tb2R1bGUubWQgLT4gU1BBbmdsZSwgU3Bvb2t5VGltZS9SZWxlb24pOgogKiAgIC0geWF3TGltaXQgPSBtaW4ofHlhd0R8LCA3NCArIHJhbmQoMC4uMS4wMykpCiAqICAgLSBwaXRjaExpbWl0ID0gbWluKHxwaXRjaER8LCAzMi4zMykKICogICAtIHJlYWNoZWQgLT4gbWF4U3RlcCA9IHJhbmQoNjUuLjEwMCk7ICFyZWFjaGVkIC0+IG1heFN0ZXAgPSByYW5kKDcuNy4uMTIuMSkKICogICAtIHNjYWxlID0gbWluKHRvdGFsLCBtYXhTdGVwKSAvIHRvdGFsOyAhcmVhY2hlZCAtPiBlYXNlKHNjYWxlKQogKiAgIC0gU3dheTogeWF3ICs9IHNpbih0ICogMyAqIDJwaSkgKiAxLjE1ICogZ2F1c3NpYW4sIHQgPSAobXMlMTIwMDApLzEyMDAKICogICAtIEdDRC1zbmFwIGNoZXJleiBhbmdsZS5hZGp1c3RTZW5zaXRpdml0eSgpCiAqLwpwdWJsaWMgY2xhc3MgS2lsbEF1cmFTcG9va3kgZXh0ZW5kcyBNb2R1bGVTdHJ1Y3R1cmUgewoKICAgIHB1YmxpYyBmaW5hbCBTbGlkZXJTZXR0aW5ncyByYW5nZSAgICAgID0gbmV3IFNsaWRlclNldHRpbmdzKCJSYW5nZSIsICAgICAiQXR0YWNrIHJhbmdlIikgICAgICAgLnNldFZhbHVlKDMuMUYpLnJhbmdlKDEuMEYsIDYuMEYpOwogICAgcHVibGljIGZpbmFsIFNsaWRlclNldHRpbmdzIGZvdlNldHRpbmcgPSBuZXcgU2xpZGVyU2V0dGluZ3MoIkZPViIsICAgICAgICJNYXggRk9WIHRvIHRhcmdldCIpICAuc2V0VmFsdWUoMTgwLjBGKS5yYW5nZSgxMC4wRiwgMTgwLjBGKTsKICAgIHB1YmxpYyBmaW5hbCBCb29sZWFuU2V0dGluZyBvbmx5U3dvcmQgID0gbmV3IEJvb2xlYW5TZXR0aW5nKCJPbmx5U3dvcmQiLCAiT25seSBzd29yZC9heGUiKSAgICAgLnNldFZhbHVlKHRydWUpOwogICAgcHVibGljIGZpbmFsIEJvb2xlYW5TZXR0aW5nIHNpbGVudFJvdCAgPSBuZXcgQm9vbGVhblNldHRpbmcoIlNpbGVudCIsICAgICJTaWxlbnQgcm90YXRpb24iKSAgICAuc2V0VmFsdWUodHJ1ZSk7CgogICAgcHJpdmF0ZSBmaW5hbCBSYW5kb20gcm5nID0gbmV3IFJhbmRvbSgpOwoKICAgIHByaXZhdGUgZmxvYXQgY3VyWWF3OwogICAgcHJpdmF0ZSBmbG9hdCBjdXJQaXRjaDsKICAgIHByaXZhdGUgYm9vbGVhbiBoYXNSb3RhdGlvbiA9IGZhbHNlOwoKICAgIHByaXZhdGUgZmxvYXQgcmVhbFlhdzsKICAgIHByaXZhdGUgZmxvYXQgcmVhbFBpdGNoOwoKICAgIHByaXZhdGUgRW50aXR5IGxvY2tlZFRhcmdldCA9IG51bGw7CgogICAgcHJpdmF0ZSBFbnRpdHkgIHBlbmRpbmdBdHRhY2sgICAgID0gbnVsbDsKICAgIHByaXZhdGUgbG9uZyAgICBwcmVBdHRhY2tEZWFkbGluZSA9IDBMOwogICAgcHJpdmF0ZSBib29sZWFuIHBlbmRpbmdXYXNGb3J3YXJkID0gZmFsc2U7CgogICAgcHJpdmF0ZSBpbnQgICAgIHRpY2tzT3V0T2ZXYXRlciA9IDEwOwogICAgcHJpdmF0ZSBpbnQgICAgIHRpY2tzT25Hcm91bmQgICA9IDA7CiAgICBwcml2YXRlIGJvb2xlYW4gd2FzRmFsbGluZyAgICAgID0gZmFsc2U7CiAgICBwcml2YXRlIGludCAgICAgZmFsbEdyb3VuZFRpY2tzID0gMDsKCiAgICBwcml2YXRlIHN0YXRpYyBmaW5hbCBpbnQgICBXX1BSRV9NSU4gICAgICAgICAgICA9IDE7CiAgICBwcml2YXRlIHN0YXRpYyBmaW5hbCBpbnQgICBXX1BSRV9NQVggICAgICAgICAgICA9IDE1OwogICAgcHJpdmF0ZSBzdGF0aWMgZmluYWwgaW50ICAgRkFMTF9HQVRFX1RJQ0tTICAgICAgPSA0MDsKICAgIHByaXZhdGUgc3RhdGljIGZpbmFsIGZsb2F0IENSSVRfQ0hBUkdFICAgICAgICAgID0gMC44NEY7CiAgICBwc}
+package rich.modules.impl.combat;
+
+import java.util.Random;
+import java.util.concurrent.ThreadLocalRandom;
+import net.minecraft.client.network.ClientPlayerEntity;
+import net.minecraft.entity.Entity;
+import net.minecraft.entity.LivingEntity;
+import net.minecraft.entity.effect.StatusEffects;
+import net.minecraft.entity.player.PlayerEntity;
+import net.minecraft.item.Item;
+import net.minecraft.registry.tag.ItemTags;
+import net.minecraft.util.Hand;
+import net.minecraft.util.hit.BlockHitResult;
+import net.minecraft.util.hit.HitResult;
+import net.minecraft.util.math.Box;
+import net.minecraft.util.math.MathHelper;
+import net.minecraft.util.math.Vec3d;
+import net.minecraft.world.RaycastContext;
+import rich.events.api.EventHandler;
+import rich.events.impl.PlayerVelocityStrafeEvent;
+import rich.events.impl.TickEvent;
+import rich.modules.impl.combat.aura.Angle;
+import rich.modules.impl.combat.aura.AngleConnection;
+import rich.modules.module.ModuleStructure;
+import rich.modules.module.category.ModuleCategory;
+import rich.modules.module.setting.implement.BooleanSetting;
+import rich.modules.module.setting.implement.SliderSettings;
+import rich.util.c;
+
+/**
+ * KillAuraSpooky -- SPAngle profile (SpookyTime bypass) + moveCorrection.
+ *
+ * Silent: AngleConnection.INSTANCE.setRotation() --
+ *   ClientPlayerEntityMixin.hookSilentRotationYaw/Pitch (@ModifyExpressionValue)
+ *   intercepts getYaw()/getPitch() only inside sendMovementPackets().
+ *   Does NOT touch player.yaw -- camera always shows real mouse yaw.
+ *
+ * MoveCorrection: in silent mode the movement vector is recalculated
+ *   under aim-yaw so the server doesn't see movement at wrong angle -> flags.
+ *
+ * RotationBypass (by-module.md -> SPAngle, SpookyTime/Releon):
+ *   - yawLimit   = min(|yawD|, 74 + rand(0..1.03))
+ *   - pitchLimit = min(|pitchD|, 32.33)
+ *   - reached -> maxStep = rand(65..100); !reached -> maxStep = rand(7.7..12.1)
+ *   - scale = min(total, maxStep) / total; !reached -> ease(scale)
+ *   - Sway: yaw += sin(t * 3 * 2pi) * 1.15 * gaussian, t = (ms%12000)/1200
+ *   - GCD-snap via angle.adjustSensitivity()
+ */
+public class KillAuraSpooky extends ModuleStructure {
+
+    public final SliderSettings range       = new SliderSettings("Range",      "Attack range")       .setValue(3.1F).range(1.0F, 6.0F);
+    public final SliderSettings fovSetting  = new SliderSettings("FOV",        "Max FOV to target")  .setValue(180.0F).range(10.0F, 180.0F);
+    public final BooleanSetting onlySword   = new BooleanSetting("OnlySword",  "Only sword/axe")     .setValue(true);
+    public final BooleanSetting silentRot   = new BooleanSetting("Silent",     "Silent rotation")    .setValue(true);
+
+    private final Random rng = new Random();
+
+    private float curYaw;
+    private float curPitch;
+    private boolean hasRotation = false;
+
+    private float realYaw;
+    private float realPitch;
+
+    private Entity lockedTarget = null;
+
+    private Entity  pendingAttack     = null;
+    private long    preAttackDeadline = 0L;
+    private boolean pendingWasForward = false;
+
+    private int     ticksOutOfWater = 10;
+    private int     ticksOnGround   = 0;
+    private boolean wasFalling      = false;
+    private int     fallGroundTicks  = 0;
+
+    private static final int   W_PRE_MIN            = 1;
+    private static final int   W_PRE_MAX            = 15;
+    private static final int   FALL_GATE_TICKS      = 40;
+    private static final float CRIT_CHARGE          = 0.84F;
+
+    public KillAuraSpooky() {
+        super("KillAuraSpooky", "SPAngle kill-aura (SpookyTime bypass)", ModuleCategory.UTILITIES);
+    }
+
+    // -------------------------------------------------------------------------
+    // Tick
+    // -------------------------------------------------------------------------
+
+    @EventHandler
+    public void onTick(TickEvent event) {
+        if (mc.player == null || mc.world == null || !this.isState()) return;
+
+        // Water timer
+        if (mc.player.isTouchingWater()) ticksOutOfWater = 0;
+        else if (ticksOutOfWater < 20) ticksOutOfWater++;
+
+        // Ground / fall timer
+        boolean onGround = mc.player.isOnGround();
+        if (onGround) {
+            if (wasFalling) { fallGroundTicks = 0; wasFalling = false; }
+            if (ticksOnGround < 20) ticksOnGround++;
+        } else {
+            ticksOnGround = 0;
+            if (mc.player.getVelocity().y < -0.1) wasFalling = true;
+        }
+        if (wasFalling && onGround) { if (fallGroundTicks < FALL_GATE_TICKS) fallGroundTicks++; }
+
+        realYaw   = mc.player.getYaw();
+        realPitch = mc.player.getPitch();
+
+        // Pending attack
+        if (pendingAttack != null) {
+            if (System.currentTimeMillis() > preAttackDeadline || pendingWasForward) {
+                doAttack(pendingAttack);
+                pendingAttack = null;
+            }
+        }
+
+        Entity target = findTarget();
+        if (target == null) {
+            resetRotation();
+            lockedTarget = null;
+            return;
+        }
+        lockedTarget = target;
+
+        // Compute needed angles
+        Angle needed = calcAngle(mc.player, target);
+        Angle next   = spAngleRotate(new Angle(curYaw, curPitch), needed);
+
+        curYaw   = next.getYaw();
+        curPitch = next.getPitch();
+        hasRotation = true;
+
+        if (silentRot.getValue()) {
+            AngleConnection.INSTANCE.setRotation(next);
+        } else {
+            mc.player.setYaw(curYaw);
+            mc.player.setPitch(curPitch);
+        }
+
+        // Attack
+        boolean reached = Math.abs(MathHelper.wrapDegrees(needed.getYaw() - curYaw)) < 3.0F
+                       && Math.abs(needed.getPitch() - curPitch) < 3.0F;
+        if (reached && canAttack(target)) {
+            int preDelay = W_PRE_MIN + rng.nextInt(W_PRE_MAX - W_PRE_MIN + 1);
+            pendingAttack     = target;
+            preAttackDeadline = System.currentTimeMillis() + preDelay;
+            pendingWasForward = isForwardPressed();
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // MoveCorrection
+    // -------------------------------------------------------------------------
+
+    @EventHandler
+    public void onPlayerVelocityStrafe(PlayerVelocityStrafeEvent event) {
+        if (!this.isState() || !silentRot.getValue() || !hasRotation) return;
+        if (mc.player == null) return;
+
+        Vec3d input = event.getMovementInput();
+        double speed = event.getSpeed();
+        if (input.lengthSquared() < 1e-9) return;
+
+        double aimYawRad = Math.toRadians(curYaw);
+        double realYawRad = Math.toRadians(realYaw);
+
+        // Rotate input from real-yaw space to aim-yaw space
+        double ix = input.x;
+        double iz = input.z;
+
+        // Standard: forward = -sin(yaw)*z + -cos(yaw)*x ... let's just recalc velocity
+        double sinAim  = Math.sin(aimYawRad);
+        double cosAim  = Math.cos(aimYawRad);
+        double sinReal = Math.sin(realYawRad);
+        double cosReal = Math.cos(realYawRad);
+
+        // Decode input to world-space using aim yaw, re-encode using real yaw
+        // world_x = -sin(aim)*iz - cos(aim)*... standard MC move calc:
+        // vx = (-sin(yaw)*fwd - cos(yaw)*strafe) * speed
+        // vz = ( cos(yaw)*fwd - sin(yaw)*strafe) * speed
+        // Reverse: fwd = (-sin(yaw)*vx + cos(yaw)*vz)/speed
+        //          str = (-cos(yaw)*vx - sin(yaw)*vz)/speed
+
+        Vec3d vel = event.getVelocity();
+        double vx = vel.x;
+        double vz = vel.z;
+
+        // decode using realYaw
+        double fwd = -sinReal * vx + cosReal * vz;
+        double str = -cosReal * vx - sinReal * vz;
+
+        // re-encode using aimYaw
+        double newVx = (-sinAim * fwd - cosAim * str);
+        double newVz = ( cosAim * fwd - sinAim * str);
+
+        event.setVelocity(new Vec3d(newVx, vel.y, newVz));
+    }
+
+    // -------------------------------------------------------------------------
+    // SPAngle rotation
+    // -------------------------------------------------------------------------
+
+    private Angle spAngleRotate(Angle current, Angle target) {
+        float dy = MathHelper.wrapDegrees(target.getYaw()   - current.getYaw());
+        float dp = MathHelper.wrapDegrees(target.getPitch() - current.getPitch());
+
+        float yawLimit   = (float) Math.min(Math.abs(dy), 74.0F + (float)(rng.nextDouble() * 1.03));
+        float pitchLimit = (float) Math.min(Math.abs(dp), 32.33F);
+
+        float totalYaw   = Math.abs(dy);
+        float totalPitch = Math.abs(dp);
+        boolean reached  = totalYaw <= yawLimit && totalPitch <= pitchLimit;
+
+        float maxStepYaw;
+        float maxStepPitch;
+        if (reached) {
+            maxStepYaw   = 65.0F + rng.nextFloat() * 35.0F;   // rand(65..100)
+            maxStepPitch = 65.0F + rng.nextFloat() * 35.0F;
+        } else {
+            maxStepYaw   = 7.7F  + rng.nextFloat() * 4.4F;    // rand(7.7..12.1)
+            maxStepPitch = 7.7F  + rng.nextFloat() * 4.4F;
+        }
+
+        float stepYaw;
+        if (totalYaw < 1e-4F) {
+            stepYaw = 0;
+        } else {
+            float scaleY = Math.min(totalYaw, maxStepYaw) / totalYaw;
+            if (!reached) scaleY = ease(scaleY);
+            stepYaw = Math.copySign(Math.min(yawLimit, totalYaw * scaleY), dy);
+        }
+
+        float stepPitch;
+        if (totalPitch < 1e-4F) {
+            stepPitch = 0;
+        } else {
+            float scaleP = Math.min(totalPitch, maxStepPitch) / totalPitch;
+            if (!reached) scaleP = ease(scaleP);
+            stepPitch = Math.copySign(Math.min(pitchLimit, totalPitch * scaleP), dp);
+        }
+
+        float newYaw   = current.getYaw()   + stepYaw;
+        float newPitch = current.getPitch() + stepPitch;
+        newPitch = MathHelper.clamp(newPitch, -90.0F, 90.0F);
+
+        // Idle sway when no target movement
+        if (reached) {
+            long ms = System.currentTimeMillis();
+            double t = (ms % 12000L) / 1200.0;
+            float sway = (float)(Math.sin(t * 3.0 * 2.0 * Math.PI) * 1.15 * rng.nextGaussian() * 0.15);
+            newYaw += sway;
+        }
+
+        // GCD snap
+        Angle result = new Angle(newYaw, newPitch).adjustSensitivity();
+        return result;
+    }
+
+    private float ease(float t) {
+        return t * (0.5F + 0.5F * t);
+    }
+
+    // -------------------------------------------------------------------------
+    // Helpers
+    // -------------------------------------------------------------------------
+
+    private void resetRotation() {
+        hasRotation = false;
+        if (silentRot.getValue()) {
+            AngleConnection.INSTANCE.setRotation(null);
+        }
+    }
+
+    private Entity findTarget() {
+        if (mc.player == null || mc.world == null) return null;
+        float maxRange = range.getValue();
+        float fov      = fovSetting.getValue();
+        Entity best    = null;
+        double bestDist = Double.MAX_VALUE;
+
+        for (Entity e : mc.world.getEntities()) {
+            if (!(e instanceof LivingEntity le)) continue;
+            if (le.isDead() || le.getHealth() <= 0) continue;
+            if (e == mc.player) continue;
+            if (e instanceof PlayerEntity pe && pe.isCreative()) continue;
+            if (le.hasStatusEffect(StatusEffects.INVISIBILITY)) continue;
+
+            double dist = mc.player.distanceTo(e);
+            if (dist > maxRange) continue;
+
+            Angle needed = calcAngle(mc.player, e);
+            float dYaw = Math.abs(MathHelper.wrapDegrees(needed.getYaw() - mc.player.getYaw()));
+            if (dYaw > fov / 2f) continue;
+
+            if (!hasLineOfSight(e)) continue;
+
+            if (dist < bestDist) {
+                bestDist = dist;
+                best     = e;
+            }
+        }
+        return best;
+    }
+
+    private boolean hasLineOfSight(Entity target) {
+        if (mc.world == null) return false;
+        Vec3d eyes   = mc.player.getCameraPosVec(1.0F);
+        Vec3d tPos   = target.getCameraPosVec(1.0F);
+        var result   = mc.world.raycast(new RaycastContext(
+                eyes, tPos, RaycastContext.ShapeType.COLLIDER,
+                RaycastContext.FluidHandling.NONE, mc.player));
+        return result.getType() == HitResult.Type.MISS
+            || (result instanceof BlockHitResult bhr
+                && bhr.getBlockPos().equals(target.getBlockPos()));
+    }
+
+    private boolean canAttack(Entity target) {
+        if (mc.player == null) return false;
+        if (ticksOutOfWater < 2) return false;
+        // Crit: must be falling and on ground within gate
+        // simplified: just check attack cooldown
+        float cooldown = mc.player.getAttackCooldownProgress(0.5F);
+        if (cooldown < CRIT_CHARGE) return false;
+        if (onlySword.getValue()) {
+            Item held = mc.player.getMainHandStack().getItem();
+            boolean isSword = mc.player.getMainHandStack().isIn(ItemTags.SWORDS);
+            boolean isAxe   = mc.player.getMainHandStack().isIn(ItemTags.AXES);
+            if (!isSword && !isAxe) return false;
+        }
+        return true;
+    }
+
+    private void doAttack(Entity target) {
+        if (mc.player == null || mc.interactionManager == null) return;
+        mc.interactionManager.attackEntity(mc.player, target);
+        mc.player.swingHand(Hand.MAIN_HAND);
+    }
+
+    private boolean isForwardPressed() {
+        return mc.options.forwardKey.isPressed();
+    }
+
+    private static Angle calcAngle(ClientPlayerEntity player, Entity target) {
+        Vec3d eyes = player.getCameraPosVec(1.0F);
+        Vec3d tPos = target.getCameraPosVec(1.0F);
+        double dx = tPos.x - eyes.x;
+        double dy = tPos.y - eyes.y;
+        double dz = tPos.z - eyes.z;
+        double dist = Math.sqrt(dx * dx + dz * dz);
+        float yaw   = (float)(Math.toDegrees(Math.atan2(dz, dx)) - 90.0);
+        float pitch = (float)(-Math.toDegrees(Math.atan2(dy, dist)));
+        return new Angle(yaw, pitch);
+    }
+}
