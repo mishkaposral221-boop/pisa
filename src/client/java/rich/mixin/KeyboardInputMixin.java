@@ -10,6 +10,7 @@ import org.spongepowered.asm.mixin.injection.At;
 import rich.IMinecraft;
 import rich.events.api.EventManager;
 import rich.events.impl.InputEvent;
+import rich.modules.impl.combat.AutoSwap;
 import rich.modules.impl.combat.Triggerbot;
 import rich.modules.impl.combat.aura.Angle;
 import rich.modules.impl.combat.aura.AngleConnection;
@@ -25,20 +26,27 @@ public class KeyboardInputMixin {
       EventManager.callEvent(var2);
       PlayerInput out = this.transformInput(var2.getInput());
 
-      // 2) Триггер-бот / W-tap: гасим W (и при желании sprint/jump),
-      //    пока активно окно "сброса W" перед ударом.
-      //    После одного тика без forward() движок снимет isSprinting,
-      //    и следующий тик даст fresh sprint-attack с knockback-бустом.
-      boolean suppressFwd    = Triggerbot.SUPPRESS_FORWARD;
-      boolean suppressSprint = Triggerbot.SUPPRESS_SPRINT;
-      boolean suppressJump   = Triggerbot.SUPPRESS_JUMP;
+      // 2) Сводим все suppress-флаги:
+      //    Triggerbot.SUPPRESS_FORWARD/SPRINT/JUMP — W-tap sprint reset.
+      //    AutoSwap.SUPPRESS_INPUT — полный anti-InventoryMove (всё гасим).
+      //    AutoSwap.SUPPRESS_SPRINT — только спринт.
+      boolean asInput  = AutoSwap.SUPPRESS_INPUT;
+      boolean asSprint = AutoSwap.SUPPRESS_SPRINT;
 
-      if (suppressFwd || suppressSprint || suppressJump) {
+      boolean suppressFwd    = Triggerbot.SUPPRESS_FORWARD || asInput;
+      boolean suppressBack   = asInput;
+      boolean suppressLeft   = asInput;
+      boolean suppressRight  = asInput;
+      boolean suppressJump   = Triggerbot.SUPPRESS_JUMP || asInput;
+      boolean suppressSprint = Triggerbot.SUPPRESS_SPRINT || asInput || asSprint;
+
+      if (suppressFwd || suppressBack || suppressLeft || suppressRight
+            || suppressJump || suppressSprint) {
          out = new PlayerInput(
             suppressFwd    ? false : out.forward(),
-            out.backward(),
-            out.left(),
-            out.right(),
+            suppressBack   ? false : out.backward(),
+            suppressLeft   ? false : out.left(),
+            suppressRight  ? false : out.right(),
             suppressJump   ? false : out.jump(),
             out.sneak(),
             suppressSprint ? false : out.sprint()
