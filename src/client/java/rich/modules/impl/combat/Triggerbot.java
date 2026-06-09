@@ -21,19 +21,15 @@ import java.util.concurrent.ThreadLocalRandom;
  * Triggerbot: auto-attacks targeted living entities.
  *
  * W-release mechanic (before EVERY hit):
- *   1. Attack decision made -> save target, suppress W (SUPPRESS_FORWARD=true)
- *      preAttackCountdown = random(W_RELEASE_MIN..W_RELEASE_MAX) ticks
- *   2. While countdown > 0: keep W suppressed, decrement, return
- *   3. countdown == 0: doAttack(), restore W if it was held
+ *   1. Attack decision made -> save target, suppress W.
+ *      preAttackCountdown = random(1..2) ticks -- W stays released this long before hit.
+ *   2. While preAttackCountdown > 0: keep W suppressed, tick down.
+ *   3. preAttackCountdown == 0: doAttack(), then suppress W for postAttackCountdown
+ *      = random(0..2) ticks -- W is not instantly re-pressed after hit.
  *
- * Randomized timings:
- *   W_RELEASE_MIN = 1 tick  (min ticks W is released before hit)
- *   W_RELEASE_MAX = 3 ticks (max ticks W is released before hit)
- *
- * Charge thresholds:
- *   GROUND_ATTACK_CHARGE  0.93
- *   CRIT_CHARGE           0.84
- *   GROUND_COMBO_DELAY    2
+ * BUG FIX: the finally block previously overrode SUPPRESS_FORWARD=true set inside
+ *   queueAttack() back to false on the same tick. Fixed by checking pendingTarget != null
+ *   or postAttackCountdown > 0 in the finally expression.
  */
 public class Triggerbot extends ModuleStructure {
 
@@ -45,20 +41,21 @@ public class Triggerbot extends ModuleStructure {
     private static final boolean DEBUG_LOGS = Boolean.getBoolean("rich.debug.triggerbot");
     private static final long DEBUG_LOG_MIN_GAP_MS = 1000L;
 
-    // W-release timing before every hit (ticks)
-    private static final int W_RELEASE_MIN = 1;
-    private static final int W_RELEASE_MAX = 3;
+    // How many ticks W is released BEFORE the hit fires (1..W_PRE_MAX)
+    private static final int W_PRE_MAX  = 2;
+    // How many ticks W stays released AFTER the hit (0..W_POST_MAX)
+    private static final int W_POST_MAX = 2;
 
-    private Entity  pendingTarget      = null;
-    private int     preAttackCountdown = 0;
-    private boolean pendingWasForward  = false;
+    private Entity  pendingTarget        = null;
+    private int     preAttackCountdown   = 0;   // ticks to wait before firing
+    private int     postAttackCountdown  = 0;   // ticks to keep W suppressed after hit
+    private boolean pendingWasForward    = false;
 
     private String lastDiag = "";
     private long lastDiagLogMs = 0L;
     private int ticksOutOfWater = 10;
     private int ticksOnGround   = 0;
 
-    // --- Timing constants ---
     private static final int   GROUND_COMBO_DELAY   = 2;
     private static final float GROUND_ATTACK_CHARGE = 0.93F;
     private static final float CRIT_CHARGE          = 0.84F;
@@ -83,25 +80,31 @@ public class Triggerbot extends ModuleStructure {
     @Override
     public void deactivate() {
         super.deactivate();
-        SUPPRESS_FORWARD = false;
-        SUPPRESS_SPRINT  = false;
-        SUPPRESS_JUMP    = false;
-        pendingTarget    = null;
-        preAttackCountdown = 0;
-        ticksOutOfWater  = 0;
-        ticksOnGround    = 0;
-        lastDiag = "";
-        lastDiagLogMs = 0L;
+        SUPPRESS_FORWARD     = false;
+        SUPPRESS_SPRINT      = false;
+        SUPPRESS_JUMP        = false;
+        pendingTarget        = null;
+        preAttackCountdown   = 0;
+        postAttackCountdown  = 0;
+        ticksOutOfWater      = 0;
+        ticksOnGround        = 0;
+        lastDiag             = "";
+        lastDiagLogMs        = 0L;
     }
 
     @EventHandler
     public void onTick(TickEvent event) {
+        // These are set to true inside the tick body when needed.
+        // The finally block writes them to the volatile flags.
+        // CRITICAL: pendingTarget != null and postAttackCountdown > 0 must also
+        // propagate suppression -- see finally block.
         boolean wantSuppressForward = false;
         boolean wantSuppressJump    = false;
         try {
             if (mc.player == null || mc.world == null || mc.currentScreen != null) {
-                ticksOnGround = 0;
-                pendingTarget = null;
+                ticksOnGround       = 0;
+                pendingTarget       = null;
+                postAttackCountdown = 0;
                 return;
             }
 
@@ -111,26 +114,41 @@ public class Triggerbot extends ModuleStructure {
             if (mc.player.isOnGround()) { if (ticksOnGround < 100) ticksOnGround++; }
             else { ticksOnGround = 0; }
 
+            // --- Post-attack W delay (W stays released for a bit after hitting) ---
+            if (postAttackCountdown > 0) {
+                postAttackCountdown--;
+                wantSuppressForward = true;
+                diag("POST_W", "post-attack W suppress, left=" + postAttackCountdown);
+                // Don't return -- still process input; just keep W suppressed this tick.
+                // Fall through to normal detection (charge won't be ready anyway).
+            }
+
             // --- Pending pre-attack: W released, counting down before hit ---
             if (pendingTarget != null) {
                 if (!isEntityValid(pendingTarget)) {
-                    pendingTarget = null;
+                    pendingTarget      = null;
                     preAttackCountdown = 0;
+                    // postAttackCountdown stays, keeps W released
                     return;
                 }
                 if (preAttackCountdown > 0) {
                     preAttackCountdown--;
                     wantSuppressForward = true;
-                    diag("W_WAIT", "W suppressed, countdown=" + preAttackCountdown);
+                    diag("W_WAIT", "pre-attack W suppress, left=" + preAttackCountdown);
                     return;
                 }
                 // countdown == 0: fire the hit
-                Entity t = pendingTarget;
+                Entity t         = pendingTarget;
                 boolean wasForward = pendingWasForward;
-                pendingTarget = null;
+                pendingTarget      = null;
                 preAttackCountdown = 0;
-                doAttack(t, wasForward);
-                diag("HIT_FIRE", "HIT fire fw=" + wasForward);
+                // Randomize how long W stays OFF after the hit (0..W_POST_MAX ticks)
+                postAttackCountdown = ThreadLocalRandom.current().nextInt(0, W_POST_MAX + 1);
+                doAttack(t, wasForward, postAttackCountdown == 0);
+                diag("HIT_FIRE", "HIT fire fw=" + wasForward + " post=" + postAttackCountdown);
+                if (postAttackCountdown > 0) {
+                    wantSuppressForward = true;
+                }
                 return;
             }
 
@@ -144,7 +162,7 @@ public class Triggerbot extends ModuleStructure {
             // --- Water hit ---
             if (isInWater()) {
                 if (charge >= GROUND_ATTACK_CHARGE) {
-                    queueAttack(target, "WATER");
+                    wantSuppressForward = queueAttack(target, "WATER");
                 }
                 return;
             }
@@ -153,7 +171,7 @@ public class Triggerbot extends ModuleStructure {
             if (!critPossible) {
                 float need = noCritCharge.getValue();
                 if (charge >= need) {
-                    queueAttack(target, "NOCRIT");
+                    wantSuppressForward = queueAttack(target, "NOCRIT");
                 } else {
                     diag("NOCRIT_WAIT", "NOCRIT wait charge=" + fmt(charge));
                 }
@@ -164,7 +182,7 @@ public class Triggerbot extends ModuleStructure {
             if (!mc.player.isOnGround()) {
                 String blocker = critBlocker();
                 if (blocker == null && charge >= CRIT_CHARGE) {
-                    queueAttack(target, "CRIT");
+                    wantSuppressForward = queueAttack(target, "CRIT");
                 } else {
                     diag("AIR_BLOCK", "block=" + blocker + " charge=" + fmt(charge));
                 }
@@ -184,12 +202,17 @@ public class Triggerbot extends ModuleStructure {
 
             // --- Ground combo ---
             if (charge >= GROUND_ATTACK_CHARGE && ticksOnGround >= GROUND_COMBO_DELAY) {
-                queueAttack(target, "COMBO");
+                wantSuppressForward = queueAttack(target, "COMBO");
             } else {
                 diag("GROUND_WAIT", "wait charge=" + fmt(charge) + " ticks=" + ticksOnGround);
             }
 
         } finally {
+            // FIX: pendingTarget != null means we just queued this tick (queue tick also
+            // needs W suppressed, but queueAttack sets the flag BEFORE finally runs).
+            // The return value of queueAttack() is propagated through wantSuppressForward.
+            // postAttackCountdown was already decremented above, so if it was > 0 on entry
+            // we already set wantSuppressForward = true there.
             SUPPRESS_FORWARD = wantSuppressForward;
             SUPPRESS_SPRINT  = false;
             SUPPRESS_JUMP    = wantSuppressJump;
@@ -197,24 +220,26 @@ public class Triggerbot extends ModuleStructure {
     }
 
     /**
-     * Queues an attack: releases W for a random number of ticks, then hits.
-     * The random countdown adds humanlike variance to every W-release.
+     * Queues an attack with a random pre-attack W-release countdown (1..W_PRE_MAX ticks).
+     * Returns true so the caller can set wantSuppressForward = true in the same tick.
      */
-    private void queueAttack(Entity target, String reason) {
-        pendingTarget     = target;
-        pendingWasForward = mc.options.forwardKey.isPressed();
-        // randomize how long W stays released before the hit (1..3 ticks)
-        preAttackCountdown = ThreadLocalRandom.current().nextInt(W_RELEASE_MIN, W_RELEASE_MAX + 1);
-        SUPPRESS_FORWARD  = true;
-        diag("Q_" + reason, reason + " queued, W_ticks=" + preAttackCountdown + " fw=" + pendingWasForward);
+    private boolean queueAttack(Entity target, String reason) {
+        pendingTarget      = target;
+        pendingWasForward  = mc.options.forwardKey.isPressed();
+        preAttackCountdown = ThreadLocalRandom.current().nextInt(1, W_PRE_MAX + 1); // 1..2
+        diag("Q_" + reason, reason + " queued, pre=" + preAttackCountdown + " fw=" + pendingWasForward);
+        return true; // caller sets wantSuppressForward
     }
 
-    private void doAttack(Entity target, boolean wasForward) {
+    /**
+     * @param restoreSprint true if W should be re-enabled immediately after hit.
+     *                      False means postAttackCountdown will handle it.
+     */
+    private void doAttack(Entity target, boolean wasForward, boolean restoreSprint) {
         mc.player.setSprinting(false);
         mc.interactionManager.attackEntity(mc.player, target);
         mc.player.swingHand(Hand.MAIN_HAND);
-        // restore sprint only if W was actually held at the moment of queue
-        if (wasForward && mc.options.forwardKey.isPressed()) {
+        if (restoreSprint && wasForward && mc.options.forwardKey.isPressed()) {
             mc.player.setSprinting(true);
         }
     }
@@ -256,15 +281,15 @@ public class Triggerbot extends ModuleStructure {
     }
 
     private String critBlocker() {
-        if (!(mc.player.fallDistance > 0.0))                    return "fall<=0";
-        if (ticksOutOfWater < 3)                                return "justLeftWater";
-        if (mc.player.isOnGround())                             return "onGround";
-        if (mc.player.isClimbing())                             return "climbing";
-        if (mc.player.isTouchingWater())                        return "water";
-        if (mc.player.hasStatusEffect(StatusEffects.LEVITATION)) return "levitation";
-        if (mc.player.hasStatusEffect(StatusEffects.BLINDNESS))  return "blindness";
-        if (mc.player.hasVehicle())                             return "vehicle";
-        if (mc.player.getAbilities().flying)                    return "flying";
+        if (!(mc.player.fallDistance > 0.0))                     return "fall<=0";
+        if (ticksOutOfWater < 3)                                 return "justLeftWater";
+        if (mc.player.isOnGround())                              return "onGround";
+        if (mc.player.isClimbing())                              return "climbing";
+        if (mc.player.isTouchingWater())                         return "water";
+        if (mc.player.hasStatusEffect(StatusEffects.LEVITATION))  return "levitation";
+        if (mc.player.hasStatusEffect(StatusEffects.BLINDNESS))   return "blindness";
+        if (mc.player.hasVehicle())                              return "vehicle";
+        if (mc.player.getAbilities().flying)                     return "flying";
         return null;
     }
 
