@@ -36,48 +36,50 @@ public class AutoSwap extends ModuleStructure {
    private static final int OFFHAND_BUTTON = 40;
    private static final int OFFHAND_SLOT = 45;
 
-   public final BindSetting swapBind = new BindSetting("Бинд свапа", "Клавиша свапа талика во вторую руку");
-   public final SelectSetting swapMode = new SelectSetting("Режим свапа", "Legit открывает инвентарь, Packet свапает без экрана")
+   public final BindSetting swapBind = new BindSetting("\u0411\u0438\u043d\u0434 \u0441\u0432\u0430\u043f\u0430", "\u041e\u043f\u0446\u0438\u043e\u043d\u0430\u043b\u044c\u043d\u044b\u0439 \u0440\u0443\u0447\u043d\u043e\u0439 \u0442\u0440\u0438\u0433\u0433\u0435\u0440 \u0441\u0432\u0430\u043f\u0430");
+   public final BooleanSetting autoSwap = new BooleanSetting("\u0410\u0432\u0442\u043e-\u0441\u0432\u0430\u043f", "\u0421\u0432\u0430\u043f\u0430\u0442\u044c \u0430\u0432\u0442\u043e\u043c\u0430\u0442\u0438\u0447\u0435\u0441\u043a\u0438, \u043f\u043e\u043a\u0430 \u043c\u043e\u0434\u0443\u043b\u044c \u0432\u043a\u043b\u044e\u0447\u0451\u043d")
+      .setValue(true);
+   public final SelectSetting swapMode = new SelectSetting("\u0420\u0435\u0436\u0438\u043c \u0441\u0432\u0430\u043f\u0430", "Legit \u043e\u0442\u043a\u0440\u044b\u0432\u0430\u0435\u0442 \u0438\u043d\u0432\u0435\u043d\u0442\u0430\u0440\u044c, Packet \u0441\u0432\u0430\u043f\u0430\u0435\u0442 \u0431\u0435\u0437 \u044d\u043a\u0440\u0430\u043d\u0430")
       .value("Legit", "Packet")
       .selected("Legit");
-   public final SliderSettings preOpenDelay = new SliderSettings("До открытия", "Задержка до открытия инвентаря в тиках")
+   public final SliderSettings preOpenDelay = new SliderSettings("\u0414\u043e \u043e\u0442\u043a\u0440\u044b\u0442\u0438\u044f", "\u0417\u0430\u0434\u0435\u0440\u0436\u043a\u0430 \u0434\u043e \u043e\u0442\u043a\u0440\u044b\u0442\u0438\u044f \u0438\u043d\u0432\u0435\u043d\u0442\u0430\u0440\u044f \u0432 \u0442\u0438\u043a\u0430\u0445")
       .setValue(1.0F)
       .range(0, 20)
       .visible(() -> this.swapMode.isSelected("Legit"));
-   public final SliderSettings afterOpenDelay = new SliderSettings("После открытия", "Задержка после открытия инвентаря в тиках")
+   public final SliderSettings afterOpenDelay = new SliderSettings("\u041f\u043e\u0441\u043b\u0435 \u043e\u0442\u043a\u0440\u044b\u0442\u0438\u044f", "\u0417\u0430\u0434\u0435\u0440\u0436\u043a\u0430 \u043f\u043e\u0441\u043b\u0435 \u043e\u0442\u043a\u0440\u044b\u0442\u0438\u044f \u0438\u043d\u0432\u0435\u043d\u0442\u0430\u0440\u044f \u0432 \u0442\u0438\u043a\u0430\u0445")
       .setValue(3.0F)
       .range(0, 20)
       .visible(() -> this.swapMode.isSelected("Legit"));
-   public final SliderSettings beforeClickDelay = new SliderSettings("Перед F", "Задержка перед нажатием F по слоту")
+   public final SliderSettings beforeClickDelay = new SliderSettings("\u041f\u0435\u0440\u0435\u0434 F", "\u0417\u0430\u0434\u0435\u0440\u0436\u043a\u0430 \u043f\u0435\u0440\u0435\u0434 \u043d\u0430\u0436\u0430\u0442\u0438\u0435\u043c F \u043f\u043e \u0441\u043b\u043e\u0442\u0443")
       .setValue(1.0F)
       .range(0, 20)
       .visible(() -> this.swapMode.isSelected("Legit"));
-   public final SliderSettings closeDelay = new SliderSettings("Перед закрытием", "Задержка перед закрытием инвентаря в тиках")
+   public final SliderSettings closeDelay = new SliderSettings("\u041f\u0435\u0440\u0435\u0434 \u0437\u0430\u043a\u0440\u044b\u0442\u0438\u0435\u043c", "\u0417\u0430\u0434\u0435\u0440\u0436\u043a\u0430 \u043f\u0435\u0440\u0435\u0434 \u0437\u0430\u043a\u0440\u044b\u0442\u0438\u0435\u043c \u0438\u043d\u0432\u0435\u043d\u0442\u0430\u0440\u044f \u0432 \u0442\u0438\u043a\u0430\u0445")
       .setValue(1.0F)
       .range(0, 20)
       .visible(() -> this.swapMode.isSelected("Legit"));
-   public final SliderSettings randomDelay = new SliderSettings("Рандом задержки", "Дополнительный случайный разброс в тиках")
+   public final SliderSettings randomDelay = new SliderSettings("\u0420\u0430\u043d\u0434\u043e\u043c \u0437\u0430\u0434\u0435\u0440\u0436\u043a\u0438", "\u0414\u043e\u043f\u043e\u043b\u043d\u0438\u0442\u0435\u043b\u044c\u043d\u044b\u0439 \u0441\u043b\u0443\u0447\u0430\u0439\u043d\u044b\u0439 \u0440\u0430\u0437\u0431\u0440\u043e\u0441 \u0432 \u0442\u0438\u043a\u0430\u0445")
       .setValue(1.0F)
       .range(0, 10)
       .visible(() -> this.swapMode.isSelected("Legit"));
-   public final SliderSettings cooldown = new SliderSettings("Cooldown", "Минимальная пауза между свапами в миллисекундах")
+   public final SliderSettings cooldown = new SliderSettings("Cooldown", "\u041c\u0438\u043d\u0438\u043c\u0430\u043b\u044c\u043d\u0430\u044f \u043f\u0430\u0443\u0437\u0430 \u043c\u0435\u0436\u0434\u0443 \u0441\u0432\u0430\u043f\u0430\u043c\u0438 \u0432 \u043c\u0438\u043b\u043b\u0438\u0441\u0435\u043a\u0443\u043d\u0434\u0430\u0445")
       .setValue(250.0F)
       .range(0, 3000);
-   public final BooleanSetting stopMovement = new BooleanSetting("Остановка", "Останавливать игрока во время legit-свапа")
+   public final BooleanSetting stopMovement = new BooleanSetting("\u041e\u0441\u0442\u0430\u043d\u043e\u0432\u043a\u0430", "\u041e\u0441\u0442\u0430\u043d\u0430\u0432\u043b\u0438\u0432\u0430\u0442\u044c \u0438\u0433\u0440\u043e\u043a\u0430 \u0432\u043e \u0432\u0440\u0435\u043c\u044f legit-\u0441\u0432\u0430\u043f\u0430")
       .setValue(true)
       .visible(() -> this.swapMode.isSelected("Legit"));
 
-   public final TextSetting slot1 = new TextSetting("Предмет 1", "ID предмета");
-   public final ButtonSetting pick1 = new ButtonSetting("Выбрать предмет 1", "Открыть инвентарь")
-      .setButtonName("Выбрать")
+   public final TextSetting slot1 = new TextSetting("\u041f\u0440\u0435\u0434\u043c\u0435\u0442 1", "ID \u043f\u0440\u0435\u0434\u043c\u0435\u0442\u0430");
+   public final ButtonSetting pick1 = new ButtonSetting("\u0412\u044b\u0431\u0440\u0430\u0442\u044c \u043f\u0440\u0435\u0434\u043c\u0435\u0442 1", "\u041e\u0442\u043a\u0440\u044b\u0442\u044c \u0438\u043d\u0432\u0435\u043d\u0442\u0430\u0440\u044c")
+      .setButtonName("\u0412\u044b\u0431\u0440\u0430\u0442\u044c")
       .setRunnable(() -> this.openPickerFor(0));
-   public final TextSetting slot2 = new TextSetting("Предмет 2", "ID предмета");
-   public final ButtonSetting pick2 = new ButtonSetting("Выбрать предмет 2", "Открыть инвентарь")
-      .setButtonName("Выбрать")
+   public final TextSetting slot2 = new TextSetting("\u041f\u0440\u0435\u0434\u043c\u0435\u0442 2", "ID \u043f\u0440\u0435\u0434\u043c\u0435\u0442\u0430");
+   public final ButtonSetting pick2 = new ButtonSetting("\u0412\u044b\u0431\u0440\u0430\u0442\u044c \u043f\u0440\u0435\u0434\u043c\u0435\u0442 2", "\u041e\u0442\u043a\u0440\u044b\u0442\u044c \u0438\u043d\u0432\u0435\u043d\u0442\u0430\u0440\u044c")
+      .setButtonName("\u0412\u044b\u0431\u0440\u0430\u0442\u044c")
       .setRunnable(() -> this.openPickerFor(1));
-   public final TextSetting slot3 = new TextSetting("Предмет 3", "ID предмета");
-   public final ButtonSetting pick3 = new ButtonSetting("Выбрать предмет 3", "Открыть инвентарь")
-      .setButtonName("Выбрать")
+   public final TextSetting slot3 = new TextSetting("\u041f\u0440\u0435\u0434\u043c\u0435\u0442 3", "ID \u043f\u0440\u0435\u0434\u043c\u0435\u0442\u0430");
+   public final ButtonSetting pick3 = new ButtonSetting("\u0412\u044b\u0431\u0440\u0430\u0442\u044c \u043f\u0440\u0435\u0434\u043c\u0435\u0442 3", "\u041e\u0442\u043a\u0440\u044b\u0442\u044c \u0438\u043d\u0432\u0435\u043d\u0442\u0430\u0440\u044c")
+      .setButtonName("\u0412\u044b\u0431\u0440\u0430\u0442\u044c")
       .setRunnable(() -> this.openPickerFor(2));
 
    private int pickingForSlot = -1;
@@ -94,9 +96,10 @@ public class AutoSwap extends ModuleStructure {
    }
 
    public AutoSwap() {
-      super("AutoSwap", "Свап талика во вторую руку", ModuleCategory.UTILITIES);
+      super("AutoSwap", "\u0421\u0432\u0430\u043f \u0442\u0430\u043b\u0438\u043a\u0430 \u0432\u043e \u0432\u0442\u043e\u0440\u0443\u044e \u0440\u0443\u043a\u0443", ModuleCategory.UTILITIES);
       this.settings(
          this.swapBind,
+         this.autoSwap,
          this.swapMode,
          this.preOpenDelay,
          this.afterOpenDelay,
@@ -168,6 +171,18 @@ public class AutoSwap extends ModuleStructure {
             Item var2 = this.pendingItem;
             this.pendingItem = null;
             this.beginSwap(var2);
+            return;
+         }
+
+         // \u0410\u0432\u0442\u043e-\u0442\u0440\u0438\u0433\u0433\u0435\u0440: \u0434\u0435\u0440\u0436\u0438\u043c \u0432\u044b\u0431\u0440\u0430\u043d\u043d\u044b\u0439 \u043f\u0440\u0435\u0434\u043c\u0435\u0442 \u0432\u043e \u0432\u0442\u043e\u0440\u043e\u0439 \u0440\u0443\u043a\u0435, \u043f\u043e\u043a\u0430 \u043c\u043e\u0434\u0443\u043b\u044c \u0432\u043a\u043b\u044e\u0447\u0451\u043d.
+         if (this.autoSwap.isValue() && mc.currentScreen == null) {
+            Item offhand = mc.player.getOffHandStack().getItem();
+            if (!this.isConfiguredItem(offhand)) {
+               Item auto = this.resolveTargetItem();
+               if (auto != null && offhand != auto) {
+                  this.beginSwap(auto);
+               }
+            }
          }
 
          return;
@@ -298,8 +313,19 @@ public class AutoSwap extends ModuleStructure {
          return var3;
       }
 
-      // Ничего нет в инвентаре — возвращаем первый валидный, чтобы beginSwap корректно ничего не сделал.
+      // \u041d\u0438\u0447\u0435\u0433\u043e \u043d\u0435\u0442 \u0432 \u0438\u043d\u0432\u0435\u043d\u0442\u0430\u0440\u0435 \u2014 \u0432\u043e\u0437\u0432\u0440\u0430\u0449\u0430\u0435\u043c \u043f\u0435\u0440\u0432\u044b\u0439 \u0432\u0430\u043b\u0438\u0434\u043d\u044b\u0439, \u0447\u0442\u043e\u0431\u044b beginSwap \u043a\u043e\u0440\u0440\u0435\u043a\u0442\u043d\u043e \u043d\u0438\u0447\u0435\u0433\u043e \u043d\u0435 \u0441\u0434\u0435\u043b\u0430\u043b.
       return var1 != null ? var1 : (var2 != null ? var2 : var3);
+   }
+
+   private boolean isConfiguredItem(Item var1) {
+      if (var1 == null || var1 == Items.AIR) {
+         return false;
+      }
+
+      Item var2 = this.parseItem(this.slot1.getText());
+      Item var3 = this.parseItem(this.slot2.getText());
+      Item var4 = this.parseItem(this.slot3.getText());
+      return var1 == var2 || var1 == var3 || var1 == var4;
    }
 
    private Item parseItem(String var1) {
@@ -362,10 +388,10 @@ public class AutoSwap extends ModuleStructure {
 
       int var3 = mc.player.currentScreenHandler.syncId;
 
-      // Основной путь — как F по слоту: SlotActionType.SWAP + button 40.
+      // \u041e\u0441\u043d\u043e\u0432\u043d\u043e\u0439 \u043f\u0443\u0442\u044c \u2014 \u043a\u0430\u043a F \u043f\u043e \u0441\u043b\u043e\u0442\u0443: SlotActionType.SWAP + button 40.
       mc.interactionManager.clickSlot(var3, var2.id, OFFHAND_BUTTON, SlotActionType.SWAP, mc.player);
 
-      // Fallback, если SWAP не применился: обычные PICKUP-клики взять/положить/вернуть.
+      // Fallback, \u0435\u0441\u043b\u0438 SWAP \u043d\u0435 \u043f\u0440\u0438\u043c\u0435\u043d\u0438\u043b\u0441\u044f: \u043e\u0431\u044b\u0447\u043d\u044b\u0435 PICKUP-\u043a\u043b\u0438\u043a\u0438 \u0432\u0437\u044f\u0442\u044c/\u043f\u043e\u043b\u043e\u0436\u0438\u0442\u044c/\u0432\u0435\u0440\u043d\u0443\u0442\u044c.
       if (mc.player.getOffHandStack().getItem() != var1) {
          mc.interactionManager.clickSlot(var3, var2.id, 0, SlotActionType.PICKUP, mc.player);
          mc.interactionManager.clickSlot(var3, OFFHAND_SLOT, 0, SlotActionType.PICKUP, mc.player);
