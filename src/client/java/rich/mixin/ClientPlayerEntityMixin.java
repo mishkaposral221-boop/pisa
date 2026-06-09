@@ -54,16 +54,32 @@ public abstract class ClientPlayerEntityMixin extends AbstractClientPlayerEntity
       }
    }
 
+   /**
+    * КРИТИЧНО: занулять input ДО Input.tick(), иначе Input.tick() уже
+    * посчитает движение из реального WASD и игрок начнёт двигаться.
+    * Зануление playerInput post-factum (как было раньше) не отменяет уже
+    * применённое движение — отсюда «залаг» и кик за InventoryMove.
+    */
+   @Inject(method = "tickMovement", at = @At("HEAD"))
+   private void onTickMovementHead(CallbackInfo ci) {
+      if (IMinecraft.mc.player == null) return;
+      try {
+         if (AutoSwap.SUPPRESS_INPUT && input != null && input.playerInput != null) {
+            input.playerInput = new PlayerInput(false, false, false, false, false, false, false);
+            if (IMinecraft.mc.player.isSprinting()) {
+               IMinecraft.mc.player.setSprinting(false);
+            }
+         }
+      } catch (Throwable ignored) {}
+   }
+
    @Inject(method = "tickMovement",
            at = @At(value = "INVOKE", target = "Lnet/minecraft/client/input/Input;tick()V", shift = Shift.AFTER))
    private void onInputTick(CallbackInfo ci) {
       if (IMinecraft.mc.player == null) return;
 
-      // === AutoSwap: полное зануление input во время свапа ===
-      // Когда SUPPRESS_INPUT включён, обнуляем ВСЕ компоненты движения, чтобы
-      // игрок гарантированно стоял неподвижно — даже если игрок зажал WASD,
-      // спринт или прыжок. Без этого haltMovement() обнуляет только velocity,
-      // и в следующий же тик клиент снова применяет input от зажатых клавиш.
+      // Доп. подстраховка post-Input.tick() — если playerInput кем-то восстановили
+      // между HEAD-хуком и tick(), зануляем повторно.
       try {
          if (AutoSwap.SUPPRESS_INPUT && input != null && input.playerInput != null) {
             input.playerInput = new PlayerInput(false, false, false, false, false, false, false);

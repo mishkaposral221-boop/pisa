@@ -75,16 +75,16 @@ public class AutoSwap extends ModuleStructure {
    public final SliderSettings closeDelay = new SliderSettings("Перед возвратом", "Legit: тиков между F и восстановительным UpdateSelectedSlot")
       .setValue(3.0F).range(0, 20)
       .visible(() -> this.swapMode.isSelected("Legit"));
-   public final SliderSettings restoreGap = new SliderSettings("Гэп HeldItemSlot", "Legit: тиков между восстановительным UpdateSelectedSlot и финальным ClickSlot. Должен быть >=2 от Post HeldItemSlot.")
+   public final SliderSettings restoreGap = new SliderSettings("Гэп HeldItemSlot", "Legit: тиков между восстановительным UpdateSelectedSlot и финальным ClickSlot. Должен быть >=2.")
       .setValue(3.0F).range(0, 20)
       .visible(() -> this.swapMode.isSelected("Legit"));
    public final SliderSettings randomDelay = new SliderSettings("Рандом задержки", "Legit: дополнительный случайный разброс в тиках")
       .setValue(2.0F).range(0, 10)
       .visible(() -> this.swapMode.isSelected("Legit"));
    public final SliderSettings relocateHaltTicks = new SliderSettings("Стоп перед свапом", "Тиков стационарного состояния перед ЛЮБЫМ свапом. Обязательно при ходьбе.")
-      .setValue(4.0F).range(1, 10);
+      .setValue(6.0F).range(2, 15);
    public final SliderSettings maskDelay = new SliderSettings("Задержка маски", "Тиков между ClickSlot и CloseHandledScreen-маской. Должен быть >=2, иначе multiaction.")
-      .setValue(2.0F).range(2, 10);
+      .setValue(3.0F).range(2, 10);
    public final SliderSettings cooldown = new SliderSettings("Cooldown", "Минимальная пауза между свапами в миллисекундах")
       .setValue(1000.0F).range(0, 3000);
    public final BooleanSetting stopMovement = new BooleanSetting("Остановка", "Принудительно останавливать игрока во время свапа")
@@ -93,9 +93,9 @@ public class AutoSwap extends ModuleStructure {
       .setValue(false);
    public final BooleanSetting restoreAfterRelocate = new BooleanSetting("Возврат после перекидывания", "Если предмет был в инвентаре — вернуть содержимое хотбара на место")
       .setValue(true);
-   public final BooleanSetting maskInventory = new BooleanSetting("Маскировка ClickSlot", "После каждого SWAP-клика шлём CloseHandledScreen(0) ЧЕРЕЗ N тиков (см. Задержка маски), не в одном тике с ClickSlot. Обходит InventoryMove-проверки.")
-      .setValue(true);
-   public final BooleanSetting antiInventoryMove = new BooleanSetting("Анти InventoryMove", "На протяжении всего свапа полностью обнуляет input игрока (WASD/спринт/прыжок) и шлёт STOP_SPRINTING. Обязательно при возможности свапа во время ходьбы.")
+   public final BooleanSetting maskInventory = new BooleanSetting("Маскировка ClickSlot", "После каждого SWAP-клика шлём CloseHandledScreen(0) через N тиков отдельным пакетом. ПО УМОЛЧАНИЮ ВЫКЛ — некоторые AC флагают CloseHandledScreen(0) сам по себе. Включай только если нужно.")
+      .setValue(false);
+   public final BooleanSetting antiInventoryMove = new BooleanSetting("Анти InventoryMove", "На протяжении всего свапа полностью обнуляет input игрока (WASD/спринт/прыжок) ДО Input.tick() — игрок гарантированно неподвижен с первого тика. Обязательно при возможности свапа во время ходьбы.")
       .setValue(true);
 
    public final TextSetting slot1 = new TextSetting("Предмет 1", "ID или алиас");
@@ -231,14 +231,10 @@ public class AutoSwap extends ModuleStructure {
       }
 
       // === ОТЛОЖЕННАЯ МАСКА ===
-      // Обрабатываем ПЕРЕД основной phase-логикой, чтобы маска и phase-пакет
-      // никогда не оказались в одном тике (фикс multiaction).
       if (this.pendingMaskTicks > 0) {
          this.pendingMaskTicks--;
          if (this.pendingMaskTicks == 0) {
             this.flushMaskNow();
-            // После отправки маски возвращаемся — основная phase-логика обработается
-            // на следующем тике. Гарантирует что маска одна в своём тике.
             return;
          }
       }
@@ -270,7 +266,7 @@ public class AutoSwap extends ModuleStructure {
          return;
       }
 
-      // Force halt на ВСЕ фазы свапа — больше не зависит от RELOCATE/RESTORE_RELOCATE.
+      // Force halt на ВСЕ фазы свапа.
       boolean forceHalt = this.swapPhase != PHASE_IDLE
             && (this.antiInventoryMove.isValue() || this.stopMovement.isValue());
       if (forceHalt) {
@@ -280,7 +276,7 @@ public class AutoSwap extends ModuleStructure {
          }
          this.haltMovement();
          SUPPRESS_SPRINT = true;
-         SUPPRESS_INPUT = true;  // полное зануление playerInput в мискине
+         SUPPRESS_INPUT = true;
       }
       if (this.lockRotation.isValue()) this.refreshRotationLock();
 
@@ -391,7 +387,7 @@ public class AutoSwap extends ModuleStructure {
       }
 
       int preHaltTicks = this.antiInventoryMove.isValue()
-            ? Math.max(1, this.relocateHaltTicks.getInt())
+            ? Math.max(2, this.relocateHaltTicks.getInt())
             : 0;
 
       if (preHaltTicks > 0) {
@@ -448,10 +444,6 @@ public class AutoSwap extends ModuleStructure {
    private void sendVanillaSwapClick(int screenSlotId, int hotbarButton) {
       if (mc.player == null || mc.interactionManager == null) return;
 
-      // Если уже есть пендинг маска — флашим её немедленно ПЕРЕД новым ClickSlot,
-      // чтобы маска не догнала будущий ClickSlot в одном тике.
-      // На практике этого почти не бывает (между relocate и restore-relocate проходит
-      // много фаз), но защита не помешает.
       if (this.pendingMaskTicks > 0) {
          this.flushMaskNow();
       }
@@ -464,14 +456,11 @@ public class AutoSwap extends ModuleStructure {
          mc.player
       );
 
-      // Маска отложена в очередь — отправится через N тиков отдельным пакетом.
-      // НИКОГДА не шлём CloseHandledScreen в том же тике, что и ClickSlot.
       if (this.maskInventory.isValue()) {
          this.pendingMaskTicks = Math.max(2, this.maskDelay.getInt());
       }
    }
 
-   /** Шлёт CloseHandledScreen прямо сейчас и сбрасывает таймер. */
    private void flushMaskNow() {
       if (mc.getNetworkHandler() != null && mc.player != null) {
          mc.getNetworkHandler().sendPacket(
