@@ -132,7 +132,7 @@ public class KillAuraSpooky extends ModuleStructure {
         curPitch = next.getPitch();
         hasRotation = true;
 
-        if (silentRot.getValue()) {
+        if (silentRot.isValue()) {
             AngleConnection.INSTANCE.setRotation(next);
         } else {
             mc.player.setYaw(curYaw);
@@ -156,32 +156,20 @@ public class KillAuraSpooky extends ModuleStructure {
 
     @EventHandler
     public void onPlayerVelocityStrafe(PlayerVelocityStrafeEvent event) {
-        if (!this.isState() || !silentRot.getValue() || !hasRotation) return;
+        if (!this.isState() || !silentRot.isValue() || !hasRotation) return;
         if (mc.player == null) return;
 
         Vec3d input = event.getMovementInput();
         double speed = event.getSpeed();
         if (input.lengthSquared() < 1e-9) return;
 
-        double aimYawRad = Math.toRadians(curYaw);
+        double aimYawRad  = Math.toRadians(curYaw);
         double realYawRad = Math.toRadians(realYaw);
 
-        // Rotate input from real-yaw space to aim-yaw space
-        double ix = input.x;
-        double iz = input.z;
-
-        // Standard: forward = -sin(yaw)*z + -cos(yaw)*x ... let's just recalc velocity
         double sinAim  = Math.sin(aimYawRad);
         double cosAim  = Math.cos(aimYawRad);
         double sinReal = Math.sin(realYawRad);
         double cosReal = Math.cos(realYawRad);
-
-        // Decode input to world-space using aim yaw, re-encode using real yaw
-        // world_x = -sin(aim)*iz - cos(aim)*... standard MC move calc:
-        // vx = (-sin(yaw)*fwd - cos(yaw)*strafe) * speed
-        // vz = ( cos(yaw)*fwd - sin(yaw)*strafe) * speed
-        // Reverse: fwd = (-sin(yaw)*vx + cos(yaw)*vz)/speed
-        //          str = (-cos(yaw)*vx - sin(yaw)*vz)/speed
 
         Vec3d vel = event.getVelocity();
         double vx = vel.x;
@@ -216,10 +204,10 @@ public class KillAuraSpooky extends ModuleStructure {
         float maxStepYaw;
         float maxStepPitch;
         if (reached) {
-            maxStepYaw   = 65.0F + rng.nextFloat() * 35.0F;   // rand(65..100)
+            maxStepYaw   = 65.0F + rng.nextFloat() * 35.0F;
             maxStepPitch = 65.0F + rng.nextFloat() * 35.0F;
         } else {
-            maxStepYaw   = 7.7F  + rng.nextFloat() * 4.4F;    // rand(7.7..12.1)
+            maxStepYaw   = 7.7F  + rng.nextFloat() * 4.4F;
             maxStepPitch = 7.7F  + rng.nextFloat() * 4.4F;
         }
 
@@ -245,7 +233,7 @@ public class KillAuraSpooky extends ModuleStructure {
         float newPitch = current.getPitch() + stepPitch;
         newPitch = MathHelper.clamp(newPitch, -90.0F, 90.0F);
 
-        // Idle sway when no target movement
+        // Idle sway when reached target
         if (reached) {
             long ms = System.currentTimeMillis();
             double t = (ms % 12000L) / 1200.0;
@@ -254,8 +242,7 @@ public class KillAuraSpooky extends ModuleStructure {
         }
 
         // GCD snap
-        Angle result = new Angle(newYaw, newPitch).adjustSensitivity();
-        return result;
+        return new Angle(newYaw, newPitch).adjustSensitivity();
     }
 
     private float ease(float t) {
@@ -268,7 +255,7 @@ public class KillAuraSpooky extends ModuleStructure {
 
     private void resetRotation() {
         hasRotation = false;
-        if (silentRot.getValue()) {
+        if (silentRot.isValue()) {
             AngleConnection.INSTANCE.setRotation(null);
         }
     }
@@ -306,9 +293,9 @@ public class KillAuraSpooky extends ModuleStructure {
 
     private boolean hasLineOfSight(Entity target) {
         if (mc.world == null) return false;
-        Vec3d eyes   = mc.player.getCameraPosVec(1.0F);
-        Vec3d tPos   = target.getCameraPosVec(1.0F);
-        var result   = mc.world.raycast(new RaycastContext(
+        Vec3d eyes  = mc.player.getCameraPosVec(1.0F);
+        Vec3d tPos  = target.getCameraPosVec(1.0F);
+        var result  = mc.world.raycast(new RaycastContext(
                 eyes, tPos, RaycastContext.ShapeType.COLLIDER,
                 RaycastContext.FluidHandling.NONE, mc.player));
         return result.getType() == HitResult.Type.MISS
@@ -319,12 +306,9 @@ public class KillAuraSpooky extends ModuleStructure {
     private boolean canAttack(Entity target) {
         if (mc.player == null) return false;
         if (ticksOutOfWater < 2) return false;
-        // Crit: must be falling and on ground within gate
-        // simplified: just check attack cooldown
         float cooldown = mc.player.getAttackCooldownProgress(0.5F);
         if (cooldown < CRIT_CHARGE) return false;
-        if (onlySword.getValue()) {
-            Item held = mc.player.getMainHandStack().getItem();
+        if (onlySword.isValue()) {
             boolean isSword = mc.player.getMainHandStack().isIn(ItemTags.SWORDS);
             boolean isAxe   = mc.player.getMainHandStack().isIn(ItemTags.AXES);
             if (!isSword && !isAxe) return false;
