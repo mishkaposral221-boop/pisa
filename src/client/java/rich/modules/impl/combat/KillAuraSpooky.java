@@ -1,5 +1,6 @@
 package rich.modules.impl.combat;
 
+import java.lang.reflect.Field;
 import java.util.Random;
 import java.util.concurrent.ThreadLocalRandom;
 import net.minecraft.client.network.ClientPlayerEntity;
@@ -29,9 +30,9 @@ import rich.util.c;
  * KillAura — TestSmooth-style rotation.
  *
  * Silent (1-е лицо не движется):
- *   onTick  → пакет уходит с curYaw
- *   onWorldRender → до рендера восстанавливаем yaw=realYaw + prevYaw=realYaw
- *                 (prevYaw убирает артефакт интерполяции lerp(prevYaw,yaw,partial))
+ *   onTick         → пакет уходит с curYaw
+ *   onWorldRender  → до рендера восстанавливаем yaw=realYaw + prevYaw=realYaw через рефлексию
+ *                    (prevYaw убирает артефакт интерполяции lerp(prevYaw,yaw,partial))
  */
 public class KillAuraSpooky extends ModuleStructure {
 
@@ -46,7 +47,6 @@ public class KillAuraSpooky extends ModuleStructure {
     private float curPitch;
     private boolean hasRotation = false;
 
-    /** Реальные углы камеры — сохраняются до любых наших изменений */
     private float realYaw;
     private float realPitch;
 
@@ -68,6 +68,71 @@ public class KillAuraSpooky extends ModuleStructure {
     private static final float GROUND_ATTACK_CHARGE = 0.93F;
     private static final int   GROUND_COMBO_DELAY   = 2;
 
+    // ── Рефлексия для prevYaw/prevPitch ──────────────────────────────────────────
+    private static Field fieldPrevYaw   = null;
+    private static Field fieldPrevPitch = null;
+    private static boolean reflInitDone = false;
+
+    private static void initReflection() {
+        if (reflInitDone) return;
+        reflInitDone = true;
+        // Возможные Yarn-имена полей для разных версий
+        String[] yawNames   = { "prevYaw",   "lastYaw",   "o",  "yawO",   "field_6360", "prevBodyYaw" };
+        String[] pitchNames = { "prevPitch", "lastPitch", "n",  "pitchO", "field_6361", "prevHeadPitch" };
+        Class<?> cls = Entity.class;
+        for (String name : yawNames) {
+            Field f = findField(cls, name);
+            if (f != null && f.getType() == float.class) { fieldPrevYaw = f; break; }
+        }
+        for (String name : pitchNames) {
+            Field f = findField(cls, name);
+            if (f != null && f.getType() == float.class) { fieldPrevPitch = f; break; }
+        }
+        // Если не нашли по имени — берём float-поля по позиции
+        if (fieldPrevYaw == null || fieldPrevPitch == null) {
+            java.util.List<Field> floats = new java.util.ArrayList<>();
+            Class<?> c = cls;
+            while (c != null) {
+                for (Field f : c.getDeclaredFields()) {
+                    if (f.getType() == float.class) {
+                        f.setAccessible(true);
+                        floats.add(f);
+                    }
+                }
+                c = c.getSuperclass();
+            }
+            // yaw~[0], prevYaw~[1], pitch~[2], prevPitch~[3]
+            if (fieldPrevYaw   == null && floats.size() >= 2) fieldPrevYaw   = floats.get(1);
+            if (fieldPrevPitch == null && floats.size() >= 4) fieldPrevPitch = floats.get(3);
+        }
+    }
+
+    private static Field findField(Class<?> cls, String name) {
+        Class<?> c = cls;
+        while (c != null) {
+            try {
+                Field f = c.getDeclaredField(name);
+                f.setAccessible(true);
+                return f;
+            } catch (NoSuchFieldException ignored) {}
+            c = c.getSuperclass();
+        }
+        return null;
+    }
+
+    private static void setPrevYaw(Entity e, float val) {
+        initReflection();
+        if (fieldPrevYaw == null) return;
+        try { fieldPrevYaw.set(e, val); } catch (Exception ignored) {}
+    }
+
+    private static void setPrevPitch(Entity e, float val) {
+        initReflection();
+        if (fieldPrevPitch == null) return;
+        try { fieldPrevPitch.set(e, val); } catch (Exception ignored) {}
+    }
+    // ─────────────────────────────────────────────────────────────
+
     public KillAuraSpooky() {
         super("KillAura", "SpookyTime kill-aura (TestSmooth)", ModuleCategory.UTILITIES);
         this.settings(range, fovSetting, onlySword, silentRot);
@@ -84,9 +149,6 @@ public class KillAuraSpooky extends ModuleStructure {
         fullReset();
     }
 
-    // ══════════════════════════════════════════════════════════════════════
-    // ГЛАВНЫЙ ТИК
-    // ══════════════════════════════════════════════════════════════════════
     @EventHandler
     public void onTick(TickEvent event) {
         boolean wantSuppress = false;
@@ -97,13 +159,11 @@ public class KillAuraSpooky extends ModuleStructure {
             }
             ClientPlayerEntity player = mc.player;
 
-            // Запоминаем реальные углы камеры ДО любых изменений
             realYaw   = player.getYaw();
             realPitch = player.getPitch();
 
             updateGroundWaterState(player);
 
-            // ── Pending attack ───────────────────────────────────────────────
             if (pendingAttack != null) {
                 if (!isEntityValid(pendingAttack)) {
                     pendingAttack = null;
@@ -123,7 +183,6 @@ public class KillAuraSpooky extends ModuleStructure {
                 return;
             }
 
-            // ── Поиск цели ───────────────────────────────────────────────────
             Entity target = findTarget(player);
             if (target == null) {
                 lockedTarget = null;
@@ -132,16 +191,13 @@ public class KillAuraSpooky extends ModuleStructure {
             }
             lockedTarget = target;
 
-            // ── TestSmooth rotation ──────────────────────────────────────────
             Vec3d aimPoint = getNearestVisiblePoint(player, target);
             float[] next   = testSmoothRotate(player, aimPoint);
             curYaw   = next[0];
             curPitch = next[1];
             hasRotation = true;
 
-            // Пакет с curYaw (silent: onWorldRender вернёт realYaw до рендера)
             setPacketRotation(player, curYaw, curPitch);
-
             tickAttack(player, target);
 
         } finally {
@@ -149,26 +205,17 @@ public class KillAuraSpooky extends ModuleStructure {
         }
     }
 
-    // ══════════════════════════════════════════════════════════════════════
-    // RENDER — восстанавливаем камеру ДО рендера кадра
-    // prevYaw = realYaw → убирает артефакт lerp(prevYaw, yaw, partial)
-    // ══════════════════════════════════════════════════════════════════════
     @EventHandler
     public void onWorldRender(WorldRenderEvent event) {
         if (!silentRot.isValue()) return;
         if (mc.player == null || !this.isState()) return;
         ClientPlayerEntity player = mc.player;
-        // Восстанавливаем и текущий yaw, и предыдущий —
-        // иначе lerp(prevYaw=curYaw, yaw=realYaw, partial) даст мерцание
-        player.prevYaw   = realYaw;
-        player.prevPitch = realPitch;
+        setPrevYaw(player,   realYaw);
+        setPrevPitch(player, realPitch);
         player.setYaw(realYaw);
         player.setPitch(realPitch);
     }
 
-    // ══════════════════════════════════════════════════════════════════════
-    // setPacketRotation — пишем curYaw в игрока (пакет уйдёт с ним)
-    // ══════════════════════════════════════════════════════════════════════
     private void setPacketRotation(ClientPlayerEntity player, float yaw, float pitch) {
         player.setYaw(yaw);
         player.setPitch(pitch);
@@ -176,9 +223,6 @@ public class KillAuraSpooky extends ModuleStructure {
         player.bodyYaw = yaw;
     }
 
-    // ══════════════════════════════════════════════════════════════════════
-    // TestSmooth-style алгоритм (волновой шум + lerp 0.6f)
-    // ══════════════════════════════════════════════════════════════════════
     private float[] testSmoothRotate(ClientPlayerEntity player, Vec3d aimPoint) {
         Vec3d eye = player.getEyePos();
         double dx = aimPoint.x - eye.x;
@@ -231,9 +275,6 @@ public class KillAuraSpooky extends ModuleStructure {
         return a + (b - a) * t;
     }
 
-    // ══════════════════════════════════════════════════════════════════════
-    // АТАКА
-    // ══════════════════════════════════════════════════════════════════════
     private void tickAttack(ClientPlayerEntity player, Entity target) {
         if (!canHit(player, target)) return;
         float charge = player.getAttackCooldownProgress(0.0F);
@@ -274,9 +315,6 @@ public class KillAuraSpooky extends ModuleStructure {
         }
     }
 
-    // ══════════════════════════════════════════════════════════════════════
-    // ПОИСК ЦЕЛИ
-    // ══════════════════════════════════════════════════════════════════════
     private Entity findTarget(ClientPlayerEntity player) {
         if (mc.world == null) return null;
         Entity best      = null;
@@ -315,7 +353,7 @@ public class KillAuraSpooky extends ModuleStructure {
         if (canSee(player, eyeLevel)) return eyeLevel;
         float baseYaw   = hasRotation ? curYaw   : realYaw;
         float basePitch = hasRotation ? curPitch : realPitch;
-        float yawR  = baseYaw   * (float)(Math.PI / 180);
+        float yawR   = baseYaw   * (float)(Math.PI / 180);
         float pitchR = basePitch * (float)(Math.PI / 180);
         double lx = -Math.sin(yawR) * Math.cos(pitchR);
         double ly = -Math.sin(pitchR);
@@ -337,9 +375,6 @@ public class KillAuraSpooky extends ModuleStructure {
         return hit.getType() == HitResult.Type.MISS || hit.getPos().distanceTo(point) < 1.0;
     }
 
-    // ══════════════════════════════════════════════════════════════════════
-    // ВСПОМОГАТЕЛЬНЫЕ
-    // ══════════════════════════════════════════════════════════════════════
     private void updateGroundWaterState(ClientPlayerEntity player) {
         if (isInWater()) { ticksOutOfWater = 0; }
         else if (ticksOutOfWater < 100) { ticksOutOfWater++; }
