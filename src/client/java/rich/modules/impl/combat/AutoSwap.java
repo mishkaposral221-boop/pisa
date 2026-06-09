@@ -77,6 +77,11 @@ public class AutoSwap extends ModuleStructure {
    public final BindSetting swapBind = new BindSetting("Бинд свапа", "Ручной триггер свапа")
       .visible(() -> this.triggerMode.isSelected("Без колеса"));
 
+   public final BooleanSetting legitInvSwap = new BooleanSetting(
+         "Свап из инвентаря",
+         "Если нужного предмета нет в хотбаре — открываем инвентарь, ждём реакцию, ClickSlot SWAP в пустой слот хотбара, закрываем инвентарь, потом F. Каждый пакет в своём тике с гауссовым интервалом. Только в Legit.")
+      .setValue(true).visible(() -> this.mode.isSelected("Legit"));
+
    public final SliderSettings legitMeanMs = new SliderSettings("Legit: среднее (мс)", "Гаусс-распределение всех задержек.")
       .setValue(220.0F).range(80, 600).visible(() -> this.mode.isSelected("Legit"));
    public final SliderSettings legitStdMs = new SliderSettings("Legit: разброс (мс)", "Стандартное отклонение. Ломает AutoTotemA/B.")
@@ -85,10 +90,6 @@ public class AutoSwap extends ModuleStructure {
       .setValue(150.0F).range(0, 500).visible(() -> this.mode.isSelected("Legit"));
    public final SliderSettings outlierChance = new SliderSettings("Legit: outlier %", "Шанс медленного свапа. Ломает AutoTotemB/C.")
       .setValue(10.0F).range(0, 30).visible(() -> this.mode.isSelected("Legit"));
-   public final BooleanSetting legitInvSwap = new BooleanSetting(
-         "Legit: свап из инвентаря",
-         "Если предмета нет в хотбаре — открываем инвентарь, ждём реакцию, делаем ClickSlot SWAP в пустой слот хотбара, закрываем инвентарь, потом F. Каждый пакет в своём тике с гауссовым интервалом.")
-      .setValue(true).visible(() -> this.mode.isSelected("Legit"));
 
    public final SliderSettings preOpenDelay = new SliderSettings("До скролла", "Custom")
       .setValue(3.0F).range(0, 20).visible(() -> this.mode.isSelected("Custom"));
@@ -168,7 +169,8 @@ public class AutoSwap extends ModuleStructure {
       super("AutoSwap", "Свап во вторую руку (Legit / Rage / Custom)", ModuleCategory.UTILITIES);
       this.settings(
          this.mode, this.triggerMode, this.wheelBind, this.swapBind,
-         this.legitMeanMs, this.legitStdMs, this.reactionFloorMs, this.outlierChance, this.legitInvSwap,
+         this.legitInvSwap,
+         this.legitMeanMs, this.legitStdMs, this.reactionFloorMs, this.outlierChance,
          this.preOpenDelay, this.afterOpenDelay, this.closeDelay, this.restoreGap,
          this.randomDelay, this.relocateHaltTicks, this.maskDelay,
          this.cooldown,
@@ -719,7 +721,7 @@ public class AutoSwap extends ModuleStructure {
          msg = "Rage свапает только из хотбара. Положи «" + name + "» в хотбар или включи Legit.";
       } else if (this.mode.isSelected("Legit")) {
          if (!this.legitInvSwap.isValue()) {
-            msg = "Нет «" + name + "» в хотбаре. Включи «Legit: свап из инвентаря» или положи в хотбар.";
+            msg = "Нет «" + name + "» в хотбаре. Включи «Свап из инвентаря» или положи в хотбар.";
          } else {
             msg = "«" + name + "» не найден ни в хотбаре, ни в инвентаре.";
          }
