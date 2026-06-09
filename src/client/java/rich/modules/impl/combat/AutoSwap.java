@@ -399,8 +399,8 @@ public class AutoSwap extends ModuleStructure {
       if (this.swapPhase == PHASE_INV_REACTION) {
          if (mc.player == null || mc.interactionManager == null) { this.finishSwap(); return; }
          int syncId = mc.player.playerScreenHandler.syncId;
+         // clickSlot уже сам применяет SWAP к клиентскому инвентарю и шлёт пакет. Не нужно вручную зеркалить.
          mc.interactionManager.clickSlot(syncId, this.invPickupSlot, this.swapHotbarSlot, SlotActionType.SWAP, mc.player);
-         this.mirrorInvHotbarSwap(this.invPickupSlot, this.swapHotbarSlot);
          this.swapPhase = PHASE_INV_AFTER_CLICK;
          this.phaseTimer = Math.max(2, (int)Math.ceil(this.computeLegitDelayMs() / 50.0));
          return;
@@ -596,15 +596,6 @@ public class AutoSwap extends ModuleStructure {
       ItemStack inOffhand = mc.player.getStackInHand(Hand.OFF_HAND).copy();
       inv.setStack(hotbarSlot, inOffhand);
       mc.player.setStackInHand(Hand.OFF_HAND, inHotbar);
-   }
-
-   private void mirrorInvHotbarSwap(int invSlot, int hotbarSlot) {
-      if (mc.player == null) return;
-      PlayerInventory inv = mc.player.getInventory();
-      ItemStack invStack = inv.getStack(invSlot).copy();
-      ItemStack hbStack = inv.getStack(hotbarSlot).copy();
-      inv.setStack(invSlot, hbStack);
-      inv.setStack(hotbarSlot, invStack);
    }
 
    private void trackOffhandLoss() {
