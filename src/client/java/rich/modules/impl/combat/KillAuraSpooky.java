@@ -58,7 +58,7 @@ public class KillAuraSpooky extends ModuleStructure {
     private boolean hasRotation = false;
 
     private Entity lockedTarget = null;
-    private long   targetLostMs = 0;   // момент потери цели
+    private long   targetLostMs = 0;
     private float  holdYaw;
     private float  holdPitch;
 
@@ -74,14 +74,14 @@ public class KillAuraSpooky extends ModuleStructure {
 
     private static final int   W_PRE_MIN            = 1;
     private static final int   W_PRE_MAX            = 15;
-    private static final int   FALL_GATE_TICKS      = 40;    // ~2s
+    private static final int   FALL_GATE_TICKS      = 40;
     private static final float CRIT_CHARGE          = 0.84F;
     private static final float GROUND_ATTACK_CHARGE = 0.93F;
-    private static final int   GROUND_COMBO_DELAY   = 2;     // тиков
+    private static final int   GROUND_COMBO_DELAY   = 2;
 
     // ── Конструктор ────────────────────────────────────────────────────────
     public KillAuraSpooky() {
-        super("KillAura", "SpookyTime kill-aura (SPAngle)", ModuleCategory.COMBAT);
+        super("KillAura", "SpookyTime kill-aura (SPAngle)", ModuleCategory.UTILITIES);
         this.settings(range, fovSetting, onlySword, silentRot, swayOn);
     }
 
@@ -135,11 +135,9 @@ public class KillAuraSpooky extends ModuleStructure {
             }
             long elapsed = now - targetLostMs;
             if (elapsed < 50L) {
-                // Freeze (50ms): держим последний угол
                 applyRotation(player, holdYaw, holdPitch);
                 return;
             } else if (elapsed < 550L) {
-                // Eased return к камере (500ms)
                 float t     = (float)(elapsed - 50L) / 500.0F;
                 float eased = t * (0.5F + 0.5F * t);
                 float retYaw   = holdYaw   + MathHelper.wrapDegrees(player.getYaw()   - holdYaw)   * eased;
@@ -168,7 +166,6 @@ public class KillAuraSpooky extends ModuleStructure {
         curPitch = next[1];
         hasRotation = true;
 
-        // GCD-снап (один раз, на дельту)
         float[] snapped = gcdSnap(player, prevYaw, prevPitch, curYaw, curPitch);
         curYaw   = snapped[0];
         curPitch = snapped[1];
@@ -180,7 +177,7 @@ public class KillAuraSpooky extends ModuleStructure {
     }
 
     // ══════════════════════════════════════════════════════════════════════
-    // SPANGLE — ротационный профиль SpookyTime
+    // SPANGLE
     // ══════════════════════════════════════════════════════════════════════
     private float[] spAngle(float curYaw, float curPitch, Vec3d eye, Vec3d aim) {
         double dx = aim.x - eye.x;
@@ -219,7 +216,6 @@ public class KillAuraSpooky extends ModuleStructure {
         float nextYaw   = curYaw   + applyYaw;
         float nextPitch = MathHelper.clamp(curPitch + applyPitch, -89.0F, 90.0F);
 
-        // Sway (только idle, добавляет органики)
         if (swayOn.isValue()) {
             long ms = System.currentTimeMillis();
             float phase = (float)((ms % 12000L) / 1200.0 * 3.0 * (Math.PI * 2.0));
@@ -235,8 +231,16 @@ public class KillAuraSpooky extends ModuleStructure {
     private float[] gcdSnap(ClientPlayerEntity player,
                              float prevYaw, float prevPitch,
                              float nextYaw, float nextPitch) {
-        float sens = (float)((Double) mc.options.getMouseSensitivity().getValue()) * 0.6F + 0.2F;
-        float gcd  = sens * sens * sens * 1.2F * 0.15F;
+        Object raw = mc.options.getMouseSensitivity().getValue();
+        float sens;
+        if (raw instanceof Double) {
+            sens = ((Double) raw).floatValue() * 0.6F + 0.2F;
+        } else if (raw instanceof Number) {
+            sens = ((Number) raw).floatValue() * 0.6F + 0.2F;
+        } else {
+            sens = 0.5F * 0.6F + 0.2F;
+        }
+        float gcd = sens * sens * sens * 1.2F * 0.15F;
         if (gcd < 1e-4F) return new float[]{ nextYaw, nextPitch };
 
         float dY = MathHelper.wrapDegrees(nextYaw   - prevYaw);
@@ -262,7 +266,7 @@ public class KillAuraSpooky extends ModuleStructure {
     }
 
     // ══════════════════════════════════════════════════════════════════════
-    // АТАКА (crit-aware + W-release, как в Triggerbot)
+    // АТАКА (crit-aware + W-release)
     // ══════════════════════════════════════════════════════════════════════
     private void tickAttack(ClientPlayerEntity player, Entity target) {
         if (!canHit(player, target)) return;
@@ -343,10 +347,6 @@ public class KillAuraSpooky extends ModuleStructure {
         return best;
     }
 
-    /**
-     * Возвращает ближайшую видимую точку на хитбоксе цели.
-     * Сначала eye-level центра, если невидима — clamped crosshair (как в AimAssist).
-     */
     private Vec3d getNearestVisiblePoint(ClientPlayerEntity player, Entity target) {
         Box   box    = target.getBoundingBox();
         Vec3d eye    = player.getEyePos();
