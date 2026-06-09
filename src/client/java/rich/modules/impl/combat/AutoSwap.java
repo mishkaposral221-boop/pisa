@@ -1,5 +1,6 @@
 package rich.modules.impl.combat;
 
+import java.util.Locale;
 import java.util.concurrent.ThreadLocalRandom;
 import net.minecraft.client.gui.screen.ingame.InventoryScreen;
 import net.minecraft.item.Item;
@@ -38,12 +39,12 @@ public class AutoSwap extends ModuleStructure {
    private static final int PHASE_BEFORE_CLICK = 3;
    private static final int PHASE_CLOSING = 4;
    private static final int OFFHAND_BUTTON = 40;
-   private static final int OFFHAND_SLOT = 45;
 
    public final SelectSetting triggerMode = new SelectSetting("Триггер", "Колесо — выбор предмета через радиальное меню, Без колеса — авто-свап")
       .value("Колесо", "Без колеса")
       .selected("Без колеса");
-   public final BindSetting wheelBind = new BindSetting("Бинд колеса", "Клавиша открытия колеса (режим Колесо)");
+   public final BindSetting wheelBind = new BindSetting("Бинд колеса", "Зажми, наведи на предмет и отпусти для выбора")
+      .visible(() -> this.triggerMode.isSelected("Колесо"));
    public final BindSetting swapBind = new BindSetting("Бинд свапа", "Опциональный ручной триггер свапа");
    public final BooleanSetting autoSwap = new BooleanSetting("Авто-свап", "Свапать автоматически, пока модуль включён (режим Без колеса)")
       .setValue(true)
@@ -78,15 +79,17 @@ public class AutoSwap extends ModuleStructure {
       .setValue(true)
       .visible(() -> this.swapMode.isSelected("Legit"));
 
-   public final TextSetting slot1 = new TextSetting("Предмет 1", "ID предмета");
+   public final TextSetting slot1 = new TextSetting("Предмет 1", "ID предмета или алиас: талик/тотем/totem");
    public final ButtonSetting pick1 = new ButtonSetting("Выбрать предмет 1", "Открыть инвентарь")
       .setButtonName("Выбрать")
       .setRunnable(() -> this.openPickerFor(0));
-   public final TextSetting slot2 = new TextSetting("Предмет 2", "ID предмета");
+   public final TextSetting slot2 = new TextSetting("Предмет 2", "ID предмета или алиас")
+      ;
    public final ButtonSetting pick2 = new ButtonSetting("Выбрать предмет 2", "Открыть инвентарь")
       .setButtonName("Выбрать")
       .setRunnable(() -> this.openPickerFor(1));
-   public final TextSetting slot3 = new TextSetting("Предмет 3", "ID предмета");
+   public final TextSetting slot3 = new TextSetting("Предмет 3", "ID предмета или алиас")
+      ;
    public final ButtonSetting pick3 = new ButtonSetting("Выбрать предмет 3", "Открыть инвентарь")
       .setButtonName("Выбрать")
       .setRunnable(() -> this.openPickerFor(2));
@@ -179,13 +182,23 @@ public class AutoSwap extends ModuleStructure {
          this.pendingItem = this.resolveTargetItem();
       }
 
-      // Колесо открывается своим биндом только в режиме "Колесо".
-      if (this.triggerMode.isSelected("Колесо") && this.wheelBind.getKey() != -1 && var1.isKeyDown(this.wheelBind.getKey(), true)) {
-         this.wheelOpen = !this.wheelOpen;
-         if (this.wheelOpen) {
+      // Колесо: зажал бинд -> навёл -> отпустил бинд = выбрал. Наведение само по себе больше не свапает.
+      if (this.triggerMode.isSelected("Колесо") && this.wheelBind.getKey() != -1) {
+         if (var1.isKeyDown(this.wheelBind.getKey(), true)) {
+            this.wheelOpen = true;
             this.lastHover = -1;
             this.setCursorUnlocked(true);
-         } else {
+         } else if (var1.isKeyReleased(this.wheelBind.getKey(), true) && this.wheelOpen) {
+            if (this.lastHover != -1) {
+               TextSetting setting = this.getSlotSetting(this.lastHover);
+               Item picked = this.parseItem(setting != null ? setting.getText() : null);
+               if (picked != null) {
+                  this.pendingItem = picked;
+               }
+            }
+
+            this.wheelOpen = false;
+            this.lastHover = -1;
             this.setCursorUnlocked(false);
          }
       }
@@ -375,7 +388,16 @@ public class AutoSwap extends ModuleStructure {
          return null;
       }
 
-      Identifier var2 = Identifier.tryParse(var1.trim());
+      String id = var1.trim().toLowerCase(Locale.ROOT);
+      if (id.equals("талик") || id.equals("тотем") || id.equals("totem") || id.equals("talik") || id.equals("totem_of_undying")) {
+         return Items.TOTEM_OF_UNDYING;
+      }
+
+      if (!id.contains(":")) {
+         id = "minecraft:" + id;
+      }
+
+      Identifier var2 = Identifier.tryParse(id);
       if (var2 == null) {
          return null;
       }
@@ -430,15 +452,8 @@ public class AutoSwap extends ModuleStructure {
 
       int var3 = mc.player.currentScreenHandler.syncId;
 
-      // Основной путь — как F по слоту: SlotActionType.SWAP + button 40.
+      // Только один swap-клик как F по слоту. Старый fallback через PICKUP убран, потому что он мог свапать предмет два раза.
       mc.interactionManager.clickSlot(var3, var2.id, OFFHAND_BUTTON, SlotActionType.SWAP, mc.player);
-
-      // Fallback, если SWAP не применился: обычные PICKUP-клики взять/положить/вернуть.
-      if (mc.player.getOffHandStack().getItem() != var1) {
-         mc.interactionManager.clickSlot(var3, var2.id, 0, SlotActionType.PICKUP, mc.player);
-         mc.interactionManager.clickSlot(var3, OFFHAND_SLOT, 0, SlotActionType.PICKUP, mc.player);
-         mc.interactionManager.clickSlot(var3, var2.id, 0, SlotActionType.PICKUP, mc.player);
-      }
 
       this.lastSwapMs = System.currentTimeMillis();
       return true;
@@ -496,17 +511,7 @@ public class AutoSwap extends ModuleStructure {
          float var9 = (float)(mc.mouse.getY() * var3 / mc.getWindow().getHeight());
          byte var10 = 3;
          int var11 = this.getHoverIndex(var8, var9, var4, var5, var7, var6, var10);
-         if (var11 != -1 && var11 != this.lastHover) {
-            this.lastHover = var11;
-            Item picked = this.parseItem(this.getSlotSetting(var11) != null ? this.getSlotSetting(var11).getText() : null);
-            if (picked != null) {
-               this.pendingItem = picked;
-               this.wheelOpen = false;
-               this.lastHover = -1;
-               this.setCursorUnlocked(false);
-               return;
-            }
-         }
+         this.lastHover = var11;
 
          float var21 = 360.0F / var10;
          float var22 = 2.0F;
@@ -567,13 +572,7 @@ public class AutoSwap extends ModuleStructure {
       }
 
       this.cachedIds[var1] = var3;
-      Identifier var4 = Identifier.tryParse(var3);
-      if (var4 == null) {
-         this.cachedStacks[var1] = ItemStack.EMPTY;
-         return ItemStack.EMPTY;
-      }
-
-      Item var5 = (Item)Registries.ITEM.get(var4);
+      Item var5 = this.parseItem(var3);
       this.cachedStacks[var1] = var5 != null && var5 != Items.AIR ? var5.getDefaultStack() : ItemStack.EMPTY;
       return this.cachedStacks[var1];
    }
