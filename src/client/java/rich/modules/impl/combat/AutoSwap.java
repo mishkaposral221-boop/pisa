@@ -382,10 +382,6 @@ public class AutoSwap extends ModuleStructure {
       this.sentSprintStop = false;
 
       // === ЖЁСТКАЯ ФИКСАЦИЯ ПОЗИЦИИ ===
-      // Сохраняем X/Y/Z в момент начала свапа. Дальше каждый тик до finishSwap
-      // позиция игрока будет принудительно возвращаться к этим координатам.
-      // Это гарантирует, что сервер видит игрока как полностью стационарного
-      // независимо от того, прошла ли через какие-то лазейки скорость/инпут.
       if (this.positionLock.isValue()) {
          this.lockX = mc.player.getX();
          this.lockY = mc.player.getY();
@@ -598,17 +594,14 @@ public class AutoSwap extends ModuleStructure {
       mc.player.upwardSpeed = 0.0F;
 
       // === ЖЁСТКАЯ ФИКСАЦИЯ XZ ===
-      // Откатываем игрока на сохранённые координаты КАЖДЫЙ тик.
-      // Y оставляем живой (гравитация/прыжки работают), но XZ строго заблокированы.
-      // Сервер при отправке PlayerMoveC2SPacket получит зафиксированную позицию
-      // и не сможет залогировать «движение во время ClickSlot».
+      // В yarn 1.21.11 из публичных «prev»-полей доступны только lastX/lastZ и lastRenderX/lastRenderZ.
+      // setPosition + прямые присваивания этих полей достаточно для того, чтобы
+      // sendMovementPackets() трактовал игрока как полностью стационарного.
       if (this.posLockActive && !Double.isNaN(this.lockX) && !Double.isNaN(this.lockZ)) {
          double curY = mc.player.getY();
          mc.player.setPosition(this.lockX, curY, this.lockZ);
          mc.player.lastX = this.lockX;
          mc.player.lastZ = this.lockZ;
-         mc.player.prevX = this.lockX;
-         mc.player.prevZ = this.lockZ;
          mc.player.lastRenderX = this.lockX;
          mc.player.lastRenderZ = this.lockZ;
       }
