@@ -274,8 +274,9 @@ public class AutoSwap extends ModuleStructure {
       long now = System.currentTimeMillis();
       if (now - this.lastSwapMs < (long)this.cooldown.getInt()) return;
 
-      if (mc.player.getOffHandStack().getItem() == item) return;
-
+      // Не блокируем «тотем→тотем» / «талисман→талисман»: если в инвентаре есть подходящий стак,
+      // позволяем заменить оффхенд свежим. Автотриггер сам зовёт beginSwap только когда offhand != desired
+      // (см. onTick), так что бесконечного цикла не будет.
       Slot slot = this.findSlotForItem(item);
       if (slot == null) return;
 
@@ -346,15 +347,23 @@ public class AutoSwap extends ModuleStructure {
 
    private Slot findSlotForItem(Item item) {
       if (mc.player == null || item == null || item == Items.AIR) return null;
-      for (int i = 36; i <= 44; i++) {
-         Slot s = this.getPlayerSlot(i);
-         if (this.slotContains(s, item)) return s;
-      }
+      ItemStack mainHand = mc.player.getMainHandStack();
+      // 1) Сначала ищем в основной части инвентаря (9..35) — не трогаем хотбар,
+      //    чтобы свап не утаскивал предмет, который сейчас в руке (это давало эффект «обратного» свапа).
       for (int i = 9; i <= 35; i++) {
          Slot s = this.getPlayerSlot(i);
          if (this.slotContains(s, item)) return s;
       }
-      return null;
+      // 2) Затем — хотбар (36..44), но слот основной руки откладываем на потом.
+      Slot heldFallback = null;
+      for (int i = 36; i <= 44; i++) {
+         Slot s = this.getPlayerSlot(i);
+         if (!this.slotContains(s, item)) continue;
+         if (s.getStack() == mainHand) { if (heldFallback == null) heldFallback = s; continue; }
+         return s;
+      }
+      // 3) Крайний случай: предмет есть только в основной руке.
+      return heldFallback;
    }
 
    private Slot getPlayerSlot(int id) {
