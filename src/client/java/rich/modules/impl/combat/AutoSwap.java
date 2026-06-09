@@ -50,7 +50,8 @@ public class AutoSwap extends ModuleStructure {
       .selected("Без колеса");
    public final BindSetting wheelBind = new BindSetting("Бинд колеса", "Зажми, наведи на предмет и отпусти для выбора")
       .visible(() -> this.triggerMode.isSelected("Колесо"));
-   public final BindSetting swapBind = new BindSetting("Бинд свапа", "Опциональный ручной триггер свапа");
+   public final BindSetting swapBind = new BindSetting("Бинд свапа", "Ручной триггер свапа (работает только в режиме «Без колеса»)")
+      .visible(() -> this.triggerMode.isSelected("Без колеса"));
    public final SelectSetting swapMode = new SelectSetting("Режим свапа", "Legit открывает инвентарь, Packet свапает без экрана")
       .value("Legit", "Packet")
       .selected("Legit");
@@ -165,7 +166,13 @@ public class AutoSwap extends ModuleStructure {
    public void onKey(KeyEvent var1) {
       if (mc.player == null) return;
 
-      if (this.swapBind.getKey() != -1 && var1.isKeyDown(this.swapBind.getKey(), true)) {
+      // swapBind работает ТОЛЬКО в режиме «Без колеса».
+      // В режиме «Колесо» свап идёт ИСКЛЮЧИТЕЛЬНО через выбор в колесе,
+      // иначе при совпадении/наложении клавиш получается двойной свап:
+      //   keyDown swapBind → pendingItem (свап #1) + keyRelease wheelBind → picked (свап #2).
+      if (this.swapBind.getKey() != -1
+            && this.triggerMode.isSelected("Без колеса")
+            && var1.isKeyDown(this.swapBind.getKey(), true)) {
          this.pendingItem = this.resolveTargetItem();
       }
 
@@ -173,6 +180,9 @@ public class AutoSwap extends ModuleStructure {
          if (var1.isKeyDown(this.wheelBind.getKey(), true)) {
             this.wheelOpen = true;
             this.lastHover = -1;
+            // Сбрасываем любой pendingItem, который мог остаться от предыдущих событий
+            // — в режиме «Колесо» выбор фиксируется ТОЛЬКО на release.
+            this.pendingItem = null;
             this.setCursorUnlocked(true);
          } else if (var1.isKeyReleased(this.wheelBind.getKey(), true) && this.wheelOpen) {
             if (this.lastHover != -1) {
@@ -196,6 +206,11 @@ public class AutoSwap extends ModuleStructure {
 
       if (this.postSwapPauseTicks > 0) {
          this.postSwapPauseTicks--;
+         return;
+      }
+
+      // Пока колесо открыто — никаких свапов, ждём выбор пользователя
+      if (this.wheelOpen) {
          return;
       }
 
