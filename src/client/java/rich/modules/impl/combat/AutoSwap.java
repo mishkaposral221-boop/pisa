@@ -12,6 +12,7 @@ import net.minecraft.screen.slot.Slot;
 import net.minecraft.screen.slot.SlotActionType;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.collection.DefaultedList;
+import org.lwjgl.glfw.GLFW;
 import rich.Initialization;
 import rich.events.api.EventHandler;
 import rich.events.impl.ClickSlotEvent;
@@ -21,7 +22,6 @@ import rich.events.impl.TickEvent;
 import rich.modules.module.ModuleStructure;
 import rich.modules.module.category.ModuleCategory;
 import rich.modules.module.setting.implement.BindSetting;
-import rich.modules.module.setting.implement.BooleanSetting;
 import rich.modules.module.setting.implement.ButtonSetting;
 import rich.modules.module.setting.implement.SelectSetting;
 import rich.modules.module.setting.implement.SliderSettings;
@@ -39,6 +39,8 @@ public class AutoSwap extends ModuleStructure {
    private static final int PHASE_BEFORE_CLICK = 3;
    private static final int PHASE_CLOSING = 4;
    private static final int OFFHAND_BUTTON = 40;
+   private static final int INVENTORY_WIDTH = 176;
+   private static final int INVENTORY_HEIGHT = 166;
 
    public final SelectSetting triggerMode = new SelectSetting("Триггер", "Колесо — выбор предмета через радиальное меню, Без колеса — авто-свап")
       .value("Колесо", "Без колеса")
@@ -46,9 +48,6 @@ public class AutoSwap extends ModuleStructure {
    public final BindSetting wheelBind = new BindSetting("Бинд колеса", "Зажми, наведи на предмет и отпусти для выбора")
       .visible(() -> this.triggerMode.isSelected("Колесо"));
    public final BindSetting swapBind = new BindSetting("Бинд свапа", "Опциональный ручной триггер свапа");
-   public final BooleanSetting autoSwap = new BooleanSetting("Авто-свап", "Свапать автоматически, пока модуль включён (режим Без колеса)")
-      .setValue(true)
-      .visible(() -> this.triggerMode.isSelected("Без колеса"));
    public final SelectSetting swapMode = new SelectSetting("Режим свапа", "Legit открывает инвентарь, Packet свапает без экрана")
       .value("Legit", "Packet")
       .selected("Legit");
@@ -75,7 +74,7 @@ public class AutoSwap extends ModuleStructure {
    public final SliderSettings cooldown = new SliderSettings("Cooldown", "Минимальная пауза между свапами в миллисекундах")
       .setValue(250.0F)
       .range(0, 3000);
-   public final BooleanSetting stopMovement = new BooleanSetting("Остановка", "Останавливать игрока во время legit-свапа")
+   public final rich.modules.module.setting.implement.BooleanSetting stopMovement = new rich.modules.module.setting.implement.BooleanSetting("Остановка", "Останавливать игрока во время legit-свапа")
       .setValue(true)
       .visible(() -> this.swapMode.isSelected("Legit"));
 
@@ -83,13 +82,11 @@ public class AutoSwap extends ModuleStructure {
    public final ButtonSetting pick1 = new ButtonSetting("Выбрать предмет 1", "Открыть инвентарь")
       .setButtonName("Выбрать")
       .setRunnable(() -> this.openPickerFor(0));
-   public final TextSetting slot2 = new TextSetting("Предмет 2", "ID предмета или алиас")
-      ;
+   public final TextSetting slot2 = new TextSetting("Предмет 2", "ID предмета или алиас");
    public final ButtonSetting pick2 = new ButtonSetting("Выбрать предмет 2", "Открыть инвентарь")
       .setButtonName("Выбрать")
       .setRunnable(() -> this.openPickerFor(1));
-   public final TextSetting slot3 = new TextSetting("Предмет 3", "ID предмета или алиас")
-      ;
+   public final TextSetting slot3 = new TextSetting("Предмет 3", "ID предмета или алиас");
    public final ButtonSetting pick3 = new ButtonSetting("Выбрать предмет 3", "Открыть инвентарь")
       .setButtonName("Выбрать")
       .setRunnable(() -> this.openPickerFor(2));
@@ -119,7 +116,6 @@ public class AutoSwap extends ModuleStructure {
          this.triggerMode,
          this.wheelBind,
          this.swapBind,
-         this.autoSwap,
          this.swapMode,
          this.preOpenDelay,
          this.afterOpenDelay,
@@ -177,12 +173,10 @@ public class AutoSwap extends ModuleStructure {
          return;
       }
 
-      // Ручной бинд свапа — работает в любом режиме.
       if (this.swapBind.getKey() != -1 && var1.isKeyDown(this.swapBind.getKey(), true)) {
          this.pendingItem = this.resolveTargetItem();
       }
 
-      // Колесо: зажал бинд -> навёл -> отпустил бинд = выбрал. Наведение само по себе больше не свапает.
       if (this.triggerMode.isSelected("Колесо") && this.wheelBind.getKey() != -1) {
          if (var1.isKeyDown(this.wheelBind.getKey(), true)) {
             this.wheelOpen = true;
@@ -219,8 +213,7 @@ public class AutoSwap extends ModuleStructure {
             return;
          }
 
-         // Авто-триггер (режим Без колеса): держим во второй руке предмет с наивысшим приоритетом из доступных.
-         if (this.triggerMode.isSelected("Без колеса") && this.autoSwap.isValue() && mc.currentScreen == null) {
+         if (this.triggerMode.isSelected("Без колеса") && mc.currentScreen == null) {
             Item desired = this.resolveDesiredOffhandItem();
             if (desired != null && mc.player.getOffHandStack().getItem() != desired) {
                this.beginSwap(desired);
@@ -306,7 +299,8 @@ public class AutoSwap extends ModuleStructure {
          return;
       }
 
-      if (this.findSlotForItem(var1) == null) {
+      Slot slot = this.findSlotForItem(var1);
+      if (slot == null) {
          return;
       }
 
@@ -339,7 +333,6 @@ public class AutoSwap extends ModuleStructure {
       }
    }
 
-   // Ручной/колёсный путь: первый сконфигурированный предмет, присутствующий в инвентаре.
    private Item resolveTargetItem() {
       Item var1 = this.parseItem(this.slot1.getText());
       if (var1 != null && this.findSlotForItem(var1) != null) {
@@ -359,9 +352,6 @@ public class AutoSwap extends ModuleStructure {
       return var1 != null ? var1 : (var2 != null ? var2 : var3);
    }
 
-   // Авто-путь: предмет с наивысшим приоритетом, который есть во второй руке ИЛИ в инвентаре.
-   // Если он уже во второй руке — desired совпадёт с offhand и свапа не будет.
-   // Если предмет выше приоритетом лежит в инвентаре, а во второй руке предмет ниже приоритетом — он будет вытеснен.
    private Item resolveDesiredOffhandItem() {
       Item offhand = mc.player != null ? mc.player.getOffHandStack().getItem() : Items.AIR;
 
@@ -389,7 +379,7 @@ public class AutoSwap extends ModuleStructure {
       }
 
       String id = var1.trim().toLowerCase(Locale.ROOT);
-      if (id.equals("талик") || id.equals("тотем") || id.equals("totem") || id.equals("talik") || id.equals("totem_of_undying")) {
+      if (id.contains("талик") || id.contains("тотем") || id.contains("totem") || id.contains("talik")) {
          return Items.TOTEM_OF_UNDYING;
       }
 
@@ -450,13 +440,31 @@ public class AutoSwap extends ModuleStructure {
          return false;
       }
 
-      int var3 = mc.player.currentScreenHandler.syncId;
+      if (mc.currentScreen instanceof InventoryScreen) {
+         this.moveCursorToSlot(var2);
+      }
 
-      // Только один swap-клик как F по слоту. Старый fallback через PICKUP убран, потому что он мог свапать предмет два раза.
+      int var3 = mc.player.currentScreenHandler.syncId;
       mc.interactionManager.clickSlot(var3, var2.id, OFFHAND_BUTTON, SlotActionType.SWAP, mc.player);
 
       this.lastSwapMs = System.currentTimeMillis();
       return true;
+   }
+
+   private void moveCursorToSlot(Slot var1) {
+      if (mc.getWindow() == null || var1 == null) {
+         return;
+      }
+
+      int scaledWidth = mc.getWindow().getScaledWidth();
+      int scaledHeight = mc.getWindow().getScaledHeight();
+      double guiLeft = (scaledWidth - INVENTORY_WIDTH) / 2.0;
+      double guiTop = (scaledHeight - INVENTORY_HEIGHT) / 2.0;
+      double scaledX = guiLeft + var1.x + 8.0;
+      double scaledY = guiTop + var1.y + 8.0;
+      double rawX = scaledX * mc.getWindow().getWidth() / (double)scaledWidth;
+      double rawY = scaledY * mc.getWindow().getHeight() / (double)scaledHeight;
+      GLFW.glfwSetCursorPos(mc.getWindow().getHandle(), rawX, rawY);
    }
 
    private void stopServerSprint() {
