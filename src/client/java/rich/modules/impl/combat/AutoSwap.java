@@ -39,20 +39,14 @@ import rich.util.render.pipeline.WheelPipeline;
 public class AutoSwap extends ModuleStructure {
    public static volatile boolean SUPPRESS_SPRINT = false;
 
-   // Anti-BadPacket rotation lock. Миксин в ClientPlayerEntity подменяет yaw/pitch в
-   // sendMovementPackets/tick на эти значения, пока LOCK_ROTATION = true.
    public static volatile boolean LOCK_ROTATION = false;
    public static volatile float LOCK_YAW = 0.0F;
    public static volatile float LOCK_PITCH = 0.0F;
 
    private static final int PHASE_IDLE = 0;
-   // Новые фазы ванильной F-последовательности:
-   private static final int PHASE_SCROLL_TO = 1;   // ждём preOpenDelay, потом скроллим на хотбар-слот с предметом
-   private static final int PHASE_DO_SWAP = 2;     // ждём afterOpenDelay, потом PlayerAction(SWAP_WITH_OFFHAND)
-   private static final int PHASE_RESTORE = 3;     // ждём closeDelay, потом скроллим обратно
-   private static final int INVENTORY_WIDTH = 176;
-   private static final int INVENTORY_HEIGHT = 166;
-   // Количество тиков паузы после любого свапа.
+   private static final int PHASE_SCROLL_TO = 1;
+   private static final int PHASE_DO_SWAP = 2;
+   private static final int PHASE_RESTORE = 3;
    private static final int POST_SWAP_PAUSE_TICKS = 10;
 
    public final SelectSetting triggerMode = new SelectSetting("Триггер", "Колесо — выбор через радиальное меню, Без колеса — авто-свап")
@@ -83,14 +77,16 @@ public class AutoSwap extends ModuleStructure {
       .setValue(false);
    public final BooleanSetting lockRotation = new BooleanSetting("Lock rotation", "Замораживать поворот головы во время свапа")
       .setValue(false);
+   public final BooleanSetting restoreAfterRelocate = new BooleanSetting("Возврат после перекидывания", "Если предмет был в основной части инвентаря — вернуть содержимое хотбара на место (ванильным 1-9 пакетом)")
+      .setValue(true);
 
-   public final TextSetting slot1 = new TextSetting("Предмет 1", "ID или алиас (должен лежать в хотбаре!)");
+   public final TextSetting slot1 = new TextSetting("Предмет 1", "ID или алиас");
    public final ButtonSetting pick1 = new ButtonSetting("Выбрать 1", "Открыть инвентарь")
       .setButtonName("Выбрать").setRunnable(() -> this.openPickerFor(0));
-   public final TextSetting slot2 = new TextSetting("Предмет 2", "ID или алиас (должен лежать в хотбаре!)");
+   public final TextSetting slot2 = new TextSetting("Предмет 2", "ID или алиас");
    public final ButtonSetting pick2 = new ButtonSetting("Выбрать 2", "Открыть инвентарь")
       .setButtonName("Выбрать").setRunnable(() -> this.openPickerFor(1));
-   public final TextSetting slot3 = new TextSetting("Предмет 3", "ID или алиас (должен лежать в хотбаре!)");
+   public final TextSetting slot3 = new TextSetting("Предмет 3", "ID или алиас");
    public final ButtonSetting pick3 = new ButtonSetting("Выбрать 3", "Открыть инвентарь")
       .setButtonName("Выбрать").setRunnable(() -> this.openPickerFor(2));
 
@@ -101,6 +97,9 @@ public class AutoSwap extends ModuleStructure {
    private int phaseTimer = 0;
    private int swapHotbarSlot = -1;     // хотбар 0..8, куда «скроллим» для F-трика
    private int originalSlot = -1;       // хотбар 0..8, в который возвращаемся
+   // Для restoreAfterRelocate: если перекидывали предмет из основного инвентаря — помним откуда взяли.
+   // -1 = перекидывания не было; >= 0 = screen-handler slotId 9..35.
+   private int relocateFromInvSlot = -1;
    private boolean sentSprintStop = false;
    private long lastSwapMs = 0L;
    private int postSwapPauseTicks = 0;
@@ -129,6 +128,7 @@ public class AutoSwap extends ModuleStructure {
          this.cooldown,
          this.stopMovement,
          this.lockRotation,
+         this.restoreAfterRelocate,
          this.slot1, this.pick1,
          this.slot2, this.pick2,
          this.slot3, this.pick3
@@ -163,7 +163,6 @@ public class AutoSwap extends ModuleStructure {
                }
                var1.cancel();
                this.pickingForSlot = -1;
-               // Чисто клиентское закрытие, без close-пакета.
                mc.setScreen(null);
             }
          }
@@ -233,7 +232,6 @@ public class AutoSwap extends ModuleStructure {
          return;
       }
 
-      // В Legit фазах держим rotation lock и stop-sprint если включены.
       if (!this.sentSprintStop && this.stopMovement.isValue()) {
          this.stopServerSprint();
          this.sentSprintStop = true;
@@ -265,6 +263,10 @@ public class AutoSwap extends ModuleStructure {
          if (this.originalSlot != this.swapHotbarSlot && this.originalSlot >= 0) {
             this.sendScrollPacket(this.originalSlot);
          }
+         // Если была релокация из инвентаря — вернём в исходный слот ванильным 1-9 пакетом.
+         if (this.relocateFromInvSlot != -1 && this.restoreAfterRelocate.isValue()) {
+            this.sendVanillaSwapClick(this.relocateFromInvSlot, this.swapHotbarSlot);
+         }
          this.finishSwap();
       }
    }
@@ -273,22 +275,34 @@ public class AutoSwap extends ModuleStructure {
       if (mc.player == null || item == null || item == Items.AIR) return;
       long now = System.currentTimeMillis();
       if (now - this.lastSwapMs < (long)this.cooldown.getInt()) return;
-
-      // Ищем предмет ИСКЛЮЧИТЕЛЬНО в хотбаре (0..8): под ванильный F-трик.
-      int hotbar = this.findHotbarSlotForItem(item);
-      if (hotbar == -1) return;
-
       if (mc.currentScreen != null && !(mc.currentScreen instanceof InventoryScreen)) return;
+
+      int hotbar = this.findHotbarSlotForItem(item);
+      int invSlot = -1;
+      if (hotbar == -1) {
+         invSlot = this.findInvSlotForItem(item);
+         if (invSlot == -1) return; // предмета нигде нет
+      }
 
       this.lastSwapMs = now;
       this.targetItem = item;
-      this.swapHotbarSlot = hotbar;
       this.originalSlot = this.getSelectedSlot();
+      this.relocateFromInvSlot = -1;
+
+      // Если предмет в инвентаре — сначала перекинем в хотбар ванильным 1-9 пакетом.
+      if (hotbar == -1) {
+         int stash = this.findEmptyHotbarSlot();
+         if (stash == -1) stash = this.originalSlot >= 0 ? this.originalSlot : 0;
+         // ClickSlot формы 1-9 hotkey: button = stash (0..8), mode = SWAP.
+         this.sendVanillaSwapClick(invSlot, stash);
+         this.relocateFromInvSlot = invSlot;
+         hotbar = stash;
+      }
+      this.swapHotbarSlot = hotbar;
 
       if (this.lockRotation.isValue()) this.refreshRotationLock();
 
       if (this.swapMode.isSelected("Packet")) {
-         // Packet: все три ванильных пакета в один тик.
          if (this.stopMovement.isValue()) {
             this.stopServerSprint();
             this.haltMovement();
@@ -301,15 +315,16 @@ public class AutoSwap extends ModuleStructure {
          if (this.originalSlot != this.swapHotbarSlot && this.originalSlot >= 0) {
             this.sendScrollPacket(this.originalSlot);
          }
+         if (this.relocateFromInvSlot != -1 && this.restoreAfterRelocate.isValue()) {
+            this.sendVanillaSwapClick(this.relocateFromInvSlot, this.swapHotbarSlot);
+         }
          this.finishSwap();
          return;
       }
 
-      // Legit: разносим пакеты по тикам.
       this.sentSprintStop = false;
       SUPPRESS_SPRINT = this.stopMovement.isValue();
       if (this.originalSlot == this.swapHotbarSlot) {
-         // Не нужен скролл — сразу фаза DO_SWAP.
          this.swapPhase = PHASE_DO_SWAP;
          this.phaseTimer = this.delayTicks(this.afterOpenDelay);
       } else {
@@ -322,6 +337,7 @@ public class AutoSwap extends ModuleStructure {
       this.targetItem = null;
       this.swapHotbarSlot = -1;
       this.originalSlot = -1;
+      this.relocateFromInvSlot = -1;
       this.swapPhase = PHASE_IDLE;
       this.phaseTimer = 0;
       this.sentSprintStop = false;
@@ -330,7 +346,7 @@ public class AutoSwap extends ModuleStructure {
       if (this.lockRotation.isValue()) this.refreshRotationLock();
    }
 
-   // === Ванильные пакеты F-трика ===
+   // === Ванильные пакеты ===
 
    private void sendScrollPacket(int hotbarSlot) {
       if (mc.getNetworkHandler() == null) return;
@@ -345,8 +361,22 @@ public class AutoSwap extends ModuleStructure {
          Direction.DOWN));
    }
 
-   // Сервер после SWAP_ITEM_WITH_OFFHAND свопит основную руку (хотбар[swapHotbarSlot]) с оффхендом.
-   // Делаем то же самое в локальном инвентаре, чтобы не было визуального рассинхрона.
+   /**
+    * Ванильный ClickSlot формы «цифры 1-9 над слотом в инвентаре»:
+    * свопит слот в ScreenHandler’е с указанным хотбар-слотом. interactionManager.clickSlot
+    * сам обновляет локальный ScreenHandler/PlayerInventory и шлёт ClickSlotC2SPacket.
+    */
+   private void sendVanillaSwapClick(int screenSlotId, int hotbarButton) {
+      if (mc.player == null || mc.interactionManager == null) return;
+      mc.interactionManager.clickSlot(
+         mc.player.playerScreenHandler.syncId,
+         screenSlotId,
+         hotbarButton,
+         SlotActionType.SWAP,
+         mc.player
+      );
+   }
+
    private void mirrorOffhandSwap(int hotbarSlot) {
       if (mc.player == null) return;
       PlayerInventory inv = mc.player.getInventory();
@@ -361,7 +391,6 @@ public class AutoSwap extends ModuleStructure {
       return mc.player.getInventory().getSelectedSlot();
    }
 
-   // Ищем предмет только в хотбаре.
    private int findHotbarSlotForItem(Item item) {
       if (mc.player == null || item == null || item == Items.AIR) return -1;
       PlayerInventory inv = mc.player.getInventory();
@@ -372,10 +401,38 @@ public class AutoSwap extends ModuleStructure {
       return -1;
    }
 
+   // Ищем предмет в основной части инвентаря.
+   // Возвращаем screen-handler slotId (9..35) — именно эти индексы нужны для ClickSlot.
+   // Для main inventory они совпадают с PlayerInventory.getStack индексами.
+   private int findInvSlotForItem(Item item) {
+      if (mc.player == null || item == null || item == Items.AIR) return -1;
+      PlayerInventory inv = mc.player.getInventory();
+      for (int i = 9; i <= 35; i++) {
+         ItemStack s = inv.getStack(i);
+         if (!s.isEmpty() && s.getItem() == item) return i;
+      }
+      return -1;
+   }
+
+   private int findEmptyHotbarSlot() {
+      if (mc.player == null) return -1;
+      PlayerInventory inv = mc.player.getInventory();
+      int sel = inv.getSelectedSlot();
+      // Сначала ищем пустой слот НЕ в руке (чтобы не путать HUD).
+      for (int i = 8; i >= 0; i--) {
+         if (i == sel) continue;
+         if (inv.getStack(i).isEmpty()) return i;
+      }
+      // Если вне выбранного нет пустых — пусть будет выбранный, если он пустой.
+      if (inv.getStack(sel).isEmpty()) return sel;
+      return -1;
+   }
+
    private Item resolveTargetItem() {
       for (int i = 0; i < 3; i++) {
          Item it = this.parseItem(this.getSlotSetting(i) != null ? this.getSlotSetting(i).getText() : null);
-         if (it != null && this.findHotbarSlotForItem(it) != -1) return it;
+         if (it == null) continue;
+         if (this.findHotbarSlotForItem(it) != -1 || this.findInvSlotForItem(it) != -1) return it;
       }
       return null;
    }
@@ -387,7 +444,7 @@ public class AutoSwap extends ModuleStructure {
          Item it = this.parseItem(this.getSlotSetting(i) != null ? this.getSlotSetting(i).getText() : null);
          if (it == null) continue;
          if (offhand == it) return it;
-         if (this.findHotbarSlotForItem(it) != -1) return it;
+         if (this.findHotbarSlotForItem(it) != -1 || this.findInvSlotForItem(it) != -1) return it;
       }
       return null;
    }
@@ -435,6 +492,7 @@ public class AutoSwap extends ModuleStructure {
       this.targetItem = null;
       this.swapHotbarSlot = -1;
       this.originalSlot = -1;
+      this.relocateFromInvSlot = -1;
       this.sentSprintStop = false;
       SUPPRESS_SPRINT = false;
       if (this.postSwapPauseTicks == 0) {
