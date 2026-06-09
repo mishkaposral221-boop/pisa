@@ -394,22 +394,23 @@ public class AutoSwap extends ModuleStructure {
          return false;
       }
 
-      int var2 = this.getDestinationButton();
+      if (this.destination.isSelected("Offhand")) {
+         // Это ровно действие клавиши F по слоту: SlotActionType.SWAP + button 40.
+         // Для player inventory важно брать currentScreenHandler.syncId, иначе свап из main inventory
+         // может не применяться на сервере в некоторых состояниях экрана.
+         mc.interactionManager.clickSlot(mc.player.currentScreenHandler.syncId, var1, 40, SlotActionType.SWAP, mc.player);
+         this.lastSwapMs = System.currentTimeMillis();
+         return true;
+      }
+
+      int var2 = this.getDestinationHotbarButton();
       if (var2 < 0) {
          return false;
       }
 
-      mc.interactionManager.clickSlot(mc.player.playerScreenHandler.syncId, var1, var2, SlotActionType.SWAP, mc.player);
+      mc.interactionManager.clickSlot(mc.player.currentScreenHandler.syncId, var1, var2, SlotActionType.SWAP, mc.player);
       this.lastSwapMs = System.currentTimeMillis();
       return true;
-   }
-
-   private int getDestinationButton() {
-      if (this.destination.isSelected("Offhand")) {
-         return 40;
-      }
-
-      return this.getDestinationHotbarButton();
    }
 
    private int getDestinationHotbarButton() {
