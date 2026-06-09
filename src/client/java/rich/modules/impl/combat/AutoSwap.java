@@ -8,6 +8,7 @@ import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
 import net.minecraft.network.packet.c2s.play.ClientCommandC2SPacket;
+import net.minecraft.network.packet.c2s.play.CloseHandledScreenC2SPacket;
 import net.minecraft.network.packet.c2s.play.PlayerActionC2SPacket;
 import net.minecraft.network.packet.c2s.play.UpdateSelectedSlotC2SPacket;
 import net.minecraft.registry.Registries;
@@ -79,6 +80,8 @@ public class AutoSwap extends ModuleStructure {
       .setValue(false);
    public final BooleanSetting restoreAfterRelocate = new BooleanSetting("Возврат после перекидывания", "Если предмет был в основной части инвентаря — вернуть содержимое хотбара на место (ванильным 1-9 пакетом)")
       .setValue(true);
+   public final BooleanSetting maskInventory = new BooleanSetting("Маскировка ClickSlot", "После каждого SWAP-клика шлём CloseHandledScreen(0). Обходит InventoryMove-проверки (Grim/Polar/Spacetime). На сервере это no-op для плеер-инвентаря.")
+      .setValue(true);
 
    public final TextSetting slot1 = new TextSetting("Предмет 1", "ID или алиас");
    public final ButtonSetting pick1 = new ButtonSetting("Выбрать 1", "Открыть инвентарь")
@@ -95,10 +98,8 @@ public class AutoSwap extends ModuleStructure {
    private Item targetItem = null;
    private int swapPhase = PHASE_IDLE;
    private int phaseTimer = 0;
-   private int swapHotbarSlot = -1;     // хотбар 0..8, куда «скроллим» для F-трика
-   private int originalSlot = -1;       // хотбар 0..8, в который возвращаемся
-   // Для restoreAfterRelocate: если перекидывали предмет из основного инвентаря — помним откуда взяли.
-   // -1 = перекидывания не было; >= 0 = screen-handler slotId 9..35.
+   private int swapHotbarSlot = -1;
+   private int originalSlot = -1;
    private int relocateFromInvSlot = -1;
    private boolean sentSprintStop = false;
    private long lastSwapMs = 0L;
@@ -129,6 +130,7 @@ public class AutoSwap extends ModuleStructure {
          this.stopMovement,
          this.lockRotation,
          this.restoreAfterRelocate,
+         this.maskInventory,
          this.slot1, this.pick1,
          this.slot2, this.pick2,
          this.slot3, this.pick3
@@ -263,7 +265,6 @@ public class AutoSwap extends ModuleStructure {
          if (this.originalSlot != this.swapHotbarSlot && this.originalSlot >= 0) {
             this.sendScrollPacket(this.originalSlot);
          }
-         // Если была релокация из инвентаря — вернём в исходный слот ванильным 1-9 пакетом.
          if (this.relocateFromInvSlot != -1 && this.restoreAfterRelocate.isValue()) {
             this.sendVanillaSwapClick(this.relocateFromInvSlot, this.swapHotbarSlot);
          }
@@ -281,7 +282,7 @@ public class AutoSwap extends ModuleStructure {
       int invSlot = -1;
       if (hotbar == -1) {
          invSlot = this.findInvSlotForItem(item);
-         if (invSlot == -1) return; // предмета нигде нет
+         if (invSlot == -1) return;
       }
 
       this.lastSwapMs = now;
@@ -289,11 +290,9 @@ public class AutoSwap extends ModuleStructure {
       this.originalSlot = this.getSelectedSlot();
       this.relocateFromInvSlot = -1;
 
-      // Если предмет в инвентаре — сначала перекинем в хотбар ванильным 1-9 пакетом.
       if (hotbar == -1) {
          int stash = this.findEmptyHotbarSlot();
          if (stash == -1) stash = this.originalSlot >= 0 ? this.originalSlot : 0;
-         // ClickSlot формы 1-9 hotkey: button = stash (0..8), mode = SWAP.
          this.sendVanillaSwapClick(invSlot, stash);
          this.relocateFromInvSlot = invSlot;
          hotbar = stash;
@@ -346,8 +345,6 @@ public class AutoSwap extends ModuleStructure {
       if (this.lockRotation.isValue()) this.refreshRotationLock();
    }
 
-   // === Ванильные пакеты ===
-
    private void sendScrollPacket(int hotbarSlot) {
       if (mc.getNetworkHandler() == null) return;
       mc.getNetworkHandler().sendPacket(new UpdateSelectedSlotC2SPacket(hotbarSlot));
@@ -362,9 +359,10 @@ public class AutoSwap extends ModuleStructure {
    }
 
    /**
-    * Ванильный ClickSlot формы «цифры 1-9 над слотом в инвентаре»:
-    * свопит слот в ScreenHandler’е с указанным хотбар-слотом. interactionManager.clickSlot
-    * сам обновляет локальный ScreenHandler/PlayerInventory и шлёт ClickSlotC2SPacket.
+    * Ванильный ClickSlot формы «цифры 1-9 над слотом в инвентаре».
+    * После пакета — маскирующий CloseHandledScreen(0): сбрасывает эвристику AC
+    * «игрок двигается с открытым инвентарём». Известный обход Grim/Polar/Spacetime
+    * (GrimAnticheat Issue #1829). Сервер игнорирует CloseHandledScreen для syncId=0.
     */
    private void sendVanillaSwapClick(int screenSlotId, int hotbarButton) {
       if (mc.player == null || mc.interactionManager == null) return;
@@ -375,6 +373,15 @@ public class AutoSwap extends ModuleStructure {
          SlotActionType.SWAP,
          mc.player
       );
+      if (this.maskInventory.isValue()) {
+         this.sendInventoryCloseMask();
+      }
+   }
+
+   private void sendInventoryCloseMask() {
+      if (mc.getNetworkHandler() == null || mc.player == null) return;
+      mc.getNetworkHandler().sendPacket(
+         new CloseHandledScreenC2SPacket(mc.player.playerScreenHandler.syncId));
    }
 
    private void mirrorOffhandSwap(int hotbarSlot) {
@@ -401,9 +408,6 @@ public class AutoSwap extends ModuleStructure {
       return -1;
    }
 
-   // Ищем предмет в основной части инвентаря.
-   // Возвращаем screen-handler slotId (9..35) — именно эти индексы нужны для ClickSlot.
-   // Для main inventory они совпадают с PlayerInventory.getStack индексами.
    private int findInvSlotForItem(Item item) {
       if (mc.player == null || item == null || item == Items.AIR) return -1;
       PlayerInventory inv = mc.player.getInventory();
@@ -418,12 +422,10 @@ public class AutoSwap extends ModuleStructure {
       if (mc.player == null) return -1;
       PlayerInventory inv = mc.player.getInventory();
       int sel = inv.getSelectedSlot();
-      // Сначала ищем пустой слот НЕ в руке (чтобы не путать HUD).
       for (int i = 8; i >= 0; i--) {
          if (i == sel) continue;
          if (inv.getStack(i).isEmpty()) return i;
       }
-      // Если вне выбранного нет пустых — пусть будет выбранный, если он пустой.
       if (inv.getStack(sel).isEmpty()) return sel;
       return -1;
    }
