@@ -20,16 +20,18 @@ import java.util.concurrent.ThreadLocalRandom;
 /**
  * Triggerbot: auto-attacks targeted living entities.
  *
- * W-release mechanic (before EVERY hit):
- *   1. Attack decision made -> save target, suppress W.
- *      preAttackCountdown = random(1..2) ticks -- W stays released this long before hit.
- *   2. While preAttackCountdown > 0: keep W suppressed, tick down.
- *   3. preAttackCountdown == 0: doAttack(), then suppress W for postAttackCountdown
- *      = random(0..2) ticks -- W is not instantly re-pressed after hit.
+ * W-release mechanic (before and after EVERY hit) — millisecond precision:
  *
- * BUG FIX: the finally block previously overrode SUPPRESS_FORWARD=true set inside
- *   queueAttack() back to false on the same tick. Fixed by checking pendingTarget != null
- *   or postAttackCountdown > 0 in the finally expression.
+ *   1. Attack decision made -> save target, generate random pre-delay [W_PRE_MIN..W_PRE_MAX] ms.
+ *      W is suppressed immediately. preAttackDeadline = now + random(1..50) ms.
+ *   2. Each tick: if now < preAttackDeadline -> keep W suppressed, return.
+ *   3. Deadline reached: doAttack(), generate post-delay [0..W_POST_MAX] ms.
+ *      W stays suppressed until postAttackDeadline.
+ *   4. After postAttackDeadline: W is restored.
+ *
+ * Timings:
+ *   Pre-attack  W release: 1 .. 50 ms (random)
+ *   Post-attack W release: 1 .. 50 ms (random)
  */
 public class Triggerbot extends ModuleStructure {
 
@@ -41,15 +43,16 @@ public class Triggerbot extends ModuleStructure {
     private static final boolean DEBUG_LOGS = Boolean.getBoolean("rich.debug.triggerbot");
     private static final long DEBUG_LOG_MIN_GAP_MS = 1000L;
 
-    // How many ticks W is released BEFORE the hit fires (1..W_PRE_MAX)
-    private static final int W_PRE_MAX  = 2;
-    // How many ticks W stays released AFTER the hit (0..W_POST_MAX)
-    private static final int W_POST_MAX = 2;
+    // W-release timing in milliseconds
+    private static final int W_PRE_MIN  = 1;   // min ms W released before hit
+    private static final int W_PRE_MAX  = 50;  // max ms W released before hit
+    private static final int W_POST_MIN = 1;   // min ms W released after hit
+    private static final int W_POST_MAX = 50;  // max ms W released after hit
 
-    private Entity  pendingTarget        = null;
-    private int     preAttackCountdown   = 0;   // ticks to wait before firing
-    private int     postAttackCountdown  = 0;   // ticks to keep W suppressed after hit
-    private boolean pendingWasForward    = false;
+    private Entity  pendingTarget         = null;
+    private long    preAttackDeadline     = 0L; // System.currentTimeMillis() target
+    private long    postAttackDeadline    = 0L;
+    private boolean pendingWasForward     = false;
 
     private String lastDiag = "";
     private long lastDiagLogMs = 0L;
@@ -80,31 +83,27 @@ public class Triggerbot extends ModuleStructure {
     @Override
     public void deactivate() {
         super.deactivate();
-        SUPPRESS_FORWARD     = false;
-        SUPPRESS_SPRINT      = false;
-        SUPPRESS_JUMP        = false;
-        pendingTarget        = null;
-        preAttackCountdown   = 0;
-        postAttackCountdown  = 0;
-        ticksOutOfWater      = 0;
-        ticksOnGround        = 0;
-        lastDiag             = "";
-        lastDiagLogMs        = 0L;
+        SUPPRESS_FORWARD   = false;
+        SUPPRESS_SPRINT    = false;
+        SUPPRESS_JUMP      = false;
+        pendingTarget      = null;
+        preAttackDeadline  = 0L;
+        postAttackDeadline = 0L;
+        ticksOutOfWater    = 0;
+        ticksOnGround      = 0;
+        lastDiag           = "";
+        lastDiagLogMs      = 0L;
     }
 
     @EventHandler
     public void onTick(TickEvent event) {
-        // These are set to true inside the tick body when needed.
-        // The finally block writes them to the volatile flags.
-        // CRITICAL: pendingTarget != null and postAttackCountdown > 0 must also
-        // propagate suppression -- see finally block.
         boolean wantSuppressForward = false;
         boolean wantSuppressJump    = false;
         try {
             if (mc.player == null || mc.world == null || mc.currentScreen != null) {
-                ticksOnGround       = 0;
-                pendingTarget       = null;
-                postAttackCountdown = 0;
+                ticksOnGround      = 0;
+                pendingTarget      = null;
+                postAttackDeadline = 0L;
                 return;
             }
 
@@ -114,41 +113,39 @@ public class Triggerbot extends ModuleStructure {
             if (mc.player.isOnGround()) { if (ticksOnGround < 100) ticksOnGround++; }
             else { ticksOnGround = 0; }
 
-            // --- Post-attack W delay (W stays released for a bit after hitting) ---
-            if (postAttackCountdown > 0) {
-                postAttackCountdown--;
+            long now = System.currentTimeMillis();
+
+            // --- Post-attack W delay ---
+            if (postAttackDeadline > 0L && now < postAttackDeadline) {
                 wantSuppressForward = true;
-                diag("POST_W", "post-attack W suppress, left=" + postAttackCountdown);
-                // Don't return -- still process input; just keep W suppressed this tick.
-                // Fall through to normal detection (charge won't be ready anyway).
+                diag("POST_W", "post-attack W suppress, left=" + (postAttackDeadline - now) + "ms");
+                // don't return — charge recheck is harmless, nothing will trigger
             }
 
-            // --- Pending pre-attack: W released, counting down before hit ---
+            // --- Pre-attack pending: W is released, waiting for deadline ---
             if (pendingTarget != null) {
                 if (!isEntityValid(pendingTarget)) {
-                    pendingTarget      = null;
-                    preAttackCountdown = 0;
-                    // postAttackCountdown stays, keeps W released
+                    pendingTarget     = null;
+                    preAttackDeadline = 0L;
                     return;
                 }
-                if (preAttackCountdown > 0) {
-                    preAttackCountdown--;
+                if (now < preAttackDeadline) {
+                    // Still waiting — keep W suppressed
                     wantSuppressForward = true;
-                    diag("W_WAIT", "pre-attack W suppress, left=" + preAttackCountdown);
+                    diag("W_WAIT", "pre W suppress, left=" + (preAttackDeadline - now) + "ms");
                     return;
                 }
-                // countdown == 0: fire the hit
-                Entity t         = pendingTarget;
+                // Deadline reached — fire the hit
+                Entity t          = pendingTarget;
                 boolean wasForward = pendingWasForward;
-                pendingTarget      = null;
-                preAttackCountdown = 0;
-                // Randomize how long W stays OFF after the hit (0..W_POST_MAX ticks)
-                postAttackCountdown = ThreadLocalRandom.current().nextInt(0, W_POST_MAX + 1);
-                doAttack(t, wasForward, postAttackCountdown == 0);
-                diag("HIT_FIRE", "HIT fire fw=" + wasForward + " post=" + postAttackCountdown);
-                if (postAttackCountdown > 0) {
-                    wantSuppressForward = true;
-                }
+                pendingTarget     = null;
+                preAttackDeadline = 0L;
+                // Random post-attack W delay
+                int postMs        = ThreadLocalRandom.current().nextInt(W_POST_MIN, W_POST_MAX + 1);
+                postAttackDeadline = now + postMs;
+                wantSuppressForward = true; // keep W off this tick too
+                doAttack(t, wasForward);
+                diag("HIT_FIRE", "HIT fire fw=" + wasForward + " post=" + postMs + "ms");
                 return;
             }
 
@@ -208,11 +205,6 @@ public class Triggerbot extends ModuleStructure {
             }
 
         } finally {
-            // FIX: pendingTarget != null means we just queued this tick (queue tick also
-            // needs W suppressed, but queueAttack sets the flag BEFORE finally runs).
-            // The return value of queueAttack() is propagated through wantSuppressForward.
-            // postAttackCountdown was already decremented above, so if it was > 0 on entry
-            // we already set wantSuppressForward = true there.
             SUPPRESS_FORWARD = wantSuppressForward;
             SUPPRESS_SPRINT  = false;
             SUPPRESS_JUMP    = wantSuppressJump;
@@ -220,28 +212,24 @@ public class Triggerbot extends ModuleStructure {
     }
 
     /**
-     * Queues an attack with a random pre-attack W-release countdown (1..W_PRE_MAX ticks).
-     * Returns true so the caller can set wantSuppressForward = true in the same tick.
+     * Queues an attack: generates a random pre-attack delay [W_PRE_MIN..W_PRE_MAX] ms.
+     * Returns true so the caller sets wantSuppressForward = true on the queue tick.
      */
     private boolean queueAttack(Entity target, String reason) {
-        pendingTarget      = target;
-        pendingWasForward  = mc.options.forwardKey.isPressed();
-        preAttackCountdown = ThreadLocalRandom.current().nextInt(1, W_PRE_MAX + 1); // 1..2
-        diag("Q_" + reason, reason + " queued, pre=" + preAttackCountdown + " fw=" + pendingWasForward);
-        return true; // caller sets wantSuppressForward
+        pendingTarget     = target;
+        pendingWasForward = mc.options.forwardKey.isPressed();
+        int preMs         = ThreadLocalRandom.current().nextInt(W_PRE_MIN, W_PRE_MAX + 1);
+        preAttackDeadline = System.currentTimeMillis() + preMs;
+        diag("Q_" + reason, reason + " queued, pre=" + preMs + "ms fw=" + pendingWasForward);
+        return true;
     }
 
-    /**
-     * @param restoreSprint true if W should be re-enabled immediately after hit.
-     *                      False means postAttackCountdown will handle it.
-     */
-    private void doAttack(Entity target, boolean wasForward, boolean restoreSprint) {
+    private void doAttack(Entity target, boolean wasForward) {
         mc.player.setSprinting(false);
         mc.interactionManager.attackEntity(mc.player, target);
         mc.player.swingHand(Hand.MAIN_HAND);
-        if (restoreSprint && wasForward && mc.options.forwardKey.isPressed()) {
-            mc.player.setSprinting(true);
-        }
+        // Sprint will be restored after postAttackDeadline expires naturally
+        // (SUPPRESS_FORWARD returns to false, player input flows through normally)
     }
 
     private boolean isEntityValid(Entity e) {
