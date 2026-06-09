@@ -1,6 +1,5 @@
 package rich.modules.impl.combat;
 
-import java.lang.reflect.Field;
 import java.util.Random;
 import java.util.concurrent.ThreadLocalRandom;
 import net.minecraft.client.network.ClientPlayerEntity;
@@ -19,7 +18,8 @@ import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.RaycastContext;
 import rich.events.api.EventHandler;
 import rich.events.impl.TickEvent;
-import rich.events.impl.WorldRenderEvent;
+import rich.modules.impl.combat.aura.Angle;
+import rich.modules.impl.combat.aura.AngleConnection;
 import rich.modules.module.ModuleStructure;
 import rich.modules.module.category.ModuleCategory;
 import rich.modules.module.setting.implement.BooleanSetting;
@@ -27,12 +27,12 @@ import rich.modules.module.setting.implement.SliderSettings;
 import rich.util.c;
 
 /**
- * KillAura — TestSmooth-style rotation.
+ * KillAuraSpooky — TestSmooth-style rotation.
  *
- * Silent (1-е лицо не движется):
- *   onTick         → пакет уходит с curYaw
- *   onWorldRender  → до рендера восстанавливаем yaw=realYaw + prevYaw=realYaw через рефлексию
- *                    (prevYaw убирает артефакт интерполяции lerp(prevYaw,yaw,partial))
+ * Silent работает через AngleConnection.INSTANCE:
+ *   ClientPlayerEntityMixin.hookSilentRotationYaw/Pitch (@ModifyExpressionValue)
+ *   перехватывает getYaw()/getPitch() только внутри sendMovementPackets(),
+ *   НЕ трогая player.yaw — камера всегда показывает реальный yaw мышки.
  */
 public class KillAuraSpooky extends ModuleStructure {
 
@@ -43,10 +43,12 @@ public class KillAuraSpooky extends ModuleStructure {
 
     private final Random rng = new Random();
 
+    // Текущий прицельный угол (отправляется в пакете при silentRot)
     private float curYaw;
     private float curPitch;
     private boolean hasRotation = false;
 
+    // Реальный yaw игрока (от мышки) — для расчёта FOV/аима
     private float realYaw;
     private float realPitch;
 
@@ -68,71 +70,6 @@ public class KillAuraSpooky extends ModuleStructure {
     private static final float GROUND_ATTACK_CHARGE = 0.93F;
     private static final int   GROUND_COMBO_DELAY   = 2;
 
-    // ── Рефлексия для prevYaw/prevPitch ──────────────────────────────────────────
-    private static Field fieldPrevYaw   = null;
-    private static Field fieldPrevPitch = null;
-    private static boolean reflInitDone = false;
-
-    private static void initReflection() {
-        if (reflInitDone) return;
-        reflInitDone = true;
-        // Возможные Yarn-имена полей для разных версий
-        String[] yawNames   = { "prevYaw",   "lastYaw",   "o",  "yawO",   "field_6360", "prevBodyYaw" };
-        String[] pitchNames = { "prevPitch", "lastPitch", "n",  "pitchO", "field_6361", "prevHeadPitch" };
-        Class<?> cls = Entity.class;
-        for (String name : yawNames) {
-            Field f = findField(cls, name);
-            if (f != null && f.getType() == float.class) { fieldPrevYaw = f; break; }
-        }
-        for (String name : pitchNames) {
-            Field f = findField(cls, name);
-            if (f != null && f.getType() == float.class) { fieldPrevPitch = f; break; }
-        }
-        // Если не нашли по имени — берём float-поля по позиции
-        if (fieldPrevYaw == null || fieldPrevPitch == null) {
-            java.util.List<Field> floats = new java.util.ArrayList<>();
-            Class<?> c = cls;
-            while (c != null) {
-                for (Field f : c.getDeclaredFields()) {
-                    if (f.getType() == float.class) {
-                        f.setAccessible(true);
-                        floats.add(f);
-                    }
-                }
-                c = c.getSuperclass();
-            }
-            // yaw~[0], prevYaw~[1], pitch~[2], prevPitch~[3]
-            if (fieldPrevYaw   == null && floats.size() >= 2) fieldPrevYaw   = floats.get(1);
-            if (fieldPrevPitch == null && floats.size() >= 4) fieldPrevPitch = floats.get(3);
-        }
-    }
-
-    private static Field findField(Class<?> cls, String name) {
-        Class<?> c = cls;
-        while (c != null) {
-            try {
-                Field f = c.getDeclaredField(name);
-                f.setAccessible(true);
-                return f;
-            } catch (NoSuchFieldException ignored) {}
-            c = c.getSuperclass();
-        }
-        return null;
-    }
-
-    private static void setPrevYaw(Entity e, float val) {
-        initReflection();
-        if (fieldPrevYaw == null) return;
-        try { fieldPrevYaw.set(e, val); } catch (Exception ignored) {}
-    }
-
-    private static void setPrevPitch(Entity e, float val) {
-        initReflection();
-        if (fieldPrevPitch == null) return;
-        try { fieldPrevPitch.set(e, val); } catch (Exception ignored) {}
-    }
-    // ─────────────────────────────────────────────────────────────
-
     public KillAuraSpooky() {
         super("KillAura", "SpookyTime kill-aura (TestSmooth)", ModuleCategory.UTILITIES);
         this.settings(range, fovSetting, onlySword, silentRot);
@@ -146,6 +83,8 @@ public class KillAuraSpooky extends ModuleStructure {
     public void deactivate() {
         super.deactivate();
         Triggerbot.SUPPRESS_FORWARD = false;
+        // Очищаем угол, чтобы пакеты снова слали реальный yaw
+        AngleConnection.INSTANCE.setRotation(null);
         fullReset();
     }
 
@@ -154,11 +93,13 @@ public class KillAuraSpooky extends ModuleStructure {
         boolean wantSuppress = false;
         try {
             if (mc.player == null || mc.world == null || mc.currentScreen != null) {
+                AngleConnection.INSTANCE.setRotation(null);
                 fullReset();
                 return;
             }
             ClientPlayerEntity player = mc.player;
 
+            // Реальный yaw — то, куда смотрит игрок мышкой (не трогаем!)
             realYaw   = player.getYaw();
             realPitch = player.getPitch();
 
@@ -172,7 +113,10 @@ public class KillAuraSpooky extends ModuleStructure {
                 }
                 if (System.currentTimeMillis() < preAttackDeadline) {
                     wantSuppress = true;
-                    if (hasRotation) setPacketRotation(player, curYaw, curPitch);
+                    // Удерживаем прицельный угол в пакете
+                    if (hasRotation && silentRot.isValue()) {
+                        AngleConnection.INSTANCE.setRotation(new Angle(curYaw, curPitch));
+                    }
                     return;
                 }
                 Entity t = pendingAttack;
@@ -187,6 +131,8 @@ public class KillAuraSpooky extends ModuleStructure {
             if (target == null) {
                 lockedTarget = null;
                 hasRotation  = false;
+                // Нет цели — пакет шлёт реальный yaw
+                AngleConnection.INSTANCE.setRotation(null);
                 return;
             }
             lockedTarget = target;
@@ -197,7 +143,18 @@ public class KillAuraSpooky extends ModuleStructure {
             curPitch = next[1];
             hasRotation = true;
 
-            setPacketRotation(player, curYaw, curPitch);
+            // Спуфим пакет через AngleConnection (не трогаем player.yaw!)
+            if (silentRot.isValue()) {
+                AngleConnection.INSTANCE.setRotation(new Angle(curYaw, curPitch));
+            } else {
+                // Не silent — двигаем реальную камеру
+                player.setYaw(curYaw);
+                player.setPitch(curPitch);
+                player.headYaw = curYaw;
+                player.bodyYaw = curYaw;
+                AngleConnection.INSTANCE.setRotation(null);
+            }
+
             tickAttack(player, target);
 
         } finally {
@@ -205,23 +162,9 @@ public class KillAuraSpooky extends ModuleStructure {
         }
     }
 
-    @EventHandler
-    public void onWorldRender(WorldRenderEvent event) {
-        if (!silentRot.isValue()) return;
-        if (mc.player == null || !this.isState()) return;
-        ClientPlayerEntity player = mc.player;
-        setPrevYaw(player,   realYaw);
-        setPrevPitch(player, realPitch);
-        player.setYaw(realYaw);
-        player.setPitch(realPitch);
-    }
-
-    private void setPacketRotation(ClientPlayerEntity player, float yaw, float pitch) {
-        player.setYaw(yaw);
-        player.setPitch(pitch);
-        player.headYaw = yaw;
-        player.bodyYaw = yaw;
-    }
+    // onWorldRender УДАЛЁН — AngleConnection не трогает player.yaw,
+    // поэтому камера всегда показывает реальный угол мышки.
+    // Призрак и блокировка камеры исчезают автоматически.
 
     private float[] testSmoothRotate(ClientPlayerEntity player, Vec3d aimPoint) {
         Vec3d eye = player.getEyePos();
