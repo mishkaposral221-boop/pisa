@@ -2,6 +2,7 @@
   "required": true,
   "package": "rich.mixin",
   "compatibilityLevel": "JAVA_21",
+  "plugin": "rich.mixin.RichSodiumAwareMixinPlugin",
   "client": [
     "AccessibilityOnboardingScreenMixin",
     "AnimationsMixin",
@@ -59,7 +60,8 @@
     "TitleScreenMixin",
     "WindowMixin",
     "WorldRendererFrameGraphAccountingMixin",
-    "WorldRendererMixin"
+    "WorldRendererMixin",
+    "WorldRendererChunkAnimatorMixin"
   ],
   "injectors": {
     "defaultRequire": 1

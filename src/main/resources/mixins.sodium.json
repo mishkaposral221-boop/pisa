@@ -2,9 +2,7 @@
   "required": false,
   "package": "rich.mixin",
   "compatibilityLevel": "JAVA_21",
-  "client": [
-    "WorldRendererMixin"
-  ],
+  "client": [],
   "injectors": {
     "defaultRequire": 0
   }

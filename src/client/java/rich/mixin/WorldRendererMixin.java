@@ -1,7 +1,6 @@
 package rich.mixin;
 
 import com.mojang.blaze3d.buffers.GpuBufferSlice;
-import net.minecraft.client.gl.DynamicUniforms.ChunkSectionsValue;
 import net.minecraft.client.option.CloudRenderMode;
 import net.minecraft.client.render.Camera;
 import net.minecraft.client.render.FrameGraphBuilder;
@@ -28,39 +27,21 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.ModifyArg;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 import rich.IMinecraft;
-import rich.modules.impl.render.ChunkAnimator;
 import rich.modules.impl.render.NoRender;
 import rich.util.profiler.FrameProfiler;
 
+// ВАЖНО: этот миксин должен оставаться совместимым с Sodium.
+// Все инъекции здесь используют только устойчивые точки HEAD/RETURN и require = 0,
+// поэтому даже если Sodium перепишет/удалит какой-то метод рендера, инъекция будет
+// просто пропущена, а не уронит игру.
+//
+// Хрупкая инъекция @ModifyArg по @At("INVOKE") (анимация секций чанков) вынесена
+// в отдельный WorldRendererChunkAnimatorMixin, который отключается при наличии Sodium.
 @Mixin(WorldRenderer.class)
 public class WorldRendererMixin implements IMinecraft {
-   @ModifyArg(method = "renderBlockLayers", at = @At(value = "INVOKE", target = "Ljava/util/List;add(Ljava/lang/Object;)Z", ordinal = 0), index = 0, require = 0)
-   private Object modifyChunkSectionsValue(Object var1) {
-      if (var1 instanceof net.minecraft.client.gl.DynamicUniforms.ChunkSectionsValue var2) {
-         ChunkAnimator var3 = ChunkAnimator.getInstance();
-         if (var3 != null && var3.isState()) {
-            float var4 = var2.visibility();
-            if (var4 >= 1.0F) {
-               return var1;
-            }
-
-            int var5 = (int)((1.0F - var4) * 100.0F);
-            if (var5 == 0) {
-               return var1;
-            }
-
-            int var6 = var2.y() - var5;
-            return new net.minecraft.client.gl.DynamicUniforms.ChunkSectionsValue(var2.modelView(), var2.x(), var6, var2.z(), var2.visibility(), var2.textureAtlasWidth(), var2.textureAtlasHeight());
-         }
-      }
-
-      return var1;
-   }
-
    @Inject(method = "hasBlindnessOrDarkness", at = @At("HEAD"), cancellable = true, require = 0)
    private void onHasBlindnessOrDarkness(Camera var1, CallbackInfoReturnable<Boolean> var2) {
       NoRender var3 = NoRender.getInstance();
