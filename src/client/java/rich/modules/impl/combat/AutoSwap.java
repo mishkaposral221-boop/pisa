@@ -82,12 +82,14 @@ public class AutoSwap extends ModuleStructure {
       .setValue(2.0F).range(0, 10)
       .visible(() -> this.swapMode.isSelected("Legit"));
    public final SliderSettings relocateHaltTicks = new SliderSettings("Стоп перед свапом", "Тиков стационарного состояния перед ЛЮБЫМ свапом. Обязательно при ходьбе.")
-      .setValue(6.0F).range(2, 15);
+      .setValue(8.0F).range(2, 15);
    public final SliderSettings maskDelay = new SliderSettings("Задержка маски", "Тиков между ClickSlot и CloseHandledScreen-маской. Должен быть >=2, иначе multiaction.")
       .setValue(3.0F).range(2, 10);
    public final SliderSettings cooldown = new SliderSettings("Cooldown", "Минимальная пауза между свапами в миллисекундах")
       .setValue(1000.0F).range(0, 3000);
    public final BooleanSetting stopMovement = new BooleanSetting("Остановка", "Принудительно останавливать игрока во время свапа")
+      .setValue(true);
+   public final BooleanSetting positionLock = new BooleanSetting("Жёсткая фиксация позиции", "ЖЁСТКО возвращает игрока в сохранённые X/Z каждый тик во время свапа. Гарантирует нулевое смещение на сервере. Обязательно против MultiActions.")
       .setValue(true);
    public final BooleanSetting lockRotation = new BooleanSetting("Lock rotation", "Замораживать поворот головы во время свапа")
       .setValue(false);
@@ -124,6 +126,12 @@ public class AutoSwap extends ModuleStructure {
    /** Тиков до отправки отложенной CloseHandledScreen-маски. -1 = ничего не запланировано. */
    private int pendingMaskTicks = -1;
 
+   /** Сохранённая X-координата для жёсткой фиксации. NaN = не активна. */
+   private double lockX = Double.NaN;
+   private double lockY = Double.NaN;
+   private double lockZ = Double.NaN;
+   private boolean posLockActive = false;
+
    private boolean wheelOpen = false;
    private boolean cursorUnlocked = false;
    private int lastHover = -1;
@@ -150,6 +158,7 @@ public class AutoSwap extends ModuleStructure {
          this.maskDelay,
          this.cooldown,
          this.stopMovement,
+         this.positionLock,
          this.lockRotation,
          this.restoreAfterRelocate,
          this.maskInventory,
@@ -372,6 +381,18 @@ public class AutoSwap extends ModuleStructure {
       this.relocateFromInvSlot = -1;
       this.sentSprintStop = false;
 
+      // === ЖЁСТКАЯ ФИКСАЦИЯ ПОЗИЦИИ ===
+      // Сохраняем X/Y/Z в момент начала свапа. Дальше каждый тик до finishSwap
+      // позиция игрока будет принудительно возвращаться к этим координатам.
+      // Это гарантирует, что сервер видит игрока как полностью стационарного
+      // независимо от того, прошла ли через какие-то лазейки скорость/инпут.
+      if (this.positionLock.isValue()) {
+         this.lockX = mc.player.getX();
+         this.lockY = mc.player.getY();
+         this.lockZ = mc.player.getZ();
+         this.posLockActive = true;
+      }
+
       if (this.lockRotation.isValue()) this.refreshRotationLock();
       SUPPRESS_SPRINT = this.stopMovement.isValue() || this.antiInventoryMove.isValue();
       SUPPRESS_INPUT = SUPPRESS_SPRINT;
@@ -424,6 +445,10 @@ public class AutoSwap extends ModuleStructure {
       this.sentSprintStop = false;
       SUPPRESS_SPRINT = false;
       SUPPRESS_INPUT = false;
+      this.posLockActive = false;
+      this.lockX = Double.NaN;
+      this.lockY = Double.NaN;
+      this.lockZ = Double.NaN;
       this.postSwapPauseTicks = POST_SWAP_PAUSE_TICKS;
       if (this.lockRotation.isValue()) this.refreshRotationLock();
    }
@@ -565,12 +590,27 @@ public class AutoSwap extends ModuleStructure {
    }
 
    private void haltMovement() {
-      if (mc.player != null) {
-         mc.player.setSprinting(false);
-         mc.player.setVelocity(0.0, mc.player.getVelocity().y, 0.0);
-         mc.player.forwardSpeed = 0.0F;
-         mc.player.sidewaysSpeed = 0.0F;
-         mc.player.upwardSpeed = 0.0F;
+      if (mc.player == null) return;
+      mc.player.setSprinting(false);
+      mc.player.setVelocity(0.0, mc.player.getVelocity().y, 0.0);
+      mc.player.forwardSpeed = 0.0F;
+      mc.player.sidewaysSpeed = 0.0F;
+      mc.player.upwardSpeed = 0.0F;
+
+      // === ЖЁСТКАЯ ФИКСАЦИЯ XZ ===
+      // Откатываем игрока на сохранённые координаты КАЖДЫЙ тик.
+      // Y оставляем живой (гравитация/прыжки работают), но XZ строго заблокированы.
+      // Сервер при отправке PlayerMoveC2SPacket получит зафиксированную позицию
+      // и не сможет залогировать «движение во время ClickSlot».
+      if (this.posLockActive && !Double.isNaN(this.lockX) && !Double.isNaN(this.lockZ)) {
+         double curY = mc.player.getY();
+         mc.player.setPosition(this.lockX, curY, this.lockZ);
+         mc.player.lastX = this.lockX;
+         mc.player.lastZ = this.lockZ;
+         mc.player.prevX = this.lockX;
+         mc.player.prevZ = this.lockZ;
+         mc.player.lastRenderX = this.lockX;
+         mc.player.lastRenderZ = this.lockZ;
       }
    }
 
@@ -585,6 +625,10 @@ public class AutoSwap extends ModuleStructure {
       this.pendingRelocateStash = -1;
       this.sentSprintStop = false;
       this.pendingMaskTicks = -1;
+      this.posLockActive = false;
+      this.lockX = Double.NaN;
+      this.lockY = Double.NaN;
+      this.lockZ = Double.NaN;
       SUPPRESS_SPRINT = false;
       SUPPRESS_INPUT = false;
       if (this.postSwapPauseTicks == 0) {
