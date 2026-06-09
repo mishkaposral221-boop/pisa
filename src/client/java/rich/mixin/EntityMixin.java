@@ -19,7 +19,6 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 import rich.IMinecraft;
 import rich.events.api.EventManager;
 import rich.events.impl.BoundingBoxControlEvent;
-import rich.events.impl.MoveEvent;
 import rich.events.impl.PlayerVelocityStrafeEvent;
 import rich.modules.impl.combat.aura.AngleConnection;
 
@@ -44,23 +43,6 @@ public abstract class EntityMixin implements IMinecraft {
       BoundingBoxControlEvent var2 = new BoundingBoxControlEvent(this.boundingBox, (Entity)(Object)this);
       EventManager.callEvent(var2);
       var1.setReturnValue(var2.getBox());
-   }
-
-   // Хук движения локального игрока.
-   //
-   // Раньше это делалось через @Inject в ClientPlayerEntity#move, но в 1.21.11
-   // ClientPlayerEntity больше не переопределяет move(...), поэтому таргет не находился.
-   // Entity#move(MovementType, Vec3d) существует ВСЕГДА и Sodium его не трогает,
-   // поэтому @ModifyVariable по аргументу-вектору движения — устойчивая точка.
-   // Фильтруемся по локальному игроку, чтобы не затрагивать остальные сущности.
-   @ModifyVariable(method = "move", at = @At("HEAD"), ordinal = 0, argsOnly = true)
-   private Vec3d rich$onClientPlayerMove(Vec3d movement) {
-      if ((Object)this == mc.player) {
-         MoveEvent event = new MoveEvent(movement);
-         EventManager.callEvent(event);
-         return event.getMovement();
-      }
-      return movement;
    }
 
    @Redirect(

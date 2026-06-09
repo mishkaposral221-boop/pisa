@@ -79,8 +79,6 @@ public class Scissor {
                GL11.glDisable(3089);
                glScissorEnabled = false;
             }
-
-            invalidateCache();
          } else {
             int[] var0 = scissorStack.peek();
             applyScissor(var0[0], var0[1], var0[2], var0[3]);
@@ -98,11 +96,6 @@ public class Scissor {
          GL11.glDisable(3089);
          glScissorEnabled = false;
       }
-
-      invalidateCache();
-   }
-
-   private static void invalidateCache() {
       lastX = Integer.MIN_VALUE;
       lastY = Integer.MIN_VALUE;
       lastW = Integer.MIN_VALUE;
@@ -113,11 +106,6 @@ public class Scissor {
       if (!glScissorEnabled) {
          GL11.glEnable(3089);
          glScissorEnabled = true;
-         // The managed render backend (and Minecraft's own render passes) can
-         // change the GL scissor box while our scissor test is disabled. Our
-         // cached last* values are therefore stale whenever we re-enable, so we
-         // must force glScissor to be re-uploaded for the first box of a session.
-         invalidateCache();
       }
 
       if (x != lastX || y != lastY || w != lastW || h != lastH) {

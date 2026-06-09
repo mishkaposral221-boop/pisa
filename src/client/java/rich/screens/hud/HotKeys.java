@@ -122,45 +122,42 @@ public class HotKeys extends AbstractHudElement {
          }
 
          Scissor.enable(Render2D.scaleX(var7), Render2D.scaleY(var8), Render2D.scaleSize(this.getWidth()), Render2D.scaleSize(var34), 2.0F);
-
-         try {
-            long var38 = this.keysList.size();
-            String var18 = String.valueOf(var38);
-            float var19 = Fonts.BOLD.getWidth(var18, 6.0F);
-            float var20 = Fonts.BOLD.getWidth("Active:", 6.0F);
-            Render2D.gradientRect(var7 + this.getWidth() - var19 - var20 + 2.0F, var8 + 5.0F, 14.0F, 12.0F, ClientTheme.panelGradient(var36), 3.0F);
-            Fonts.HUD_ICONS.draw("g", var7 + this.getWidth() - var19 - var20 + 4.0F, var8 + 6.0F, 10.0F, new Color(165, 165, 165, var36).getRGB());
-            Fonts.BOLD.draw("Binds", var7 + 8.0F, var8 + 6.5F, 6.0F, new Color(255, 255, 255, var36).getRGB());
-            byte var21 = 23;
-            if (var10) {
-               String var22 = "Example Module";
-               String var23 = "[" + this.currentRandomKey + "]";
-               float var24 = Fonts.BOLD.getWidth(var23, 6.0F);
-               float var25 = var7 + this.getWidth() - var24 - 11.5F;
-               Render2D.gradientRect(var25, var8 + var21 - 2.0F, var24 + 4.0F, 9.0F, ClientTheme.panelGradient(var36), 3.0F);
-               Render2D.outline(var25, var8 + var21 - 2.0F, var24 + 4.0F, 9.0F, 0.05F, ClientTheme.outline(var36), 2.0F);
-               Render2D.rect(var7 + 8.0F, var8 + var21 - 1.0F, 1.0F, 7.0F, ClientTheme.textSub((int)(128.0F * var3)), 1.0F);
-               Fonts.BOLD.draw(var22, var7 + 13.0F, var8 + var21 - 1.5F, 6.0F, ClientTheme.text(var36));
-               Fonts.BOLD.draw(var23, var25 + 2.0F, var8 + var21 - 1.0F, 6.0F, ClientTheme.textSub(var36));
-            } else {
-               for (ModuleStructure var40 : this.keysList) {
-                  String var41 = "[" + KeyHelper.getKeyName(var40.getKey()) + "]";
-                  float var42 = Fonts.BOLD.getWidth(var41, 6.0F);
-                  int var26 = ClientTheme.text(var36);
-                  int var27 = ClientTheme.textSub(var36);
-                  int var28 = ClientTheme.textSub((int)(128.0F * var3));
-                  float var29 = var7 + this.getWidth() - var42 - 11.5F;
-                  Render2D.gradientRect(var29, var8 + var21 - 2.0F, var42 + 4.0F, 9.0F, ClientTheme.panelGradient(var36), 3.0F);
-                  Render2D.outline(var29, var8 + var21 - 2.0F, var42 + 4.0F, 9.0F, 0.05F, ClientTheme.outline(var36), 2.0F);
-                  Render2D.rect(var7 + 8.0F, var8 + var21 - 1.0F, 1.0F, 7.0F, var28, 1.0F);
-                  Fonts.BOLD.draw(var40.getName(), var7 + 13.0F, var8 + var21 - 1.5F, 6.0F, var26);
-                  Fonts.BOLD.draw(var41, var29 + 2.0F, var8 + var21 - 1.0F, 6.0F, var27);
-                  var21 += 11;
-               }
+         long var38 = this.keysList.size();
+         String var18 = String.valueOf(var38);
+         float var19 = Fonts.BOLD.getWidth(var18, 6.0F);
+         float var20 = Fonts.BOLD.getWidth("Active:", 6.0F);
+         Render2D.gradientRect(var7 + this.getWidth() - var19 - var20 + 2.0F, var8 + 5.0F, 14.0F, 12.0F, ClientTheme.panelGradient(var36), 3.0F);
+         Fonts.HUD_ICONS.draw("g", var7 + this.getWidth() - var19 - var20 + 4.0F, var8 + 6.0F, 10.0F, new Color(165, 165, 165, var36).getRGB());
+         Fonts.BOLD.draw("Binds", var7 + 8.0F, var8 + 6.5F, 6.0F, new Color(255, 255, 255, var36).getRGB());
+         byte var21 = 23;
+         if (var10) {
+            String var22 = "Example Module";
+            String var23 = "[" + this.currentRandomKey + "]";
+            float var24 = Fonts.BOLD.getWidth(var23, 6.0F);
+            float var25 = var7 + this.getWidth() - var24 - 11.5F;
+            Render2D.gradientRect(var25, var8 + var21 - 2.0F, var24 + 4.0F, 9.0F, ClientTheme.panelGradient(var36), 3.0F);
+            Render2D.outline(var25, var8 + var21 - 2.0F, var24 + 4.0F, 9.0F, 0.05F, ClientTheme.outline(var36), 2.0F);
+            Render2D.rect(var7 + 8.0F, var8 + var21 - 1.0F, 1.0F, 7.0F, ClientTheme.textSub((int)(128.0F * var3)), 1.0F);
+            Fonts.BOLD.draw(var22, var7 + 13.0F, var8 + var21 - 1.5F, 6.0F, ClientTheme.text(var36));
+            Fonts.BOLD.draw(var23, var25 + 2.0F, var8 + var21 - 1.0F, 6.0F, ClientTheme.textSub(var36));
+         } else {
+            for (ModuleStructure var40 : this.keysList) {
+               String var41 = "[" + KeyHelper.getKeyName(var40.getKey()) + "]";
+               float var42 = Fonts.BOLD.getWidth(var41, 6.0F);
+               int var26 = ClientTheme.text(var36);
+               int var27 = ClientTheme.textSub(var36);
+               int var28 = ClientTheme.textSub((int)(128.0F * var3));
+               float var29 = var7 + this.getWidth() - var42 - 11.5F;
+               Render2D.gradientRect(var29, var8 + var21 - 2.0F, var42 + 4.0F, 9.0F, ClientTheme.panelGradient(var36), 3.0F);
+               Render2D.outline(var29, var8 + var21 - 2.0F, var42 + 4.0F, 9.0F, 0.05F, ClientTheme.outline(var36), 2.0F);
+               Render2D.rect(var7 + 8.0F, var8 + var21 - 1.0F, 1.0F, 7.0F, var28, 1.0F);
+               Fonts.BOLD.draw(var40.getName(), var7 + 13.0F, var8 + var21 - 1.5F, 6.0F, var26);
+               Fonts.BOLD.draw(var41, var29 + 2.0F, var8 + var21 - 1.0F, 6.0F, var27);
+               var21 += 11;
             }
-         } finally {
-            Scissor.disable();
          }
+
+         Scissor.disable();
       }
    }
 }
