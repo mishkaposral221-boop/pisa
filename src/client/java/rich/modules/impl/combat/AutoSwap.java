@@ -38,6 +38,7 @@ public class AutoSwap extends ModuleStructure {
    private static final int PHASE_BEFORE_CLICK = 3;
    private static final int PHASE_CLOSING = 4;
    private static final int OFFHAND_BUTTON = 40;
+   private static final int OFFHAND_SLOT = 45;
 
    public final BindSetting wheelBind = new BindSetting("Бинд колеса", "Клавиша открытия колеса");
    public final SelectSetting swapMode = new SelectSetting("Режим свапа", "Legit открывает инвентарь, Packet свапает без экрана")
@@ -231,7 +232,7 @@ public class AutoSwap extends ModuleStructure {
             return;
          }
 
-         this.pressFOnSlot(this.pendingSwapSlot);
+         this.swapToOffhand(this.pendingSwapSlot);
          this.pendingSwapSlot = -1;
          this.swapPhase = PHASE_CLOSING;
          this.phaseTimer = this.delayTicks(this.closeDelay);
@@ -301,7 +302,7 @@ public class AutoSwap extends ModuleStructure {
       }
 
       if (this.swapMode.isSelected("Packet")) {
-         return this.pressFOnSlot(var3.id);
+         return this.swapToOffhand(var3.id);
       }
 
       this.pendingSwapSlot = var3.id;
@@ -359,14 +360,31 @@ public class AutoSwap extends ModuleStructure {
       return var1 != null && !var1.getStack().isEmpty() && var1.getStack().getItem() == var2;
    }
 
-   private boolean pressFOnSlot(int var1) {
+   private boolean swapToOffhand(int var1) {
       if (mc.player == null || mc.world == null || mc.interactionManager == null || var1 < 0) {
          return false;
       }
 
-      // Единственный оставленный свап: как будто игрок нажал F по слоту — предмет уходит во вторую руку.
-      // syncId берём у playerScreenHandler, потому что slotId тоже из playerScreenHandler.
-      mc.interactionManager.clickSlot(mc.player.playerScreenHandler.syncId, var1, OFFHAND_BUTTON, SlotActionType.SWAP, mc.player);
+      Slot var2 = this.getPlayerSlot(var1);
+      if (var2 == null || var2.getStack().isEmpty()) {
+         return false;
+      }
+
+      Item var3 = var2.getStack().getItem();
+      int var4 = mc.player.playerScreenHandler.syncId;
+
+      // Основной путь — как F по слоту: SlotActionType.SWAP + button 40.
+      mc.interactionManager.clickSlot(var4, var1, OFFHAND_BUTTON, SlotActionType.SWAP, mc.player);
+
+      // На некоторых состояниях player inventory сервер/клиент может не применить SWAP с button 40.
+      // Поэтому сразу проверяем локальное состояние и делаем надёжный fallback обычными PICKUP-кликами:
+      // взять предмет -> кликнуть offhand slot 45 -> вернуть старый offhand в исходный слот.
+      if (mc.player.getOffHandStack().getItem() != var3) {
+         mc.interactionManager.clickSlot(var4, var1, 0, SlotActionType.PICKUP, mc.player);
+         mc.interactionManager.clickSlot(var4, OFFHAND_SLOT, 0, SlotActionType.PICKUP, mc.player);
+         mc.interactionManager.clickSlot(var4, var1, 0, SlotActionType.PICKUP, mc.player);
+      }
+
       this.lastSwapMs = System.currentTimeMillis();
       return true;
    }
