@@ -20,13 +20,12 @@ import java.util.concurrent.ThreadLocalRandom;
 /**
  * Triggerbot: auto-attacks targeted living entities.
  *
- * W-release mechanic (before EVERY hit):
- *   1. Attack ready -> suppress W, set preAttackDeadline = now + random(1..15) ms.
- *   2. Each tick: if now < deadline -> W suppressed, wait.
- *   3. Deadline passed -> doAttack(), W restored immediately (no post-delay to avoid flags).
+ * Приоритет ударов:
+ *   1. CRIT  — если крит достижим (падение, fallDistance>0): всегда крит.
+ *   2. COMBO — только если крит невозможен (debuff, вода и т.д.).
+ *   3. Если крит достижим и игрок на земле/в прыжке — ждём падения, не даём комбу.
  *
- * No post-attack W suppress: anticheat flags sprint-off patterns after hits.
- * Short pre-delay (1-15ms): enough for knockback boost, too short to flag.
+ * W-release: перед каждым ударом отпускаем W на 1-15мс.
  */
 public class Triggerbot extends ModuleStructure {
 
@@ -38,7 +37,6 @@ public class Triggerbot extends ModuleStructure {
     private static final boolean DEBUG_LOGS = Boolean.getBoolean("rich.debug.triggerbot");
     private static final long DEBUG_LOG_MIN_GAP_MS = 1000L;
 
-    // W released for this long before hit (milliseconds)
     private static final int W_PRE_MIN = 1;
     private static final int W_PRE_MAX = 15;
 
@@ -113,19 +111,16 @@ public class Triggerbot extends ModuleStructure {
                     return;
                 }
                 if (now < preAttackDeadline) {
-                    // Still within W-release window
                     wantSuppressForward = true;
                     diag("W_WAIT", "pre W, left=" + (preAttackDeadline - now) + "ms");
                     return;
                 }
-                // Deadline reached — fire hit, restore W immediately
                 Entity t           = pendingTarget;
                 boolean wasForward = pendingWasForward;
                 pendingTarget      = null;
                 preAttackDeadline  = 0L;
                 doAttack(t, wasForward);
                 diag("HIT_FIRE", "HIT fw=" + wasForward);
-                // wantSuppressForward stays false — W restores this tick
                 return;
             }
 
@@ -144,7 +139,7 @@ public class Triggerbot extends ModuleStructure {
                 return;
             }
 
-            // --- No-crit path ---
+            // --- No-crit path: крит невозможен (дебафф и т.д.) — комба ---
             if (!critPossible) {
                 float need = noCritCharge.getValue();
                 if (charge >= need) {
@@ -155,7 +150,9 @@ public class Triggerbot extends ModuleStructure {
                 return;
             }
 
-            // --- Air crit path ---
+            // Ниже — крит достижим. Комба никогда не даётся.
+
+            // --- Air crit: падение (fallDistance > 0) ---
             if (!mc.player.isOnGround()) {
                 String blocker = critBlocker();
                 if (blocker == null && charge >= CRIT_CHARGE) {
@@ -166,7 +163,8 @@ public class Triggerbot extends ModuleStructure {
                 return;
             }
 
-            // --- Ground jump-crit gate ---
+            // --- На земле, но крит достижим ---
+            // Прыжок нажат или в восхождении — ждём отрыва
             if (this.isJumpHeld() || mc.player.getVelocity().y > 0.0) {
                 if (this.isJumpHeld() && charge < jumpCharge.getValue()) {
                     wantSuppressJump = true;
@@ -177,12 +175,9 @@ public class Triggerbot extends ModuleStructure {
                 return;
             }
 
-            // --- Ground combo ---
-            if (charge >= GROUND_ATTACK_CHARGE && ticksOnGround >= GROUND_COMBO_DELAY) {
-                wantSuppressForward = queueAttack(target, "COMBO");
-            } else {
-                diag("GROUND_WAIT", "charge=" + fmt(charge) + " ticks=" + ticksOnGround);
-            }
+            // На земле, прыжок не нажат, velocity.y <= 0: ждём прыжка для крита.
+            // Комба здесь не даётся никогда пока крит достижим.
+            diag("GROUND_CRIT_WAIT", "waiting for jump, charge=" + fmt(charge));
 
         } finally {
             SUPPRESS_FORWARD = wantSuppressForward;
@@ -191,10 +186,6 @@ public class Triggerbot extends ModuleStructure {
         }
     }
 
-    /**
-     * Queue attack with random W-release window of 1..15 ms.
-     * Returns true so caller sets wantSuppressForward on the queue tick.
-     */
     private boolean queueAttack(Entity target, String reason) {
         pendingTarget     = target;
         pendingWasForward = mc.options.forwardKey.isPressed();
@@ -250,15 +241,15 @@ public class Triggerbot extends ModuleStructure {
     }
 
     private String critBlocker() {
-        if (!(mc.player.fallDistance > 0.0))                     return "fall<=0";
-        if (ticksOutOfWater < 3)                                 return "justLeftWater";
-        if (mc.player.isOnGround())                              return "onGround";
-        if (mc.player.isClimbing())                              return "climbing";
-        if (mc.player.isTouchingWater())                         return "water";
+        if (!(mc.player.fallDistance > 0.0))                      return "fall<=0";
+        if (ticksOutOfWater < 3)                                  return "justLeftWater";
+        if (mc.player.isOnGround())                               return "onGround";
+        if (mc.player.isClimbing())                               return "climbing";
+        if (mc.player.isTouchingWater())                          return "water";
         if (mc.player.hasStatusEffect(StatusEffects.LEVITATION))  return "levitation";
         if (mc.player.hasStatusEffect(StatusEffects.BLINDNESS))   return "blindness";
-        if (mc.player.hasVehicle())                              return "vehicle";
-        if (mc.player.getAbilities().flying)                     return "flying";
+        if (mc.player.hasVehicle())                               return "vehicle";
+        if (mc.player.getAbilities().flying)                      return "flying";
         return null;
     }
 
