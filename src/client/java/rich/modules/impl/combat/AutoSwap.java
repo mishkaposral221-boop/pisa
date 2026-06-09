@@ -14,6 +14,8 @@ import net.minecraft.network.packet.c2s.play.UpdateSelectedSlotC2SPacket;
 import net.minecraft.registry.Registries;
 import net.minecraft.screen.slot.Slot;
 import net.minecraft.screen.slot.SlotActionType;
+import net.minecraft.text.Text;
+import net.minecraft.util.Formatting;
 import net.minecraft.util.Hand;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.collection.DefaultedList;
@@ -39,36 +41,36 @@ import rich.util.render.pipeline.WheelPipeline;
 
 public class AutoSwap extends ModuleStructure {
    public static volatile boolean SUPPRESS_SPRINT = false;
-   /** Когда true — миксин обнуляет весь playerInput (WASD/спринт/прыжок). */
    public static volatile boolean SUPPRESS_INPUT = false;
-
    public static volatile boolean LOCK_ROTATION = false;
    public static volatile float LOCK_YAW = 0.0F;
    public static volatile float LOCK_PITCH = 0.0F;
 
+   // ---- Phase IDs ----
    private static final int PHASE_IDLE = 0;
+   // Safe (Rage/Legit): ровно ванильные пакеты, никакого ClickSlot.
+   private static final int PHASE_SAFE_WAIT_SCROLL = 10; // ждём после UpdateSelectedSlot
+   private static final int PHASE_SAFE_SWAP = 11;        // сейчас шлём PlayerAction(SWAP)
+   private static final int PHASE_SAFE_RESTORE = 12;     // возвращаем слот оригинала
+   // Custom (legacy phase machine, только с allowRelocate=true)
    private static final int PHASE_PRE_HALT = 1;
    private static final int PHASE_RELOCATE = 2;
    private static final int PHASE_SCROLL_TO = 3;
    private static final int PHASE_DO_SWAP = 4;
    private static final int PHASE_RESTORE = 5;
    private static final int PHASE_RESTORE_RELOCATE = 6;
-   /** Legit: ждём гауссовой задержки до клика. */
-   private static final int PHASE_LEGIT_WAIT = 7;
-   /** Legit: следующий тик — отправляем 1 пакет и выходим. */
-   private static final int PHASE_LEGIT_CLICK = 8;
    private static final int POST_SWAP_PAUSE_TICKS = 10;
 
    // ====================== MODE ======================
    public final SelectSetting mode = new SelectSetting(
          "Режим",
-         "Legit — гуманизированный обход TotemGuard/Vulcan (гаусс-задержки, reaction-floor, outliers). Rage — 1 пакет Click40, минимум задержек, максимум скорости. Custom — полный фазовый автомат со всеми слайдерами.")
+         "Legit — ванильные пакеты + гуманизация, обход TotemGuard/Vulcan. Rage — те же пакеты, но без задержек. Custom — полная фазовая машина со слайдерами (только для advanced).")
       .value("Legit", "Rage", "Custom")
       .selected("Legit");
 
    public final SelectSetting triggerMode = new SelectSetting(
          "Триггер",
-         "Колесо — выбор через радиальное меню, Без колеса — авто-свап")
+         "Колесо — выбор через радиальное меню, Без колеса — авто-свап по содержимому offhand")
       .value("Колесо", "Без колеса")
       .selected("Без колеса");
    public final BindSetting wheelBind = new BindSetting(
@@ -78,49 +80,41 @@ public class AutoSwap extends ModuleStructure {
          "Бинд свапа", "Ручной триггер свапа (работает только в режиме «Без колеса»)")
       .visible(() -> this.triggerMode.isSelected("Без колеса"));
 
-   // ===================== MECHANISM =====================
-   public final SelectSetting swapMechanism = new SelectSetting(
-         "Механика",
-         "Click40 — 1 пакет ClickSlot(button=40, SWAP) тянет предмет ИЗ любого слота прямо в offhand (без скролла/перекладывания). PacketF — vanilla UpdateSelectedSlot + SWAP_ITEM_WITH_OFFHAND (предмет должен быть в хотбаре). Mixed — Legit случайно чередует между ними каждый свап, ломая фингерпринт packet-sequence (AutoTotemD).")
-      .value("Click40", "PacketF", "Mixed")
-      .selected("Click40")
-      .visible(() -> !this.mode.isSelected("Rage"));
-
    // ===================== LEGIT HUMANIZATION =====================
    public final SliderSettings legitMeanMs = new SliderSettings(
          "Legit: среднее (мс)", "Среднее время реакции до клика. Гаусс-распределение.")
       .setValue(200.0F).range(80, 600)
-      .visible(() -> this.mode.isSelected("Legit") || this.mode.isSelected("Custom"));
+      .visible(() -> this.mode.isSelected("Legit"));
    public final SliderSettings legitStdMs = new SliderSettings(
-         "Legit: разброс (мс)", "Стандартное отклонение по Гауссу. Чем выше — тем сильнее ломаются statistical-чеки (AutoTotemA/B).")
+         "Legit: разброс (мс)", "Стандартное отклонение по Гауссу. Ломает AutoTotemA/B.")
       .setValue(80.0F).range(20, 250)
-      .visible(() -> this.mode.isSelected("Legit") || this.mode.isSelected("Custom"));
+      .visible(() -> this.mode.isSelected("Legit"));
    public final SliderSettings reactionFloorMs = new SliderSettings(
-         "Legit: реакция (мс)", "Мин. время от момента потери предмета в offhand до начала свапа. Ниже 100мс = детект AutoTotemE (impossible low outliers).")
+         "Legit: реакция (мс)", "Мин. время от потери предмета в offhand до начала свапа. Ломает AutoTotemE.")
       .setValue(150.0F).range(0, 500)
-      .visible(() -> this.mode.isSelected("Legit") || this.mode.isSelected("Custom"));
+      .visible(() -> this.mode.isSelected("Legit"));
    public final SliderSettings outlierChance = new SliderSettings(
-         "Legit: outlier %", "Шанс намеренно медленного свапа (+300..700мс). Ломает std-dev-чеки (AutoTotemB/C) — они ждут стабильную дисперсию.")
+         "Legit: outlier %", "Шанс намеренно медленного свапа (+300..700мс). Ломает AutoTotemB/C.")
       .setValue(10.0F).range(0, 30)
-      .visible(() -> this.mode.isSelected("Legit") || this.mode.isSelected("Custom"));
+      .visible(() -> this.mode.isSelected("Legit"));
 
    // ===================== CUSTOM (LEGACY) SLIDERS =====================
-   public final SliderSettings preOpenDelay = new SliderSettings("До скролла", "Custom: тиков перед первым UpdateSelectedSlot")
+   public final SliderSettings preOpenDelay = new SliderSettings("До скролла", "Custom: тиков перед UpdateSelectedSlot")
       .setValue(3.0F).range(0, 20)
       .visible(() -> this.mode.isSelected("Custom"));
-   public final SliderSettings afterOpenDelay = new SliderSettings("Перед F", "Custom: тиков между UpdateSelectedSlot и SWAP_ITEM_WITH_OFFHAND")
+   public final SliderSettings afterOpenDelay = new SliderSettings("Перед F", "Custom: тиков перед PlayerAction(SWAP)")
       .setValue(3.0F).range(0, 20)
       .visible(() -> this.mode.isSelected("Custom"));
    public final SliderSettings closeDelay = new SliderSettings("Перед возвратом", "Custom: тиков между F и восстановительным UpdateSelectedSlot")
       .setValue(3.0F).range(0, 20)
       .visible(() -> this.mode.isSelected("Custom"));
-   public final SliderSettings restoreGap = new SliderSettings("Гэп HeldItemSlot", "Custom: тиков между восстановительным UpdateSelectedSlot и финальным ClickSlot. Должен быть >=2.")
+   public final SliderSettings restoreGap = new SliderSettings("Гэп restore", "Custom: тиков между восстановительным UpdateSelectedSlot и ClickSlot. >=2.")
       .setValue(3.0F).range(0, 20)
       .visible(() -> this.mode.isSelected("Custom"));
-   public final SliderSettings randomDelay = new SliderSettings("Рандом задержки", "Custom: дополнительный случайный разброс в тиках")
+   public final SliderSettings randomDelay = new SliderSettings("Рандом задержки", "Custom: +0..N тиков")
       .setValue(2.0F).range(0, 10)
       .visible(() -> this.mode.isSelected("Custom"));
-   public final SliderSettings relocateHaltTicks = new SliderSettings("Стоп перед свапом", "Custom: тиков стационарного состояния перед ЛЮБЫМ свапом")
+   public final SliderSettings relocateHaltTicks = new SliderSettings("Стоп перед свапом", "Custom")
       .setValue(8.0F).range(2, 15)
       .visible(() -> this.mode.isSelected("Custom"));
    public final SliderSettings maskDelay = new SliderSettings("Задержка маски", "Custom: тиков между ClickSlot и CloseHandledScreen-маской. >=2.")
@@ -128,34 +122,42 @@ public class AutoSwap extends ModuleStructure {
       .visible(() -> this.mode.isSelected("Custom"));
 
    public final SliderSettings cooldown = new SliderSettings(
-         "Cooldown (мс)", "Минимальная пауза между свапами в миллисекундах. В Rage обходится мин. флором 50мс.")
+         "Cooldown (мс)", "Минимальная пауза между свапами. В Rage флор 50мс.")
       .setValue(300.0F).range(0, 3000);
 
    // ===================== BEHAVIOR TOGGLES =====================
+   public final BooleanSetting keepOriginalSlot = new BooleanSetting(
+         "Возвращать слот",
+         "После свапа вернуть выделение на слот оригинала. Отправляет лишний UpdateSelectedSlot через 1+ тик после F.")
+      .setValue(true);
+   public final BooleanSetting allowRelocate = new BooleanSetting(
+         "Custom: разрешить relocate",
+         "ОПАСНО: разрешить в Custom перекладывать предмет из инвентаря в хотбар через ClickSlot. Ловится как Multi-Action на большинстве серверов с AC. ВКЛЮЧАЙ ТОЛЬКО ЕСЛИ ЗНАЕШЬ ЧТО ДЕЛАЕШЬ.")
+      .setValue(false)
+      .visible(() -> this.mode.isSelected("Custom"));
    public final BooleanSetting stopMovement = new BooleanSetting(
-         "Остановка", "Принудительно останавливать игрока во время свапа")
+         "Остановка", "Custom: принудительно останавливать игрока")
       .setValue(false)
       .visible(() -> this.mode.isSelected("Custom"));
    public final BooleanSetting positionLock = new BooleanSetting(
          "Жёсткая фиксация XZ",
-         "ЖЁСТКО возвращает игрока в сохранённые X/Z каждый тик. ОПАСНО на Vulcan/Grim — спамит дублирующие move-пакеты → SetbackTeleport-флаг.")
+         "ОПАСНО на Vulcan/Grim (SetbackTeleport-флаг). Только Custom.")
       .setValue(false)
       .visible(() -> this.mode.isSelected("Custom"));
    public final BooleanSetting lockRotation = new BooleanSetting(
          "Lock rotation", "Замораживать поворот головы во время свапа")
       .setValue(false);
    public final BooleanSetting restoreAfterRelocate = new BooleanSetting(
-         "Возврат после перекидывания", "Custom: вернуть содержимое хотбара на место после relocate")
+         "Возврат после перекидывания", "Custom: вернуть содержимое хотбара на место")
       .setValue(true)
-      .visible(() -> this.mode.isSelected("Custom"));
+      .visible(() -> this.mode.isSelected("Custom") && this.allowRelocate.isValue());
    public final BooleanSetting maskInventory = new BooleanSetting(
-         "Маскировка ClickSlot",
-         "После каждого SWAP-клика шлём CloseHandledScreen(0). ОПАСНО — это и есть классический паттерн AutoTotemF. ПО УМОЛЧАНИЮ ВЫКЛ.")
+         "Маскировка ClickSlot", "Custom: после ClickSlot шлём CloseHandledScreen. AutoTotemF.")
       .setValue(false)
-      .visible(() -> this.mode.isSelected("Custom"));
+      .visible(() -> this.mode.isSelected("Custom") && this.allowRelocate.isValue());
    public final BooleanSetting antiInventoryMove = new BooleanSetting(
          "Анти InventoryMove",
-         "Гасит WASD/спринт/прыжок во время свапа через KeyboardInputMixin. В Legit включается на 1 тик до+после клика. В Custom — на всё время свапа.")
+         "Гасит WASD/спринт/прыжок во время свапа. В Legit — только в последний тик.")
       .setValue(false);
 
    // ===================== ITEM SLOTS =====================
@@ -185,19 +187,14 @@ public class AutoSwap extends ModuleStructure {
    private int postSwapPauseTicks = 0;
    private int pendingMaskTicks = -1;
 
-   private double lockX = Double.NaN;
-   private double lockY = Double.NaN;
-   private double lockZ = Double.NaN;
+   private double lockX = Double.NaN, lockY = Double.NaN, lockZ = Double.NaN;
    private boolean posLockActive = false;
 
-   // Legit reaction tracking
    private long offhandLostMs = 0L;
    private Item lastDesiredItem = null;
    private boolean lastHadDesired = false;
 
-   // Legit click target
-   private int legitClickInvSlot = -1;
-   private boolean legitUsePacketF = false;
+   private long lastWarnMs = 0L;
 
    private boolean wheelOpen = false;
    private boolean cursorUnlocked = false;
@@ -210,15 +207,15 @@ public class AutoSwap extends ModuleStructure {
    }
 
    public AutoSwap() {
-      super("AutoSwap", "Свап во вторую руку (Legit / Rage / Custom)", ModuleCategory.UTILITIES);
+      super("AutoSwap", "Свап во вторую руку (Legit / Rage / Custom) — ванильные пакеты", ModuleCategory.UTILITIES);
       this.settings(
          this.mode,
          this.triggerMode, this.wheelBind, this.swapBind,
-         this.swapMechanism,
          this.legitMeanMs, this.legitStdMs, this.reactionFloorMs, this.outlierChance,
          this.preOpenDelay, this.afterOpenDelay, this.closeDelay, this.restoreGap,
          this.randomDelay, this.relocateHaltTicks, this.maskDelay,
          this.cooldown,
+         this.keepOriginalSlot, this.allowRelocate,
          this.stopMovement, this.positionLock, this.lockRotation,
          this.restoreAfterRelocate, this.maskInventory, this.antiInventoryMove,
          this.slot1, this.pick1,
@@ -239,10 +236,7 @@ public class AutoSwap extends ModuleStructure {
 
    @EventHandler
    public void onClickSlot(ClickSlotEvent var1) {
-      if (mc.player == null || this.pickingForSlot == -1 || !(mc.currentScreen instanceof InventoryScreen)) {
-         return;
-      }
-
+      if (mc.player == null || this.pickingForSlot == -1 || !(mc.currentScreen instanceof InventoryScreen)) return;
       if (var1.getActionType() == SlotActionType.PICKUP) {
          DefaultedList slots = mc.player.playerScreenHandler.slots;
          if (var1.getSlotId() >= 0 && var1.getSlotId() < slots.size()) {
@@ -264,13 +258,11 @@ public class AutoSwap extends ModuleStructure {
    @EventHandler
    public void onKey(KeyEvent var1) {
       if (mc.player == null) return;
-
       if (this.swapBind.getKey() != -1
             && this.triggerMode.isSelected("Без колеса")
             && var1.isKeyDown(this.swapBind.getKey(), true)) {
          this.pendingItem = this.resolveTargetItem();
       }
-
       if (this.triggerMode.isSelected("Колесо") && this.wheelBind.getKey() != -1) {
          if (var1.isKeyDown(this.wheelBind.getKey(), true)) {
             this.wheelOpen = true;
@@ -296,26 +288,17 @@ public class AutoSwap extends ModuleStructure {
          this.resetSwap();
          return;
       }
-
       this.trackOffhandLoss();
 
-      // === ОТЛОЖЕННАЯ МАСКА ===
       if (this.pendingMaskTicks > 0) {
          this.pendingMaskTicks--;
-         if (this.pendingMaskTicks == 0) {
-            this.flushMaskNow();
-            return;
-         }
+         if (this.pendingMaskTicks == 0) { this.flushMaskNow(); return; }
       }
-
       if (this.postSwapPauseTicks > 0) {
          this.postSwapPauseTicks--;
-         if (this.postSwapPauseTicks == 0) {
-            LOCK_ROTATION = false;
-         }
+         if (this.postSwapPauseTicks == 0) LOCK_ROTATION = false;
          return;
       }
-
       if (this.wheelOpen) return;
 
       if (this.swapPhase == PHASE_IDLE) {
@@ -325,7 +308,6 @@ public class AutoSwap extends ModuleStructure {
             this.beginSwap(item);
             return;
          }
-
          if (this.triggerMode.isSelected("Без колеса") && mc.currentScreen == null) {
             Item desired = this.resolveDesiredOffhandItem();
             if (desired != null && mc.player.getOffHandStack().getItem() != desired) {
@@ -335,134 +317,18 @@ public class AutoSwap extends ModuleStructure {
          return;
       }
 
-      // === Активные фазы ===
-      if (this.swapPhase == PHASE_LEGIT_WAIT || this.swapPhase == PHASE_LEGIT_CLICK) {
-         this.tickLegitPhase();
+      // Safe phases (Rage/Legit)
+      if (this.swapPhase == PHASE_SAFE_WAIT_SCROLL
+            || this.swapPhase == PHASE_SAFE_SWAP
+            || this.swapPhase == PHASE_SAFE_RESTORE) {
+         this.tickSafePhase();
          return;
       }
-
+      // Custom phases
       this.tickCustomPhase();
    }
 
-   // ====================== LEGIT TICK ======================
-   private void tickLegitPhase() {
-      // В Legit анти-инпут активен только последний тик перед кликом и сам тик клика
-      boolean activateInput = this.antiInventoryMove.isValue() && this.phaseTimer <= 1;
-      if (activateInput) {
-         if (!this.sentSprintStop) {
-            this.stopServerSprint();
-            this.sentSprintStop = true;
-         }
-         SUPPRESS_SPRINT = true;
-         SUPPRESS_INPUT = true;
-      }
-      if (this.lockRotation.isValue()) this.refreshRotationLock();
-
-      if (this.phaseTimer > 0) {
-         this.phaseTimer--;
-         return;
-      }
-
-      if (this.swapPhase == PHASE_LEGIT_WAIT) {
-         this.swapPhase = PHASE_LEGIT_CLICK;
-         this.phaseTimer = 0;
-         return;
-      }
-      if (this.swapPhase == PHASE_LEGIT_CLICK) {
-         this.executeLegitClick();
-         this.finishSwap();
-      }
-   }
-
-   // ====================== CUSTOM TICK ======================
-   private void tickCustomPhase() {
-      boolean forceHalt = this.swapPhase != PHASE_IDLE
-            && (this.antiInventoryMove.isValue() || this.stopMovement.isValue());
-      if (forceHalt) {
-         if (!this.sentSprintStop) {
-            this.stopServerSprint();
-            this.sentSprintStop = true;
-         }
-         this.haltMovement();
-         SUPPRESS_SPRINT = true;
-         SUPPRESS_INPUT = true;
-      }
-      if (this.lockRotation.isValue()) this.refreshRotationLock();
-
-      if (this.phaseTimer > 0) {
-         this.phaseTimer--;
-         return;
-      }
-
-      if (this.swapPhase == PHASE_PRE_HALT) {
-         if (this.pendingRelocateInvSlot != -1) {
-            this.swapPhase = PHASE_RELOCATE;
-            this.phaseTimer = 0;
-         } else if (this.originalSlot == this.swapHotbarSlot) {
-            this.swapPhase = PHASE_DO_SWAP;
-            this.phaseTimer = this.tickGap(this.afterOpenDelay);
-         } else {
-            this.swapPhase = PHASE_SCROLL_TO;
-            this.phaseTimer = this.tickGap(this.preOpenDelay);
-         }
-         return;
-      }
-
-      if (this.swapPhase == PHASE_RELOCATE) {
-         this.sendVanillaSwapClick(this.pendingRelocateInvSlot, this.pendingRelocateStash);
-         this.relocateFromInvSlot = this.pendingRelocateInvSlot;
-         this.swapHotbarSlot = this.pendingRelocateStash;
-         this.pendingRelocateInvSlot = -1;
-         this.pendingRelocateStash = -1;
-
-         if (this.originalSlot == this.swapHotbarSlot) {
-            this.swapPhase = PHASE_DO_SWAP;
-            this.phaseTimer = this.tickGap(this.afterOpenDelay);
-         } else {
-            this.swapPhase = PHASE_SCROLL_TO;
-            this.phaseTimer = this.tickGap(this.preOpenDelay);
-         }
-         return;
-      }
-
-      if (this.swapPhase == PHASE_SCROLL_TO) {
-         this.sendScrollPacket(this.swapHotbarSlot);
-         this.swapPhase = PHASE_DO_SWAP;
-         this.phaseTimer = this.tickGap(this.afterOpenDelay);
-         return;
-      }
-
-      if (this.swapPhase == PHASE_DO_SWAP) {
-         this.sendSwapWithOffhandPacket();
-         this.mirrorOffhandSwap(this.swapHotbarSlot);
-         this.swapPhase = PHASE_RESTORE;
-         this.phaseTimer = this.tickGap(this.closeDelay);
-         return;
-      }
-
-      if (this.swapPhase == PHASE_RESTORE) {
-         if (this.originalSlot != this.swapHotbarSlot && this.originalSlot >= 0) {
-            this.sendScrollPacket(this.originalSlot);
-         }
-         if (this.relocateFromInvSlot != -1 && this.restoreAfterRelocate.isValue()) {
-            this.swapPhase = PHASE_RESTORE_RELOCATE;
-            this.phaseTimer = this.tickGap(this.restoreGap);
-         } else {
-            this.finishSwap();
-         }
-         return;
-      }
-
-      if (this.swapPhase == PHASE_RESTORE_RELOCATE) {
-         if (this.relocateFromInvSlot != -1 && this.restoreAfterRelocate.isValue()) {
-            this.sendVanillaSwapClick(this.relocateFromInvSlot, this.swapHotbarSlot);
-         }
-         this.finishSwap();
-         return;
-      }
-   }
-
-   // ====================== BEGIN SWAP (dispatch) ======================
+   // ====================== BEGIN SWAP (dispatcher) ======================
    private void beginSwap(Item item) {
       if (mc.player == null || item == null || item == Items.AIR) return;
       long now = System.currentTimeMillis();
@@ -473,54 +339,117 @@ public class AutoSwap extends ModuleStructure {
       if (mc.currentScreen != null && !(mc.currentScreen instanceof InventoryScreen)) return;
 
       int hotbar = this.findHotbarSlotForItem(item);
-      int invSlot = -1;
-      if (hotbar == -1) {
-         invSlot = this.findInvSlotForItem(item);
-         if (invSlot == -1) return;
+
+      if (this.mode.isSelected("Rage") || this.mode.isSelected("Legit")) {
+         if (hotbar == -1) {
+            this.warnTargetNotInHotbar(item);
+            return;
+         }
+         this.beginSafeSwap(item, hotbar, now);
+         return;
       }
 
+      // ====== CUSTOM ======
+      if (hotbar == -1) {
+         if (!this.allowRelocate.isValue()) {
+            this.warnTargetNotInHotbar(item);
+            return;
+         }
+         int inv = this.findInvSlotForItem(item);
+         if (inv == -1) return;
+         this.beginCustomSwap(item, -1, inv, now);
+         return;
+      }
+      this.beginCustomSwap(item, hotbar, -1, now);
+   }
+
+   // ====================== SAFE PATH (Rage / Legit) ======================
+   /**
+    * Абсолютно ванильный флоу: либо UpdateSelectedSlot(slot) потом PlayerAction(SWAP) потом UpdateSelectedSlot(orig),
+    * либо просто PlayerAction(SWAP) если слот уже выбран. Ни одного ClickSlot.
+    */
+   private void beginSafeSwap(Item item, int hotbar, long now) {
+      this.targetItem = item;
+      this.originalSlot = this.getSelectedSlot();
+      this.swapHotbarSlot = hotbar;
+      this.lastSwapMs = now;
+      this.sentSprintStop = false;
+
+      // Рассчитать задержку до самого SWAP
+      int waitTicksBeforeSwap;
+      if (this.mode.isSelected("Rage")) {
+         waitTicksBeforeSwap = 0;
+      } else {
+         long reactNeeded = this.reactionFloorMs.getInt();
+         long sinceLoss = this.offhandLostMs == 0L ? Long.MAX_VALUE / 4 : (now - this.offhandLostMs);
+         long waitMs = this.computeLegitDelayMs();
+         if (sinceLoss < reactNeeded) waitMs = Math.max(waitMs, reactNeeded - sinceLoss);
+         int outlier = this.outlierChance.getInt();
+         if (outlier > 0 && ThreadLocalRandom.current().nextInt(100) < outlier) {
+            waitMs += 300L + ThreadLocalRandom.current().nextInt(500);
+         }
+         waitTicksBeforeSwap = Math.max(1, (int)Math.ceil(waitMs / 50.0));
+      }
+
+      if (this.originalSlot != hotbar && this.originalSlot >= 0) {
+         // Нужно сначала UpdateSelectedSlot, ждём минимум 1 тик перед PlayerAction
+         this.sendScrollPacket(hotbar);
+         this.swapPhase = PHASE_SAFE_WAIT_SCROLL;
+         // в Rage — ровно 1 тик; в Legit — накопленная гаусс-задержка
+         this.phaseTimer = this.mode.isSelected("Rage") ? 1 : Math.max(1, waitTicksBeforeSwap);
+      } else {
+         // Слот уже правильный — сразу к SWAP
+         this.swapPhase = PHASE_SAFE_SWAP;
+         this.phaseTimer = waitTicksBeforeSwap;
+      }
+   }
+
+   private void tickSafePhase() {
+      // Анти-инпут: в Legit вкл. только в последний тик перед SWAP; в Rage — никогда
+      if (this.mode.isSelected("Legit") && this.antiInventoryMove.isValue()
+            && this.swapPhase == PHASE_SAFE_SWAP && this.phaseTimer <= 1) {
+         if (!this.sentSprintStop) { this.stopServerSprint(); this.sentSprintStop = true; }
+         SUPPRESS_SPRINT = true;
+         SUPPRESS_INPUT = true;
+      }
+      if (this.lockRotation.isValue()) this.refreshRotationLock();
+
+      if (this.phaseTimer > 0) { this.phaseTimer--; return; }
+
+      if (this.swapPhase == PHASE_SAFE_WAIT_SCROLL) {
+         // Скролл уже отправлен в beginSafeSwap, сейчас переходим к SWAP
+         this.swapPhase = PHASE_SAFE_SWAP;
+         this.phaseTimer = 0;
+         return;
+      }
+      if (this.swapPhase == PHASE_SAFE_SWAP) {
+         this.sendSwapWithOffhandPacket();
+         this.mirrorOffhandSwap(this.swapHotbarSlot);
+         if (this.keepOriginalSlot.isValue()
+               && this.originalSlot != this.swapHotbarSlot
+               && this.originalSlot >= 0) {
+            this.swapPhase = PHASE_SAFE_RESTORE;
+            this.phaseTimer = this.mode.isSelected("Rage") ? 1 : Math.max(1, (int)Math.ceil(this.computeLegitDelayMs() / 50.0));
+         } else {
+            this.finishSwap();
+         }
+         return;
+      }
+      if (this.swapPhase == PHASE_SAFE_RESTORE) {
+         this.sendScrollPacket(this.originalSlot);
+         this.finishSwap();
+         return;
+      }
+   }
+
+   // ====================== CUSTOM PATH (legacy) ======================
+   private void beginCustomSwap(Item item, int hotbar, int invSlot, long now) {
       this.targetItem = item;
       this.originalSlot = this.getSelectedSlot();
       this.relocateFromInvSlot = -1;
       this.sentSprintStop = false;
       this.lastSwapMs = now;
 
-      // ====== RAGE: instant 1-packet Click40 ======
-      if (this.mode.isSelected("Rage")) {
-         int targetInv = (hotbar != -1) ? hotbar : invSlot;
-         this.doClick40(targetInv);
-         this.mirrorOffhandSwap(targetInv);
-         this.targetItem = null;
-         this.originalSlot = -1;
-         this.swapPhase = PHASE_IDLE;
-         this.phaseTimer = 0;
-         this.postSwapPauseTicks = 1;
-         return;
-      }
-
-      // ====== LEGIT: humanized 1-packet swap ======
-      if (this.mode.isSelected("Legit")) {
-         long reactNeeded = this.reactionFloorMs.getInt();
-         long sinceLoss = this.offhandLostMs == 0L ? Long.MAX_VALUE / 4 : (now - this.offhandLostMs);
-         long waitMs = this.computeLegitDelayMs();
-         if (sinceLoss < reactNeeded) {
-            waitMs = Math.max(waitMs, reactNeeded - sinceLoss);
-         }
-         int outlier = this.outlierChance.getInt();
-         if (outlier > 0 && ThreadLocalRandom.current().nextInt(100) < outlier) {
-            waitMs += 300L + ThreadLocalRandom.current().nextInt(500);
-         }
-
-         this.legitClickInvSlot = (hotbar != -1) ? hotbar : invSlot;
-         this.legitUsePacketF = this.shouldLegitUsePacketF(hotbar != -1);
-
-         this.swapPhase = PHASE_LEGIT_WAIT;
-         this.phaseTimer = Math.max(1, (int)Math.ceil(waitMs / 50.0));
-         this.swapHotbarSlot = (hotbar != -1) ? hotbar : -1;
-         return;
-      }
-
-      // ====== CUSTOM: legacy phase machine ======
       if (this.positionLock.isValue()) {
          this.lockX = mc.player.getX();
          this.lockY = mc.player.getY();
@@ -544,15 +473,12 @@ public class AutoSwap extends ModuleStructure {
       int preHaltTicks = this.antiInventoryMove.isValue()
             ? Math.max(2, this.relocateHaltTicks.getInt())
             : 0;
-
       if (preHaltTicks > 0) {
          this.swapPhase = PHASE_PRE_HALT;
          int rnd = Math.max(0, this.randomDelay.getInt());
-         this.phaseTimer = preHaltTicks
-               + (rnd <= 0 ? 0 : ThreadLocalRandom.current().nextInt(rnd + 1));
+         this.phaseTimer = preHaltTicks + (rnd <= 0 ? 0 : ThreadLocalRandom.current().nextInt(rnd + 1));
          return;
       }
-
       if (this.pendingRelocateInvSlot != -1) {
          this.swapPhase = PHASE_RELOCATE;
          this.phaseTimer = 0;
@@ -565,98 +491,73 @@ public class AutoSwap extends ModuleStructure {
       }
    }
 
-   // ====================== LEGIT CLICK ======================
-   private void executeLegitClick() {
-      int inv = this.legitClickInvSlot;
-      if (inv < 0 || mc.player == null) return;
-
-      if (this.legitUsePacketF && inv >= 0 && inv <= 8) {
-         // PacketF путь: переключаемся на нужный хотбар-слот и шлём SWAP_ITEM_WITH_OFFHAND
-         int original = this.getSelectedSlot();
-         if (original != inv) this.sendScrollPacket(inv);
-         this.sendSwapWithOffhandPacket();
-         this.mirrorOffhandSwap(inv);
-         if (original != inv && original >= 0) this.sendScrollPacket(original);
-      } else {
-         // Click40 путь: 1 пакет, тянет напрямую
-         this.doClick40(inv);
-         this.mirrorOffhandSwap(inv);
+   private void tickCustomPhase() {
+      boolean forceHalt = this.swapPhase != PHASE_IDLE
+            && (this.antiInventoryMove.isValue() || this.stopMovement.isValue());
+      if (forceHalt) {
+         if (!this.sentSprintStop) { this.stopServerSprint(); this.sentSprintStop = true; }
+         this.haltMovement();
+         SUPPRESS_SPRINT = true;
+         SUPPRESS_INPUT = true;
       }
-   }
+      if (this.lockRotation.isValue()) this.refreshRotationLock();
+      if (this.phaseTimer > 0) { this.phaseTimer--; return; }
 
-   private boolean shouldLegitUsePacketF(boolean itemInHotbar) {
-      if (!itemInHotbar) return false; // PacketF требует хотбара
-      if (this.swapMechanism.isSelected("PacketF")) return true;
-      if (this.swapMechanism.isSelected("Click40")) return false;
-      // Mixed — рандом 50/50
-      return ThreadLocalRandom.current().nextBoolean();
-   }
-
-   private long computeLegitDelayMs() {
-      double mean = this.legitMeanMs.getInt();
-      double std = this.legitStdMs.getInt();
-      double g = ThreadLocalRandom.current().nextGaussian() * std + mean;
-      double minMs = Math.max(50.0, mean - std * 1.5);
-      double maxMs = mean + std * 3.0 + 100.0;
-      return (long) Math.max(minMs, Math.min(maxMs, g));
-   }
-
-   // ====================== OFFHAND LOSS TRACKING ======================
-   private void trackOffhandLoss() {
-      if (mc.player == null) return;
-      Item desired = this.resolveDesiredOffhandItem();
-      if (desired == null) {
-         this.lastDesiredItem = null;
-         this.lastHadDesired = false;
-         this.offhandLostMs = 0L;
-         return;
-      }
-      Item current = mc.player.getOffHandStack().getItem();
-      boolean has = (current == desired);
-
-      if (this.lastDesiredItem != desired) {
-         // Цель сменилась — переинициализируем трекинг
-         this.lastDesiredItem = desired;
-         this.lastHadDesired = has;
-         this.offhandLostMs = has ? 0L : System.currentTimeMillis();
-         return;
-      }
-
-      if (has) {
-         this.lastHadDesired = true;
-         this.offhandLostMs = 0L;
-      } else {
-         if (this.lastHadDesired || this.offhandLostMs == 0L) {
-            this.offhandLostMs = System.currentTimeMillis();
+      if (this.swapPhase == PHASE_PRE_HALT) {
+         if (this.pendingRelocateInvSlot != -1) {
+            this.swapPhase = PHASE_RELOCATE; this.phaseTimer = 0;
+         } else if (this.originalSlot == this.swapHotbarSlot) {
+            this.swapPhase = PHASE_DO_SWAP; this.phaseTimer = this.tickGap(this.afterOpenDelay);
+         } else {
+            this.swapPhase = PHASE_SCROLL_TO; this.phaseTimer = this.tickGap(this.preOpenDelay);
          }
-         this.lastHadDesired = false;
+         return;
       }
-   }
-
-   // ====================== CLICK40 CORE ======================
-   /**
-    * Tighter swap-to-offhand path: 1 пакет ClickSlot(button=40, SWAP).
-    * Сервер сам поменяет содержимое инвентарного слота с offhand (slot 45).
-    * Не требует UpdateSelectedSlot, не требует чтобы предмет был в хотбаре.
-    */
-   private void doClick40(int invIndex) {
-      if (mc.player == null || mc.interactionManager == null) return;
-      int screenSlot = invIndexToScreenSlot(invIndex);
-      if (screenSlot < 0) return;
-      mc.interactionManager.clickSlot(
-         mc.player.playerScreenHandler.syncId,
-         screenSlot,
-         40,
-         SlotActionType.SWAP,
-         mc.player
-      );
-   }
-
-   /** PlayerInventory index → playerScreenHandler slot id. */
-   private static int invIndexToScreenSlot(int invIndex) {
-      if (invIndex >= 0 && invIndex <= 8) return invIndex + 36;   // hotbar
-      if (invIndex >= 9 && invIndex <= 35) return invIndex;        // main inv
-      return -1;
+      if (this.swapPhase == PHASE_RELOCATE) {
+         this.sendVanillaSwapClick(this.pendingRelocateInvSlot, this.pendingRelocateStash);
+         this.relocateFromInvSlot = this.pendingRelocateInvSlot;
+         this.swapHotbarSlot = this.pendingRelocateStash;
+         this.pendingRelocateInvSlot = -1;
+         this.pendingRelocateStash = -1;
+         if (this.originalSlot == this.swapHotbarSlot) {
+            this.swapPhase = PHASE_DO_SWAP; this.phaseTimer = this.tickGap(this.afterOpenDelay);
+         } else {
+            this.swapPhase = PHASE_SCROLL_TO; this.phaseTimer = this.tickGap(this.preOpenDelay);
+         }
+         return;
+      }
+      if (this.swapPhase == PHASE_SCROLL_TO) {
+         this.sendScrollPacket(this.swapHotbarSlot);
+         this.swapPhase = PHASE_DO_SWAP;
+         this.phaseTimer = this.tickGap(this.afterOpenDelay);
+         return;
+      }
+      if (this.swapPhase == PHASE_DO_SWAP) {
+         this.sendSwapWithOffhandPacket();
+         this.mirrorOffhandSwap(this.swapHotbarSlot);
+         this.swapPhase = PHASE_RESTORE;
+         this.phaseTimer = this.tickGap(this.closeDelay);
+         return;
+      }
+      if (this.swapPhase == PHASE_RESTORE) {
+         if (this.originalSlot != this.swapHotbarSlot && this.originalSlot >= 0) {
+            this.sendScrollPacket(this.originalSlot);
+         }
+         if (this.relocateFromInvSlot != -1 && this.restoreAfterRelocate.isValue()) {
+            this.swapPhase = PHASE_RESTORE_RELOCATE;
+            this.phaseTimer = this.tickGap(this.restoreGap);
+         } else {
+            this.finishSwap();
+         }
+         return;
+      }
+      if (this.swapPhase == PHASE_RESTORE_RELOCATE) {
+         if (this.relocateFromInvSlot != -1 && this.restoreAfterRelocate.isValue()) {
+            this.sendVanillaSwapClick(this.relocateFromInvSlot, this.swapHotbarSlot);
+         }
+         this.finishSwap();
+         return;
+      }
    }
 
    // ====================== FINISH / RESET ======================
@@ -667,8 +568,6 @@ public class AutoSwap extends ModuleStructure {
       this.relocateFromInvSlot = -1;
       this.pendingRelocateInvSlot = -1;
       this.pendingRelocateStash = -1;
-      this.legitClickInvSlot = -1;
-      this.legitUsePacketF = false;
       this.swapPhase = PHASE_IDLE;
       this.phaseTimer = 0;
       this.sentSprintStop = false;
@@ -691,8 +590,6 @@ public class AutoSwap extends ModuleStructure {
       this.relocateFromInvSlot = -1;
       this.pendingRelocateInvSlot = -1;
       this.pendingRelocateStash = -1;
-      this.legitClickInvSlot = -1;
-      this.legitUsePacketF = false;
       this.sentSprintStop = false;
       this.pendingMaskTicks = -1;
       this.posLockActive = false;
@@ -701,9 +598,7 @@ public class AutoSwap extends ModuleStructure {
       this.lockZ = Double.NaN;
       SUPPRESS_SPRINT = false;
       SUPPRESS_INPUT = false;
-      if (this.postSwapPauseTicks == 0) {
-         LOCK_ROTATION = false;
-      }
+      if (this.postSwapPauseTicks == 0) LOCK_ROTATION = false;
    }
 
    // ====================== LOW-LEVEL PACKETS ======================
@@ -750,6 +645,44 @@ public class AutoSwap extends ModuleStructure {
       ItemStack inOffhand = mc.player.getStackInHand(Hand.OFF_HAND).copy();
       inv.setStack(hotbarSlot, inOffhand);
       mc.player.setStackInHand(Hand.OFF_HAND, inHotbar);
+   }
+
+   // ====================== OFFHAND TRACKING ======================
+   private void trackOffhandLoss() {
+      if (mc.player == null) return;
+      Item desired = this.resolveDesiredOffhandItem();
+      if (desired == null) {
+         this.lastDesiredItem = null;
+         this.lastHadDesired = false;
+         this.offhandLostMs = 0L;
+         return;
+      }
+      Item current = mc.player.getOffHandStack().getItem();
+      boolean has = (current == desired);
+      if (this.lastDesiredItem != desired) {
+         this.lastDesiredItem = desired;
+         this.lastHadDesired = has;
+         this.offhandLostMs = has ? 0L : System.currentTimeMillis();
+         return;
+      }
+      if (has) {
+         this.lastHadDesired = true;
+         this.offhandLostMs = 0L;
+      } else {
+         if (this.lastHadDesired || this.offhandLostMs == 0L) {
+            this.offhandLostMs = System.currentTimeMillis();
+         }
+         this.lastHadDesired = false;
+      }
+   }
+
+   private long computeLegitDelayMs() {
+      double mean = this.legitMeanMs.getInt();
+      double std = this.legitStdMs.getInt();
+      double g = ThreadLocalRandom.current().nextGaussian() * std + mean;
+      double minMs = Math.max(50.0, mean - std * 1.5);
+      double maxMs = mean + std * 3.0 + 100.0;
+      return (long) Math.max(minMs, Math.min(maxMs, g));
    }
 
    // ====================== HELPERS ======================
@@ -825,6 +758,21 @@ public class AutoSwap extends ModuleStructure {
       return item != null && item != Items.AIR ? item : null;
    }
 
+   private void warnTargetNotInHotbar(Item item) {
+      long now = System.currentTimeMillis();
+      if (now - this.lastWarnMs < 4000L) return;
+      this.lastWarnMs = now;
+      if (mc.player != null && item != null) {
+         String name = item.getName().getString();
+         mc.player.sendMessage(
+            Text.literal("[AutoSwap] ")
+               .formatted(Formatting.YELLOW)
+               .append(Text.literal("Положи «" + name + "» в хотбар — в Rage/Legit relocate отключён ради обхода multi-action.")
+                  .formatted(Formatting.GRAY)),
+            true);
+      }
+   }
+
    private void refreshRotationLock() {
       if (mc.player == null) return;
       LOCK_YAW = mc.player.getYaw();
@@ -856,9 +804,7 @@ public class AutoSwap extends ModuleStructure {
       }
    }
 
-   private int tickGap(SliderSettings s) {
-      return this.delayTicks(s);
-   }
+   private int tickGap(SliderSettings s) { return this.delayTicks(s); }
 
    private int delayTicks(SliderSettings s) {
       int base = Math.max(0, s.getInt());
@@ -869,7 +815,6 @@ public class AutoSwap extends ModuleStructure {
    @EventHandler
    public void onDraw(DrawEvent var1) {
       if (mc.player == null || !this.triggerMode.isSelected("Колесо") || !this.wheelOpen || mc.currentScreen != null) return;
-
       FrameProfiler profiler = FrameProfiler.getInstance();
       boolean prof = profiler.isEnabled();
       if (prof) profiler.begin("AutoSwap/wheelDraw");
@@ -878,99 +823,3 @@ public class AutoSwap extends ModuleStructure {
          int sw = var1.getDrawContext().getScaledWindowWidth();
          int sh = var1.getDrawContext().getScaledWindowHeight();
          float cx = sw / 2.0F, cy = sh / 2.0F;
-         float outerR = 92.0F, innerR = 54.0F;
-         float mx = (float)(mc.mouse.getX() * sw / mc.getWindow().getWidth());
-         float my = (float)(mc.mouse.getY() * sh / mc.getWindow().getHeight());
-         int count = 3;
-         int hover = this.getHoverIndex(mx, my, cx, cy, innerR, outerR, count);
-         this.lastHover = hover;
-
-         float segAngle = 360.0F / count;
-         float gap = 2.0F;
-         WheelPipeline wheel = Initialization.getInstance().getManager().getRenderCore().getWheelPipeline();
-         for (int i = 0; i < count; i++) {
-            int color = i == hover ? -1593847505 : 1624100301;
-            float a = -90.0F + segAngle * i + gap / 2.0F;
-            float b = a + segAngle - gap;
-            wheel.drawSegment(cx, cy, innerR, outerR, (float)Math.toRadians(a), (float)Math.toRadians(b), color);
-         }
-         for (int i = 0; i < count; i++) {
-            ItemStack stack = this.getStackForIndex(i);
-            if (!stack.isEmpty()) {
-               float angle = (float)Math.toRadians(-90.0F + segAngle * i + segAngle / 2.0F);
-               float mid = (innerR + outerR) / 2.0F;
-               float ix = cx + (float)Math.cos(angle) * mid;
-               float iy = cy + (float)Math.sin(angle) * mid;
-               var1.getDrawContext().drawItem(stack, (int)(ix - 8.0F), (int)(iy - 8.0F));
-            }
-         }
-      } finally {
-         if (prof) profiler.end();
-      }
-   }
-
-   private void setCursorUnlocked(boolean unlock) {
-      if (mc.mouse == null) return;
-      if (unlock && !this.cursorUnlocked) {
-         mc.mouse.unlockCursor();
-         this.cursorUnlocked = true;
-      } else if (!unlock && this.cursorUnlocked) {
-         if (mc.currentScreen == null) mc.mouse.lockCursor();
-         this.cursorUnlocked = false;
-      }
-   }
-
-   private ItemStack getStackForIndex(int idx) {
-      TextSetting setting = this.getSlotSetting(idx);
-      if (setting == null) return ItemStack.EMPTY;
-      String text = setting.getText();
-      if (text == null || text.isBlank()) {
-         this.cachedIds[idx] = text == null ? "" : text;
-         this.cachedStacks[idx] = ItemStack.EMPTY;
-         return ItemStack.EMPTY;
-      }
-      if (text.equals(this.cachedIds[idx])) return this.cachedStacks[idx];
-      this.cachedIds[idx] = text;
-      Item item = this.parseItem(text);
-      this.cachedStacks[idx] = item != null && item != Items.AIR ? item.getDefaultStack() : ItemStack.EMPTY;
-      return this.cachedStacks[idx];
-   }
-
-   private void invalidateCachedStack(int idx) {
-      if (idx >= 0 && idx < this.cachedIds.length) {
-         this.cachedIds[idx] = "";
-         this.cachedStacks[idx] = ItemStack.EMPTY;
-      }
-   }
-
-   private int getHoverIndex(float mx, float my, float cx, float cy, float inner, float outer, int count) {
-      float dx = mx - cx, dy = my - cy;
-      float dist = (float)Math.sqrt(dx * dx + dy * dy);
-      if (dist < inner || dist > outer) return -1;
-      double angle = Math.atan2(dy, dx) + (Math.PI / 2);
-      if (angle < 0) angle += Math.PI * 2;
-      return Math.max(0, Math.min((int)Math.floor(angle / (Math.PI * 2) * count), count - 1));
-   }
-
-   @Override
-   public void deactivate() {
-      this.pickingForSlot = -1;
-      this.pendingItem = null;
-      this.wheelOpen = false;
-      this.lastHover = -1;
-      this.postSwapPauseTicks = 0;
-      LOCK_ROTATION = false;
-      this.resetSwap();
-      if (mc.currentScreen instanceof InventoryScreen && mc.player != null) {
-         mc.setScreen(null);
-      }
-      this.setCursorUnlocked(false);
-   }
-
-   private TextSetting getSlotSetting(int idx) {
-      if (idx == 0) return this.slot1;
-      if (idx == 1) return this.slot2;
-      if (idx == 2) return this.slot3;
-      return null;
-   }
-}
