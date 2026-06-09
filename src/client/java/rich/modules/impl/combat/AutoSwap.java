@@ -60,8 +60,9 @@ public class AutoSwap extends ModuleStructure {
    private static final int PHASE_INV_AFTER_CLICK = 21;
    private static final int PHASE_INV_AFTER_CLOSE = 22;
    private static final int POST_SWAP_PAUSE_TICKS = 10;
-   // Минимум в мс между фазами inv-свапа. 3 тика. Ломает TotemGuard AutoTotemD и Vulcan BadPackets-too-fast.
    private static final long INV_PHASE_FLOOR_MS = 150L;
+   // ClickSlot SWAP button=40 = ванильное «F в инвентаре». PlayerInventory.OFF_HAND_SLOT.
+   private static final int OFFHAND_SWAP_BUTTON = 40;
 
    public final SelectSetting mode = new SelectSetting(
          "Режим",
@@ -81,7 +82,7 @@ public class AutoSwap extends ModuleStructure {
 
    public final BooleanSetting legitInvSwap = new BooleanSetting(
          "Свап из инвентаря",
-         "Если нужного предмета нет в хотбаре — открываем инвентарь, ждём реакцию, ClickSlot SWAP в пустой слот хотбара, закрываем инвентарь, потом F. Следовательные пакеты с мин. гэпом 150мс. Только в Legit.")
+         "Открываем инвентарь, наводимся на предмет, жмём F прямо в инвентаре — предмет уходит в offhand. Хотбар не затрагивается. Только Legit.")
       .setValue(true).visible(() -> this.mode.isSelected("Legit"));
 
    public final SliderSettings legitMeanMs = new SliderSettings("Legit: среднее (мс)", "Гаусс-распределение всех задержек.")
@@ -300,9 +301,7 @@ public class AutoSwap extends ModuleStructure {
          if (!this.legitInvSwap.isValue()) { this.warnTargetNotInHotbar(item); return; }
          int inv = this.findInvSlotForItem(item);
          if (inv == -1) { this.warnTargetNotInHotbar(item); return; }
-         int stash = this.findEmptyHotbarSlot();
-         if (stash == -1) stash = Math.max(0, this.getSelectedSlot());
-         this.beginLegitInvSwap(item, inv, stash, now);
+         this.beginLegitInvSwap(item, inv, now);
          return;
       }
       if (hotbar == -1) {
@@ -374,27 +373,27 @@ public class AutoSwap extends ModuleStructure {
       }
    }
 
-   private void beginLegitInvSwap(Item item, int invSlot, int stash, long now) {
+   /**
+    * Legit inv-свап: открываем инв, наводимся на предмет, жмём F (ClickSlot SWAP button=40), закрываем. Хотбар не трогаем вообще.
+    */
+   private void beginLegitInvSwap(Item item, int invSlot, long now) {
       this.targetItem = item;
       this.originalSlot = this.getSelectedSlot();
-      this.swapHotbarSlot = stash;
+      this.swapHotbarSlot = -1;
       this.invPickupSlot = invSlot;
       this.lastSwapMs = now;
       this.sentSprintStop = false;
       this.weOpenedScreen = false;
-      // Открываем инвентарь как игрок (пресс E). Сервер пакет не получает — PlayerScreenHandler всегда активен.
       if (mc.currentScreen == null) {
          mc.setScreen(new InventoryScreen(mc.player));
          this.weOpenedScreen = true;
       }
       this.swapPhase = PHASE_INV_REACTION;
-      // Реакция: 150-300мс. Как игрок увидевший что нужно открыть и навести мышку.
       long waitMs = Math.max(INV_PHASE_FLOOR_MS, this.computeLegitDelayMs() - 40L);
       this.phaseTimer = Math.max(3, (int)Math.ceil(waitMs / 50.0));
    }
 
    private void tickInvSwapPhase() {
-      // Пока инв открыт — игрок не бегит и не двигается вперёд. Сбрасываем спринт и гасим инпут.
       if (!this.sentSprintStop) { this.stopServerSprint(); this.sentSprintStop = true; }
       SUPPRESS_SPRINT = true;
       SUPPRESS_INPUT = true;
@@ -403,18 +402,17 @@ public class AutoSwap extends ModuleStructure {
 
       if (this.swapPhase == PHASE_INV_REACTION) {
          if (mc.player == null || mc.interactionManager == null) { this.finishSwap(); return; }
-         // ClickSlot SWAP через ванильный interactionManager.clickSlot — он сам проставит stateId, применит свап к клиенту и отправит пакет.
+         // ClickSlot SWAP button=40 — ванильный «F в инвентаре». Предмет из invSlot идёт прямо в offhand. Хотбар не затронут.
          int syncId = mc.player.playerScreenHandler.syncId;
-         mc.interactionManager.clickSlot(syncId, this.invPickupSlot, this.swapHotbarSlot, SlotActionType.SWAP, mc.player);
+         mc.interactionManager.clickSlot(syncId, this.invPickupSlot, OFFHAND_SWAP_BUTTON, SlotActionType.SWAP, mc.player);
          this.swapPhase = PHASE_INV_AFTER_CLICK;
-         // Гэп после клика — мин. 150мс = 3 тика. Ломает AutoTotemD.
          long waitMs = Math.max(INV_PHASE_FLOOR_MS, this.computeLegitDelayMs() - 60L);
          this.phaseTimer = Math.max(3, (int)Math.ceil(waitMs / 50.0));
          return;
       }
 
       if (this.swapPhase == PHASE_INV_AFTER_CLICK) {
-         // Закрываем инв как игрок (пресс E): CloseHandledScreen пакет + setScreen(null).
+         // Закрываем инв как игрок (пресс E).
          if (this.weOpenedScreen) {
             if (mc.getNetworkHandler() != null && mc.player != null) {
                mc.getNetworkHandler().sendPacket(new CloseHandledScreenC2SPacket(mc.player.playerScreenHandler.syncId));
@@ -422,25 +420,14 @@ public class AutoSwap extends ModuleStructure {
             if (mc.currentScreen instanceof InventoryScreen) mc.setScreen(null);
             this.weOpenedScreen = false;
          }
-         // Меняем выбранный слот через клиентский inventory. Vanilla в tickMovement сама сравнит selectedSlot != lastSelectedSlot и отправит UpdateSelectedSlot. Никаких дубликатов.
-         if (this.originalSlot != this.swapHotbarSlot && this.swapHotbarSlot >= 0 && mc.player != null) {
-            this.setClientSelectedSlot(this.swapHotbarSlot);
-         }
          this.swapPhase = PHASE_INV_AFTER_CLOSE;
-         // Гэп после закрытия — мин. 150мс = 3 тика. Даёт vanilla время отправить UpdateSelectedSlot до F.
          long waitMs = Math.max(INV_PHASE_FLOOR_MS, this.computeLegitDelayMs() - 60L);
          this.phaseTimer = Math.max(3, (int)Math.ceil(waitMs / 50.0));
          return;
       }
 
       if (this.swapPhase == PHASE_INV_AFTER_CLOSE) {
-         // F: PlayerAction(SWAP_ITEM_WITH_OFFHAND). К этому моменту vanilla уже отправила скролл.
-         this.sendSwapWithOffhandPacket();
-         this.mirrorOffhandSwap(this.swapHotbarSlot);
-         // Возвращаем выделение на оригинальный слот (vanilla сама отправит в след. тике).
-         if (this.keepOriginalSlot.isValue() && this.originalSlot != this.swapHotbarSlot && this.originalSlot >= 0 && mc.player != null) {
-            this.setClientSelectedSlot(this.originalSlot);
-         }
+         // Свап уже произошёл на PHASE_INV_REACTION. Никаких доп. пакетов.
          this.finishSwap();
          return;
       }
@@ -609,22 +596,6 @@ public class AutoSwap extends ModuleStructure {
       ItemStack inOffhand = mc.player.getStackInHand(Hand.OFF_HAND).copy();
       inv.setStack(hotbarSlot, inOffhand);
       mc.player.setStackInHand(Hand.OFF_HAND, inHotbar);
-   }
-
-   /**
-    * Меняет выбранный слот на клиенте без ручной отправки пакета.
-    * Vanilla в ClientPlayerEntity.tickMovement сама сравнит selectedSlot != lastSelectedSlot и отправит UpdateSelectedSlot в ближайшем тике.
-    * Сохраняет клиентский GUI в синхроне и не плодит дубликаты пакетов.
-    */
-   private void setClientSelectedSlot(int hotbarSlot) {
-      if (mc.player == null || hotbarSlot < 0 || hotbarSlot > 8) return;
-      PlayerInventory inv = mc.player.getInventory();
-      try {
-         inv.setSelectedSlot(hotbarSlot);
-      } catch (Throwable t) {
-         // Фоллбэк если маппинги иные — ручной пакет.
-         this.sendScrollPacket(hotbarSlot);
-      }
    }
 
    private void trackOffhandLoss() {
