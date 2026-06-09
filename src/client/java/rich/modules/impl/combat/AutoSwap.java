@@ -56,25 +56,24 @@ public class AutoSwap extends ModuleStructure {
       .value("Legit", "Packet")
       .selected("Legit");
    public final SliderSettings preOpenDelay = new SliderSettings("До открытия", "Задержка до открытия инвентаря в тиках")
-      .setValue(1.0F).range(0, 20)
+      .setValue(2.0F).range(0, 20)
       .visible(() -> this.swapMode.isSelected("Legit"));
    public final SliderSettings afterOpenDelay = new SliderSettings("После открытия", "Задержка после открытия инвентаря в тиках")
-      .setValue(3.0F).range(0, 20)
+      .setValue(5.0F).range(0, 20)
       .visible(() -> this.swapMode.isSelected("Legit"));
    public final SliderSettings beforeClickDelay = new SliderSettings("Перед F", "Задержка перед нажатием F по слоту")
-      .setValue(1.0F).range(0, 20)
+      .setValue(3.0F).range(0, 20)
       .visible(() -> this.swapMode.isSelected("Legit"));
    public final SliderSettings closeDelay = new SliderSettings("Перед закрытием", "Задержка перед закрытием инвентаря в тиках")
-      .setValue(1.0F).range(0, 20)
+      .setValue(3.0F).range(0, 20)
       .visible(() -> this.swapMode.isSelected("Legit"));
    public final SliderSettings randomDelay = new SliderSettings("Рандом задержки", "Дополнительный случайный разброс в тиках")
-      .setValue(1.0F).range(0, 10)
+      .setValue(2.0F).range(0, 10)
       .visible(() -> this.swapMode.isSelected("Legit"));
    public final SliderSettings cooldown = new SliderSettings("Cooldown", "Минимальная пауза между свапами в миллисекундах")
-      .setValue(500.0F).range(0, 3000);
-   public final BooleanSetting stopMovement = new BooleanSetting("Остановка", "Останавливать игрока во время legit-свапа")
-      .setValue(true)
-      .visible(() -> this.swapMode.isSelected("Legit"));
+      .setValue(1000.0F).range(0, 3000);
+   public final BooleanSetting stopMovement = new BooleanSetting("Остановка", "Останавливать игрока во время свапа (важно для обхода BadPacket)")
+      .setValue(true);
 
    public final TextSetting slot1 = new TextSetting("Предмет 1", "ID или алиас: талик/тотем/totem");
    public final ButtonSetting pick1 = new ButtonSetting("Выбрать 1", "Открыть инвентарь")
@@ -156,7 +155,9 @@ public class AutoSwap extends ModuleStructure {
                }
                var1.cancel();
                this.pickingForSlot = -1;
-               mc.setScreen(null);
+               // Закрываем через ванильный путь — шлём CloseHandledScreenC2SPacket,
+               // иначе у сервера остаётся «открытый» контейнер.
+               mc.player.closeHandledScreen();
             }
          }
       }
@@ -267,6 +268,9 @@ public class AutoSwap extends ModuleStructure {
 
       if (this.swapPhase == PHASE_BEFORE_CLICK) {
          if (!(mc.currentScreen instanceof InventoryScreen)) { this.resetSwap(); return; }
+         // На тике клика ещё раз гасим спринт и движение — анти-BadPacket страховка.
+         this.stopServerSprint();
+         if (this.stopMovement.isValue()) this.haltMovement();
          this.executeOffhandSwap(this.targetItem);
          this.swapPhase = PHASE_CLOSING;
          this.phaseTimer = this.delayTicks(this.closeDelay);
@@ -275,7 +279,10 @@ public class AutoSwap extends ModuleStructure {
 
       if (this.swapPhase == PHASE_CLOSING) {
          if (mc.currentScreen instanceof InventoryScreen && this.openedInventoryScreen) {
-            mc.setScreen(null);
+            // Корректное ванильное закрытие: шлём CloseHandledScreenC2SPacket + сбрасываем экран.
+            // Без этого пакета сервер думает, что инвентарь всё ещё «открыт» — и следующий
+            // ClickContainer ловится как BadPacket.
+            mc.player.closeHandledScreen();
          }
          this.resetSwap();
          // После legit-свапа выставляем tick-паузу, чтобы клиент успел обновить offhand
@@ -302,6 +309,10 @@ public class AutoSwap extends ModuleStructure {
       this.targetItem = item;
 
       if (this.swapMode.isSelected("Packet")) {
+         // Анти-BadPacket: перед сырым clickSlot обязательно гасим спринт и движение,
+         // иначе сервер видит «click + sprint + forward» в одном тике и кидает BadPacket.
+         this.stopServerSprint();
+         if (this.stopMovement.isValue()) this.haltMovement();
          this.executeOffhandSwap(item);
          this.targetItem = null;
          this.postSwapPauseTicks = POST_SWAP_PAUSE_TICKS;
@@ -538,9 +549,11 @@ public class AutoSwap extends ModuleStructure {
       this.wheelOpen = false;
       this.lastHover = -1;
       this.postSwapPauseTicks = 0;
+      boolean weOpened = this.openedInventoryScreen;
       this.resetSwap();
-      if (mc.currentScreen instanceof InventoryScreen && this.openedInventoryScreen) {
-         mc.setScreen(null);
+      if (weOpened && mc.currentScreen instanceof InventoryScreen && mc.player != null) {
+         // Ванильное закрытие со close-пакетом, чтобы не оставить сервер в "open container" state.
+         mc.player.closeHandledScreen();
       }
       this.setCursorUnlocked(false);
    }
