@@ -45,11 +45,12 @@ public class AutoSwap extends ModuleStructure {
    public static volatile float LOCK_PITCH = 0.0F;
 
    private static final int PHASE_IDLE = 0;
-   private static final int PHASE_RELOCATE = 1;
-   private static final int PHASE_SCROLL_TO = 2;
-   private static final int PHASE_DO_SWAP = 3;
-   private static final int PHASE_RESTORE = 4;
-   private static final int PHASE_RESTORE_RELOCATE = 5;
+   private static final int PHASE_PRE_HALT = 1;
+   private static final int PHASE_RELOCATE = 2;
+   private static final int PHASE_SCROLL_TO = 3;
+   private static final int PHASE_DO_SWAP = 4;
+   private static final int PHASE_RESTORE = 5;
+   private static final int PHASE_RESTORE_RELOCATE = 6;
    private static final int POST_SWAP_PAUSE_TICKS = 10;
 
    public final SelectSetting triggerMode = new SelectSetting("Триггер", "Колесо — выбор через радиальное меню, Без колеса — авто-свап")
@@ -59,37 +60,37 @@ public class AutoSwap extends ModuleStructure {
       .visible(() -> this.triggerMode.isSelected("Колесо"));
    public final BindSetting swapBind = new BindSetting("Бинд свапа", "Ручной триггер свапа (работает только в режиме «Без колеса»)")
       .visible(() -> this.triggerMode.isSelected("Без колеса"));
-   public final SelectSetting swapMode = new SelectSetting("Режим свапа", "Legit — растягивает F-пакеты во времени (рекомендуется), Packet — всё в один тик (быстро, но ловится строгими AC)")
+   public final SelectSetting swapMode = new SelectSetting("Режим свапа", "Legit — использует полные задержки из слайдеров (надёжнее), Packet — фиксированный 1-тик-гэп между пакетами (быстрее, но по-прежнему без multi-action-per-tick)")
       .value("Legit", "Packet")
       .selected("Legit");
-   public final SliderSettings preOpenDelay = new SliderSettings("До скролла", "Тиков перед первым UpdateSelectedSlot. Минимум 2 рекомендуется во избежание badpackets-чека Post HeldItemSlot.")
+   public final SliderSettings preOpenDelay = new SliderSettings("До скролла", "Legit: тиков перед первым UpdateSelectedSlot. Минимум 2 рекомендуется во избежание badpackets-чека Post HeldItemSlot.")
       .setValue(3.0F).range(0, 20)
       .visible(() -> this.swapMode.isSelected("Legit"));
-   public final SliderSettings afterOpenDelay = new SliderSettings("Перед F", "Тиков между UpdateSelectedSlot и PlayerAction(SWAP)")
+   public final SliderSettings afterOpenDelay = new SliderSettings("Перед F", "Legit: тиков между UpdateSelectedSlot и PlayerAction(SWAP)")
       .setValue(3.0F).range(0, 20)
       .visible(() -> this.swapMode.isSelected("Legit"));
-   public final SliderSettings closeDelay = new SliderSettings("Перед возвратом", "Тиков между F и восстановительным UpdateSelectedSlot")
+   public final SliderSettings closeDelay = new SliderSettings("Перед возвратом", "Legit: тиков между F и восстановительным UpdateSelectedSlot")
       .setValue(3.0F).range(0, 20)
       .visible(() -> this.swapMode.isSelected("Legit"));
-   public final SliderSettings restoreGap = new SliderSettings("Гэп HeldItemSlot", "Тиков между восстановительным UpdateSelectedSlot и финальным ClickSlot. Должен быть >=2, иначе AC поймает Post HeldItemSlot (badpackets #3).")
+   public final SliderSettings restoreGap = new SliderSettings("Гэп HeldItemSlot", "Legit: тиков между восстановительным UpdateSelectedSlot и финальным ClickSlot. Должен быть >=2, иначе AC поймает Post HeldItemSlot (badpackets #3).")
       .setValue(3.0F).range(0, 20)
       .visible(() -> this.swapMode.isSelected("Legit"));
-   public final SliderSettings randomDelay = new SliderSettings("Рандом задержки", "Дополнительный случайный разброс в тиках")
+   public final SliderSettings randomDelay = new SliderSettings("Рандом задержки", "Legit: дополнительный случайный разброс в тиках")
       .setValue(2.0F).range(0, 10)
       .visible(() -> this.swapMode.isSelected("Legit"));
-   public final SliderSettings relocateHaltTicks = new SliderSettings("Стоп перед ClickSlot", "Тиков «стационарного» состояния перед каждым ClickSlot для перемещения из инвентаря. Минимум 2 рекомендуется для Polar/Spacetime InventoryMove-чека.")
-      .setValue(3.0F).range(1, 10);
+   public final SliderSettings relocateHaltTicks = new SliderSettings("Стоп перед свапом", "Тиков стационарного состояния перед ЛЮБЫМ свапом (включая хотбарный). Обязательно при ходьбе — иначе AC ловит ClickSlot/UpdateSelectedSlot в одном тике с PlayerMove-дельтой.")
+      .setValue(4.0F).range(1, 10);
    public final SliderSettings cooldown = new SliderSettings("Cooldown", "Минимальная пауза между свапами в миллисекундах")
       .setValue(1000.0F).range(0, 3000);
-   public final BooleanSetting stopMovement = new BooleanSetting("Остановка", "Останавливать игрока во время свапа")
+   public final BooleanSetting stopMovement = new BooleanSetting("Остановка", "Даже без antiInventoryMove принудительно останавливать игрока во время свапа")
       .setValue(false);
    public final BooleanSetting lockRotation = new BooleanSetting("Lock rotation", "Замораживать поворот головы во время свапа")
       .setValue(false);
-   public final BooleanSetting restoreAfterRelocate = new BooleanSetting("Возврат после перекидывания", "Если предмет был в основной части инвентаря — вернуть содержимое хотбара на место (ванильным 1-9 пакетом)")
+   public final BooleanSetting restoreAfterRelocate = new BooleanSetting("Возврат после перекидывания", "Если предмет был в основной части инвентаря — вернуть содержимое хотбара на место")
       .setValue(true);
    public final BooleanSetting maskInventory = new BooleanSetting("Маскировка ClickSlot", "После каждого SWAP-клика шлём CloseHandledScreen(0). Обходит InventoryMove-проверки (Grim/Polar/Spacetime).")
       .setValue(true);
-   public final BooleanSetting antiInventoryMove = new BooleanSetting("Анти InventoryMove", "Перед каждым ClickSlot принудительно шлём STOP_SPRINTING + обнуляем скорость + держим игрока в стационарном состоянии N тиков. Обязательно для свапа из основного инвентаря во время движения.")
+   public final BooleanSetting antiInventoryMove = new BooleanSetting("Анти InventoryMove", "На ПРОТЯЖЕНИИ всего свапа принудительно шлём STOP_SPRINTING + обнуляем скорость. Обязательно включать при возможности свапа во время ходьбы/спринта.")
       .setValue(true);
 
    public final TextSetting slot1 = new TextSetting("Предмет 1", "ID или алиас");
@@ -248,12 +249,11 @@ public class AutoSwap extends ModuleStructure {
          return;
       }
 
-      // While any swap phase is active, force player stationary on the server.
-      // Mandatory during PHASE_RELOCATE — that's exactly what AC inspects for InventoryMove.
-      boolean forceHalt = this.swapPhase == PHASE_RELOCATE
-            || this.swapPhase == PHASE_RESTORE_RELOCATE
-            || (this.relocateFromInvSlot != -1 && this.antiInventoryMove.isValue())
-            || this.stopMovement.isValue();
+      // Фикс #10: forceHalt теперь покрывает ВСЕ фазы свапа, не только RELOCATE.
+      // Это исправляет badpacket3 при ходьбе для хотбарных предметов: AC больше не видит
+      // UpdateSelectedSlot/SwapOffhand в том же тике, что ненулевую PlayerMove-дельту.
+      boolean forceHalt = this.swapPhase != PHASE_IDLE
+            && (this.antiInventoryMove.isValue() || this.stopMovement.isValue());
       if (forceHalt) {
          if (!this.sentSprintStop) {
             this.stopServerSprint();
@@ -269,6 +269,23 @@ public class AutoSwap extends ModuleStructure {
          return;
       }
 
+      if (this.swapPhase == PHASE_PRE_HALT) {
+         // Ничего не шлём, просто стояли стационарно N тиков. Решаем куда идти:
+         //  - если предмет в инв-area — сначала в PHASE_RELOCATE
+         //  - иначе сразу в PHASE_SCROLL_TO или PHASE_DO_SWAP
+         if (this.pendingRelocateInvSlot != -1) {
+            this.swapPhase = PHASE_RELOCATE;
+            this.phaseTimer = 0; // уже отхалтили
+         } else if (this.originalSlot == this.swapHotbarSlot) {
+            this.swapPhase = PHASE_DO_SWAP;
+            this.phaseTimer = this.tickGap(this.afterOpenDelay);
+         } else {
+            this.swapPhase = PHASE_SCROLL_TO;
+            this.phaseTimer = this.tickGap(this.preOpenDelay);
+         }
+         return;
+      }
+
       if (this.swapPhase == PHASE_RELOCATE) {
          this.sendVanillaSwapClick(this.pendingRelocateInvSlot, this.pendingRelocateStash);
          this.relocateFromInvSlot = this.pendingRelocateInvSlot;
@@ -278,11 +295,10 @@ public class AutoSwap extends ModuleStructure {
 
          if (this.originalSlot == this.swapHotbarSlot) {
             this.swapPhase = PHASE_DO_SWAP;
-            this.phaseTimer = this.delayTicks(this.afterOpenDelay);
+            this.phaseTimer = this.tickGap(this.afterOpenDelay);
          } else {
             this.swapPhase = PHASE_SCROLL_TO;
-            // Гэп ClickSlot -> UpdateSelectedSlot: тоже Post HeldItemSlot чек ловит
-            this.phaseTimer = this.delayTicks(this.preOpenDelay);
+            this.phaseTimer = this.tickGap(this.preOpenDelay);
          }
          return;
       }
@@ -290,7 +306,7 @@ public class AutoSwap extends ModuleStructure {
       if (this.swapPhase == PHASE_SCROLL_TO) {
          this.sendScrollPacket(this.swapHotbarSlot);
          this.swapPhase = PHASE_DO_SWAP;
-         this.phaseTimer = this.delayTicks(this.afterOpenDelay);
+         this.phaseTimer = this.tickGap(this.afterOpenDelay);
          return;
       }
 
@@ -298,21 +314,17 @@ public class AutoSwap extends ModuleStructure {
          this.sendSwapWithOffhandPacket();
          this.mirrorOffhandSwap(this.swapHotbarSlot);
          this.swapPhase = PHASE_RESTORE;
-         this.phaseTimer = this.delayTicks(this.closeDelay);
+         this.phaseTimer = this.tickGap(this.closeDelay);
          return;
       }
 
       if (this.swapPhase == PHASE_RESTORE) {
-         // Шаг 1 восстановления: только UpdateSelectedSlot (если нужно).
-         // Финальный ClickSlot перенесён в отдельную фазу PHASE_RESTORE_RELOCATE,
-         // чтобы между UpdateSelectedSlot и ClickSlot был тиковый гэп (иначе
-         // ловится badpackets #3 / Post HeldItemSlot).
          if (this.originalSlot != this.swapHotbarSlot && this.originalSlot >= 0) {
             this.sendScrollPacket(this.originalSlot);
          }
          if (this.relocateFromInvSlot != -1 && this.restoreAfterRelocate.isValue()) {
             this.swapPhase = PHASE_RESTORE_RELOCATE;
-            this.phaseTimer = this.delayTicks(this.restoreGap);
+            this.phaseTimer = this.tickGap(this.restoreGap);
          } else {
             this.finishSwap();
          }
@@ -320,10 +332,6 @@ public class AutoSwap extends ModuleStructure {
       }
 
       if (this.swapPhase == PHASE_RESTORE_RELOCATE) {
-         // Шаг 2 восстановления: финальный ClickSlot(SWAP) ВОЗВРАЩАЕТ
-         // первоначальное содержимое хотбар-слота обратно в исходную
-         // ячейку инвентаря. Выполняется в отдельном тике с предварительным
-         // halt-комбо для антиInventoryMove.
          if (this.relocateFromInvSlot != -1 && this.restoreAfterRelocate.isValue()) {
             this.sendVanillaSwapClick(this.relocateFromInvSlot, this.swapHotbarSlot);
          }
@@ -351,64 +359,50 @@ public class AutoSwap extends ModuleStructure {
       this.relocateFromInvSlot = -1;
       this.sentSprintStop = false;
 
-      if (this.swapMode.isSelected("Packet")) {
-         // Packet mode: всё в один тик (быстро, но строгие AC могут поймать badpackets).
-         if (hotbar == -1) {
-            int stash = this.findEmptyHotbarSlot();
-            if (stash == -1) stash = this.originalSlot >= 0 ? this.originalSlot : 0;
-            this.sendVanillaSwapClick(invSlot, stash);
-            this.relocateFromInvSlot = invSlot;
-            hotbar = stash;
-         }
-         this.swapHotbarSlot = hotbar;
-         if (this.lockRotation.isValue()) this.refreshRotationLock();
-         if (this.stopMovement.isValue() || this.antiInventoryMove.isValue()) {
-            this.stopServerSprint();
-            this.haltMovement();
-         }
-         if (this.originalSlot != this.swapHotbarSlot) {
-            this.sendScrollPacket(this.swapHotbarSlot);
-         }
-         this.sendSwapWithOffhandPacket();
-         this.mirrorOffhandSwap(this.swapHotbarSlot);
-         if (this.originalSlot != this.swapHotbarSlot && this.originalSlot >= 0) {
-            this.sendScrollPacket(this.originalSlot);
-         }
-         if (this.relocateFromInvSlot != -1 && this.restoreAfterRelocate.isValue()) {
-            this.sendVanillaSwapClick(this.relocateFromInvSlot, this.swapHotbarSlot);
-         }
-         this.finishSwap();
-         return;
-      }
-
-      // Legit mode.
       if (this.lockRotation.isValue()) this.refreshRotationLock();
       SUPPRESS_SPRINT = this.stopMovement.isValue() || this.antiInventoryMove.isValue();
 
+      // Фикс #10: ECMAUnified flow для Legit и Packet режимов.
+      // Различия только в величине гэпов: tickGap() возвращает 1 в Packet, delayTicks(slider) в Legit.
+      // Оба режима используют phase-машину — больше никакого multi-action-per-tick.
+
+      // Определяем целевой хотбар-слот.
       if (hotbar == -1) {
-         // Inv-area item: enter PHASE_RELOCATE first to give server N ticks of stationary
-         // state BEFORE the ClickSlot fires. This is what fixes the InventoryMove kick
-         // when player is moving/sprinting at the moment of swap trigger.
          int stash = this.findEmptyHotbarSlot();
          if (stash == -1) stash = this.originalSlot >= 0 ? this.originalSlot : 0;
          this.pendingRelocateInvSlot = invSlot;
          this.pendingRelocateStash = stash;
-         this.swapPhase = PHASE_RELOCATE;
-         int haltTicks = this.antiInventoryMove.isValue()
-               ? Math.max(1, this.relocateHaltTicks.getInt())
-               : Math.max(0, this.preOpenDelay.getInt());
+         this.swapHotbarSlot = stash;
+      } else {
+         this.swapHotbarSlot = hotbar;
+      }
+
+      // Пре-халт: всегда включаем, если antiInventoryMove ON. Даёт N тиков нулевых PlayerMove-дельт
+      // ПЕРЕД первым свап-пакетом. Без этого AC ловит «инвентарь-во-время-движения».
+      int preHaltTicks = this.antiInventoryMove.isValue()
+            ? Math.max(1, this.relocateHaltTicks.getInt())
+            : 0;
+
+      if (preHaltTicks > 0) {
+         this.swapPhase = PHASE_PRE_HALT;
          int rnd = Math.max(0, this.randomDelay.getInt());
-         this.phaseTimer = haltTicks + (rnd <= 0 ? 0 : ThreadLocalRandom.current().nextInt(rnd + 1));
+         this.phaseTimer = preHaltTicks
+               + (rnd <= 0 || this.swapMode.isSelected("Packet")
+                     ? 0
+                     : ThreadLocalRandom.current().nextInt(rnd + 1));
          return;
       }
 
-      this.swapHotbarSlot = hotbar;
-      if (this.originalSlot == this.swapHotbarSlot) {
+      // Без пре-халта — сразу в нужную фазу.
+      if (this.pendingRelocateInvSlot != -1) {
+         this.swapPhase = PHASE_RELOCATE;
+         this.phaseTimer = 0;
+      } else if (this.originalSlot == this.swapHotbarSlot) {
          this.swapPhase = PHASE_DO_SWAP;
-         this.phaseTimer = this.delayTicks(this.afterOpenDelay);
+         this.phaseTimer = this.tickGap(this.afterOpenDelay);
       } else {
          this.swapPhase = PHASE_SCROLL_TO;
-         this.phaseTimer = this.delayTicks(this.preOpenDelay);
+         this.phaseTimer = this.tickGap(this.preOpenDelay);
       }
    }
 
@@ -440,17 +434,6 @@ public class AutoSwap extends ModuleStructure {
          Direction.DOWN));
    }
 
-   /**
-    * Ванильный ClickSlot формы «цифры 1-9 над слотом в инвентаре».
-    *
-    * Анти-кик-комбо вокруг каждого клика:
-    *  1. STOP_SPRINTING — сервер сразу видит, что игрок «остановился».
-    *  2. haltMovement — обнуляем форвард/сайд + xz-velocity. Следующий PlayerMoveC2SPacket
-    *     (отсылается ваниллой в конце тика) покажет нулевой дельта-шаг, и InventoryMove-чек
-    *     Polar/Spacetime/Grim не зафлажится.
-    *  3. ClickSlot(SWAP).
-    *  4. CloseHandledScreen(0) — сбрасывает эвристику «открыт инвентарь» (GrimAC #1829).
-    */
    private void sendVanillaSwapClick(int screenSlotId, int hotbarButton) {
       if (mc.player == null || mc.interactionManager == null) return;
       if (this.antiInventoryMove.isValue()) {
@@ -593,6 +576,12 @@ public class AutoSwap extends ModuleStructure {
       if (this.postSwapPauseTicks == 0) {
          LOCK_ROTATION = false;
       }
+   }
+
+   /** Гэп между соседними свап-пакетами. В Packet-режиме всегда 1 тик; в Legit — из слайдера + rnd. */
+   private int tickGap(SliderSettings s) {
+      if (this.swapMode.isSelected("Packet")) return 1;
+      return this.delayTicks(s);
    }
 
    private int delayTicks(SliderSettings s) {
