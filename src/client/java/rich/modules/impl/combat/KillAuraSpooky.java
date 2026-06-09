@@ -27,20 +27,12 @@ import rich.util.c;
 /**
  * KillAura — профиль SpookyTime / Releon (SPAngle).
  *
- * Ротация (by-module.md — SPAngle):
- *   yawLimit   = min(|yawΔ|, 74° + rand(0..1.03))
- *   pitchLimit = min(|pitchΔ|, 32.33°)
- *   Per-axis:
- *     reached = |Δ| >= limit
- *     maxStep = reached ? rand(65..100) : rand(7.7..12.1)
- *     scale   = min(total, maxStep) / total
- *     if !reached → ease: scale = scale*(0.5 + 0.5*scale)
- *     next    = current + Δ*scale  (pitch clamp -89..90)
- *   Sway: yaw += sin((ms%12000)/1200 * 3 * 2π) * 1.15 * gaussian()
- *   Target lost: 50ms freeze → 500ms eased-lerp to camera → reset
- *   GCD-снап на каждую финальную дельту.
+ * Silent-режим: curYaw/curPitch хранятся внутренне.
+ *   При атаке — временно подставляем наши углы, бьём, восстанавливаем.
+ *   Камера игрока визуально не двигается.
  *
- * Атака: crit-aware + W-release (1..15ms), swing — заимствовано из Triggerbot.
+ * W-release: использует Triggerbot.SUPPRESS_FORWARD (static volatile)
+ *   + finally-блок, идентично Triggerbot.
  */
 public class KillAuraSpooky extends ModuleStructure {
 
@@ -48,10 +40,10 @@ public class KillAuraSpooky extends ModuleStructure {
     public final SliderSettings range      = new SliderSettings("Range",     "Attack range")       .setValue(3.1F).range(1.0F, 6.0F);
     public final SliderSettings fovSetting = new SliderSettings("FOV",       "Max angle to target").setValue(180.0F).range(10.0F, 180.0F);
     public final BooleanSetting onlySword  = new BooleanSetting("OnlySword", "Only sword/axe")     .setValue(true);
-    public final BooleanSetting silentRot  = new BooleanSetting("Silent",    "Silent rotation")    .setValue(false);
+    public final BooleanSetting silentRot  = new BooleanSetting("Silent",    "Silent rotation")    .setValue(true);
     public final BooleanSetting swayOn     = new BooleanSetting("Sway",      "SPAngle idle sway")  .setValue(true);
 
-    // ── Состояние: ротация ─────────────────────────────────────────────────
+    // ── Ротация ────────────────────────────────────────────────────────────
     private final Random rng = new Random();
     private float   curYaw;
     private float   curPitch;
@@ -62,10 +54,10 @@ public class KillAuraSpooky extends ModuleStructure {
     private float  holdYaw;
     private float  holdPitch;
 
-    // ── Состояние: атака ───────────────────────────────────────────────────
+    // ── Атака / W-release ─────────────────────────────────────────────────
     private Entity  pendingAttack     = null;
-    private long    preAttackDeadline = 0;
-    private boolean pendingWasForward;
+    private long    preAttackDeadline = 0L;
+    private boolean pendingWasForward = false;
 
     private int     ticksOutOfWater = 10;
     private int     ticksOnGround   = 0;
@@ -92,6 +84,7 @@ public class KillAuraSpooky extends ModuleStructure {
     @Override
     public void deactivate() {
         super.deactivate();
+        Triggerbot.SUPPRESS_FORWARD = false;
         fullReset();
     }
 
@@ -100,80 +93,97 @@ public class KillAuraSpooky extends ModuleStructure {
     // ══════════════════════════════════════════════════════════════════════
     @EventHandler
     public void onTick(TickEvent event) {
-        if (mc.player == null || mc.world == null || mc.currentScreen != null) {
-            fullReset();
-            return;
-        }
-        ClientPlayerEntity player = mc.player;
-
-        updateGroundWaterState(player);
-
-        // ── Pending attack: W-release задержка ─────────────────────────────
-        if (pendingAttack != null) {
-            if (!isEntityValid(pendingAttack)) {
-                pendingAttack = null;
-                preAttackDeadline = 0;
-            } else if (System.currentTimeMillis() >= preAttackDeadline) {
-                doAttack(pendingAttack, pendingWasForward);
-                pendingAttack = null;
-            }
-            return;
-        }
-
-        // ── Поиск / сохранение цели ────────────────────────────────────────
-        Entity target = findTarget(player);
-        long now = System.currentTimeMillis();
-
-        if (target != null) {
-            lockedTarget = target;
-            targetLostMs = 0;
-        } else if (lockedTarget != null) {
-            if (targetLostMs == 0) {
-                targetLostMs = now;
-                holdYaw   = curYaw;
-                holdPitch = curPitch;
-            }
-            long elapsed = now - targetLostMs;
-            if (elapsed < 50L) {
-                applyRotation(player, holdYaw, holdPitch);
+        boolean wantSuppress = false;
+        try {
+            if (mc.player == null || mc.world == null || mc.currentScreen != null) {
+                fullReset();
                 return;
-            } else if (elapsed < 550L) {
-                float t     = (float)(elapsed - 50L) / 500.0F;
-                float eased = t * (0.5F + 0.5F * t);
-                float retYaw   = holdYaw   + MathHelper.wrapDegrees(player.getYaw()   - holdYaw)   * eased;
-                float retPitch = holdPitch + (player.getPitch() - holdPitch) * eased;
-                applyRotation(player, retYaw, retPitch);
+            }
+            ClientPlayerEntity player = mc.player;
+            updateGroundWaterState(player);
+
+            // ── Pending attack: ждём дедлайн W-release ─────────────────────
+            if (pendingAttack != null) {
+                if (!isEntityValid(pendingAttack)) {
+                    pendingAttack = null;
+                    preAttackDeadline = 0L;
+                    return;
+                }
+                if (System.currentTimeMillis() < preAttackDeadline) {
+                    wantSuppress = true;   // держим W нажатым «выключенным»
+                    return;
+                }
+                // дедлайн прошёл — атакуем
+                Entity t = pendingAttack;
+                boolean wasForward = pendingWasForward;
+                pendingAttack = null;
+                preAttackDeadline = 0L;
+                doAttack(player, t, wasForward);
                 return;
+            }
+
+            // ── Поиск цели ────────────────────────────────────────────────
+            Entity target = findTarget(player);
+            long now = System.currentTimeMillis();
+
+            if (target != null) {
+                lockedTarget = target;
+                targetLostMs = 0;
+            } else if (lockedTarget != null) {
+                if (targetLostMs == 0) {
+                    targetLostMs = now;
+                    holdYaw   = curYaw;
+                    holdPitch = curPitch;
+                }
+                long elapsed = now - targetLostMs;
+                if (elapsed < 50L) {
+                    // 50ms freeze
+                    if (!silentRot.isValue()) applyCamera(player, holdYaw, holdPitch);
+                    return;
+                } else if (elapsed < 550L) {
+                    // 500ms eased return к камере
+                    float t     = (float)(elapsed - 50L) / 500.0F;
+                    float eased = t * (0.5F + 0.5F * t);
+                    float retYaw   = holdYaw   + MathHelper.wrapDegrees(player.getYaw()   - holdYaw)   * eased;
+                    float retPitch = holdPitch + (player.getPitch() - holdPitch) * eased;
+                    if (!silentRot.isValue()) applyCamera(player, retYaw, retPitch);
+                    return;
+                } else {
+                    lockedTarget = null;
+                    hasRotation  = false;
+                    return;
+                }
             } else {
-                lockedTarget = null;
-                hasRotation  = false;
+                hasRotation = false;
                 return;
             }
-        } else {
-            hasRotation = false;
-            return;
+
+            // ── SPAngle ───────────────────────────────────────────────────
+            Vec3d aimPoint = getNearestVisiblePoint(player, target);
+
+            float prevYaw   = hasRotation ? curYaw   : player.getYaw();
+            float prevPitch = hasRotation ? curPitch : player.getPitch();
+
+            float[] next = spAngle(prevYaw, prevPitch, player.getEyePos(), aimPoint);
+            curYaw   = next[0];
+            curPitch = next[1];
+            hasRotation = true;
+
+            float[] snapped = gcdSnap(player, prevYaw, prevPitch, curYaw, curPitch);
+            curYaw   = snapped[0];
+            curPitch = snapped[1];
+
+            // Применяем камеру только если НЕ silent
+            if (!silentRot.isValue()) {
+                applyCamera(player, curYaw, curPitch);
+            }
+
+            // ── Атака ─────────────────────────────────────────────────────
+            tickAttack(player, target);
+
+        } finally {
+            Triggerbot.SUPPRESS_FORWARD = wantSuppress;
         }
-
-        // ── Ближайшая видимая точка на хитбоксе цели ──────────────────────
-        Vec3d aimPoint = getNearestVisiblePoint(player, target);
-
-        // ── SPAngle ────────────────────────────────────────────────────────
-        float prevYaw   = hasRotation ? curYaw   : player.getYaw();
-        float prevPitch = hasRotation ? curPitch : player.getPitch();
-
-        float[] next = spAngle(prevYaw, prevPitch, player.getEyePos(), aimPoint);
-        curYaw   = next[0];
-        curPitch = next[1];
-        hasRotation = true;
-
-        float[] snapped = gcdSnap(player, prevYaw, prevPitch, curYaw, curPitch);
-        curYaw   = snapped[0];
-        curPitch = snapped[1];
-
-        applyRotation(player, curYaw, curPitch);
-
-        // ── Атака ─────────────────────────────────────────────────────────
-        tickAttack(player, target);
     }
 
     // ══════════════════════════════════════════════════════════════════════
@@ -197,15 +207,13 @@ public class KillAuraSpooky extends ModuleStructure {
         float yawLimit   = Math.min(Math.abs(yawD),   74.0F + (float)(rng.nextDouble() * 1.03));
         float pitchLimit = Math.min(Math.abs(pitchD), 32.33F);
 
-        // ── Yaw ──
         boolean yawReached = Math.abs(yawD)   >= yawLimit;
         float   yawStep    = yawReached ? 65.0F + rng.nextFloat() * 35.0F
                                        :  7.7F + rng.nextFloat() *  4.4F;
         float   yawScale   = Math.min(total, yawStep) / total;
         if (!yawReached) yawScale = yawScale * (0.5F + 0.5F * yawScale);
-        float   applyYaw   = MathHelper.clamp(yawD,  -yawLimit,   yawLimit)   * yawScale;
+        float   applyYaw   = MathHelper.clamp(yawD,  -yawLimit, yawLimit) * yawScale;
 
-        // ── Pitch ──
         boolean pitchReached = Math.abs(pitchD) >= pitchLimit;
         float   pitchStep    = pitchReached ? 65.0F + rng.nextFloat() * 35.0F
                                            :  7.7F + rng.nextFloat() *  4.4F;
@@ -254,19 +262,17 @@ public class KillAuraSpooky extends ModuleStructure {
     }
 
     // ══════════════════════════════════════════════════════════════════════
-    // ПРИМЕНЕНИЕ РОТАЦИИ
+    // ПРИМЕНЕНИЕ КАМЕРЫ (только не-silent)
     // ══════════════════════════════════════════════════════════════════════
-    private void applyRotation(ClientPlayerEntity player, float yaw, float pitch) {
+    private void applyCamera(ClientPlayerEntity player, float yaw, float pitch) {
         player.setYaw(yaw);
         player.setPitch(pitch);
-        if (!silentRot.isValue()) {
-            player.headYaw = yaw;
-            player.bodyYaw = yaw;
-        }
+        player.headYaw = yaw;
+        player.bodyYaw = yaw;
     }
 
     // ══════════════════════════════════════════════════════════════════════
-    // АТАКА (crit-aware + W-release)
+    // АТАКА с временным подставлением ротации (для silent)
     // ══════════════════════════════════════════════════════════════════════
     private void tickAttack(ClientPlayerEntity player, Entity target) {
         if (!canHit(player, target)) return;
@@ -307,12 +313,43 @@ public class KillAuraSpooky extends ModuleStructure {
         preAttackDeadline = System.currentTimeMillis() + preMs;
     }
 
-    private void doAttack(Entity target, boolean wasForward) {
-        mc.player.setSprinting(false);
-        mc.interactionManager.attackEntity(mc.player, target);
-        mc.player.swingHand(Hand.MAIN_HAND);
+    /**
+     * Атакует цель.
+     * Если silent включён — временно подставляет curYaw/curPitch, бьёт, восстанавливает.
+     * Таким образом сервер видит правильные углы, а камера игрока не двигается.
+     */
+    private void doAttack(ClientPlayerEntity player, Entity target, boolean wasForward) {
+        if (silentRot.isValue() && hasRotation) {
+            // Запоминаем реальные углы
+            float realYaw   = player.getYaw();
+            float realPitch = player.getPitch();
+            float realHead  = player.headYaw;
+            float realBody  = player.bodyYaw;
+
+            // Подставляем наши
+            player.setYaw(curYaw);
+            player.setPitch(curPitch);
+            player.headYaw = curYaw;
+            player.bodyYaw = curYaw;
+
+            // Атака
+            player.setSprinting(false);
+            mc.interactionManager.attackEntity(player, target);
+            player.swingHand(Hand.MAIN_HAND);
+
+            // Восстанавливаем — камера не шевельнулась
+            player.setYaw(realYaw);
+            player.setPitch(realPitch);
+            player.headYaw = realHead;
+            player.bodyYaw = realBody;
+        } else {
+            player.setSprinting(false);
+            mc.interactionManager.attackEntity(player, target);
+            player.swingHand(Hand.MAIN_HAND);
+        }
+
         if (wasForward && mc.options.forwardKey.isPressed()) {
-            mc.player.setSprinting(true);
+            player.setSprinting(true);
         }
     }
 
@@ -359,8 +396,8 @@ public class KillAuraSpooky extends ModuleStructure {
         );
         if (canSee(player, eyeLevel)) return eyeLevel;
 
-        float yaw   = player.getYaw()   * (float)(Math.PI / 180);
-        float pitch = player.getPitch() * (float)(Math.PI / 180);
+        float yaw   = (silentRot.isValue() && hasRotation ? curYaw   : player.getYaw())   * (float)(Math.PI / 180);
+        float pitch = (silentRot.isValue() && hasRotation ? curPitch : player.getPitch()) * (float)(Math.PI / 180);
         double lx   = -Math.sin(yaw) * Math.cos(pitch);
         double ly   = -Math.sin(pitch);
         double lz   =  Math.cos(yaw) * Math.cos(pitch);
@@ -450,7 +487,7 @@ public class KillAuraSpooky extends ModuleStructure {
     private void fullReset() {
         lockedTarget = null; targetLostMs = 0; hasRotation = false;
         holdYaw = 0; holdPitch = 0;
-        pendingAttack = null; preAttackDeadline = 0;
+        pendingAttack = null; preAttackDeadline = 0L;
         ticksOnGround = 0; wasFalling = false; fallGroundTicks = 0;
         ticksOutOfWater = 10;
     }
