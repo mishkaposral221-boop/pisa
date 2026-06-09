@@ -22,6 +22,7 @@ import rich.events.impl.TickEvent;
 import rich.modules.module.ModuleStructure;
 import rich.modules.module.category.ModuleCategory;
 import rich.modules.module.setting.implement.BindSetting;
+import rich.modules.module.setting.implement.BooleanSetting;
 import rich.modules.module.setting.implement.ButtonSetting;
 import rich.modules.module.setting.implement.SelectSetting;
 import rich.modules.module.setting.implement.SliderSettings;
@@ -41,8 +42,10 @@ public class AutoSwap extends ModuleStructure {
    private static final int OFFHAND_BUTTON = 40;
    private static final int INVENTORY_WIDTH = 176;
    private static final int INVENTORY_HEIGHT = 166;
+   // Количество тиков паузы после любого свапа (помогает от двойного свапа)
+   private static final int POST_SWAP_PAUSE_TICKS = 10;
 
-   public final SelectSetting triggerMode = new SelectSetting("Триггер", "Колесо — выбор предмета через радиальное меню, Без колеса — авто-свап")
+   public final SelectSetting triggerMode = new SelectSetting("Триггер", "Колесо — выбор через радиальное меню, Без колеса — авто-свап")
       .value("Колесо", "Без колеса")
       .selected("Без колеса");
    public final BindSetting wheelBind = new BindSetting("Бинд колеса", "Зажми, наведи на предмет и отпусти для выбора")
@@ -52,44 +55,35 @@ public class AutoSwap extends ModuleStructure {
       .value("Legit", "Packet")
       .selected("Legit");
    public final SliderSettings preOpenDelay = new SliderSettings("До открытия", "Задержка до открытия инвентаря в тиках")
-      .setValue(1.0F)
-      .range(0, 20)
+      .setValue(1.0F).range(0, 20)
       .visible(() -> this.swapMode.isSelected("Legit"));
    public final SliderSettings afterOpenDelay = new SliderSettings("После открытия", "Задержка после открытия инвентаря в тиках")
-      .setValue(3.0F)
-      .range(0, 20)
+      .setValue(3.0F).range(0, 20)
       .visible(() -> this.swapMode.isSelected("Legit"));
    public final SliderSettings beforeClickDelay = new SliderSettings("Перед F", "Задержка перед нажатием F по слоту")
-      .setValue(1.0F)
-      .range(0, 20)
+      .setValue(1.0F).range(0, 20)
       .visible(() -> this.swapMode.isSelected("Legit"));
    public final SliderSettings closeDelay = new SliderSettings("Перед закрытием", "Задержка перед закрытием инвентаря в тиках")
-      .setValue(1.0F)
-      .range(0, 20)
+      .setValue(1.0F).range(0, 20)
       .visible(() -> this.swapMode.isSelected("Legit"));
    public final SliderSettings randomDelay = new SliderSettings("Рандом задержки", "Дополнительный случайный разброс в тиках")
-      .setValue(1.0F)
-      .range(0, 10)
+      .setValue(1.0F).range(0, 10)
       .visible(() -> this.swapMode.isSelected("Legit"));
    public final SliderSettings cooldown = new SliderSettings("Cooldown", "Минимальная пауза между свапами в миллисекундах")
-      .setValue(250.0F)
-      .range(0, 3000);
-   public final rich.modules.module.setting.implement.BooleanSetting stopMovement = new rich.modules.module.setting.implement.BooleanSetting("Остановка", "Останавливать игрока во время legit-свапа")
+      .setValue(500.0F).range(0, 3000);
+   public final BooleanSetting stopMovement = new BooleanSetting("Остановка", "Останавливать игрока во время legit-свапа")
       .setValue(true)
       .visible(() -> this.swapMode.isSelected("Legit"));
 
-   public final TextSetting slot1 = new TextSetting("Предмет 1", "ID предмета или алиас: талик/тотем/totem");
-   public final ButtonSetting pick1 = new ButtonSetting("Выбрать предмет 1", "Открыть инвентарь")
-      .setButtonName("Выбрать")
-      .setRunnable(() -> this.openPickerFor(0));
-   public final TextSetting slot2 = new TextSetting("Предмет 2", "ID предмета или алиас");
-   public final ButtonSetting pick2 = new ButtonSetting("Выбрать предмет 2", "Открыть инвентарь")
-      .setButtonName("Выбрать")
-      .setRunnable(() -> this.openPickerFor(1));
-   public final TextSetting slot3 = new TextSetting("Предмет 3", "ID предмета или алиас");
-   public final ButtonSetting pick3 = new ButtonSetting("Выбрать предмет 3", "Открыть инвентарь")
-      .setButtonName("Выбрать")
-      .setRunnable(() -> this.openPickerFor(2));
+   public final TextSetting slot1 = new TextSetting("Предмет 1", "ID или алиас: талик/тотем/totem");
+   public final ButtonSetting pick1 = new ButtonSetting("Выбрать 1", "Открыть инвентарь")
+      .setButtonName("Выбрать").setRunnable(() -> this.openPickerFor(0));
+   public final TextSetting slot2 = new TextSetting("Предмет 2", "ID или алиас");
+   public final ButtonSetting pick2 = new ButtonSetting("Выбрать 2", "Открыть инвентарь")
+      .setButtonName("Выбрать").setRunnable(() -> this.openPickerFor(1));
+   public final TextSetting slot3 = new TextSetting("Предмет 3", "ID или алиас");
+   public final ButtonSetting pick3 = new ButtonSetting("Выбрать 3", "Открыть инвентарь")
+      .setButtonName("Выбрать").setRunnable(() -> this.openPickerFor(2));
 
    private int pickingForSlot = -1;
    private Item pendingItem = null;
@@ -98,7 +92,10 @@ public class AutoSwap extends ModuleStructure {
    private int phaseTimer = 0;
    private boolean sentSprintStop = false;
    private boolean openedInventoryScreen = false;
+   // ms-кулдаун: выставляется в начале beginSwap, не только после фактического клика
    private long lastSwapMs = 0L;
+   // Тик-кулдаун после свапа (защита от двойного свапа пока клиент обновляет offhand)
+   private int postSwapPauseTicks = 0;
 
    private boolean wheelOpen = false;
    private boolean cursorUnlocked = false;
@@ -124,12 +121,9 @@ public class AutoSwap extends ModuleStructure {
          this.randomDelay,
          this.cooldown,
          this.stopMovement,
-         this.slot1,
-         this.pick1,
-         this.slot2,
-         this.pick2,
-         this.slot3,
-         this.pick3
+         this.slot1, this.pick1,
+         this.slot2, this.pick2,
+         this.slot3, this.pick3
       );
       this.slot1.setText("minecraft:totem_of_undying");
       this.slot2.setText("minecraft:golden_apple");
@@ -145,23 +139,23 @@ public class AutoSwap extends ModuleStructure {
 
    @EventHandler
    public void onClickSlot(ClickSlotEvent var1) {
-      if (mc.player != null && this.pickingForSlot != -1 && mc.currentScreen instanceof InventoryScreen) {
-         if (var1.getActionType() == SlotActionType.PICKUP) {
-            DefaultedList var2 = mc.player.playerScreenHandler.slots;
-            if (var1.getSlotId() >= 0 && var1.getSlotId() < var2.size()) {
-               ItemStack var3 = ((Slot)var2.get(var1.getSlotId())).getStack();
-               if (!var3.isEmpty()) {
-                  Identifier var4 = Registries.ITEM.getId(var3.getItem());
-                  TextSetting setting = this.getSlotSetting(this.pickingForSlot);
-                  if (setting != null) {
-                     setting.setText(var4.toString());
-                     this.invalidateCachedStack(this.pickingForSlot);
-                  }
+      if (mc.player == null || this.pickingForSlot == -1 || !(mc.currentScreen instanceof InventoryScreen)) {
+         return;
+      }
 
-                  var1.cancel();
-                  this.pickingForSlot = -1;
-                  mc.setScreen(null);
+      if (var1.getActionType() == SlotActionType.PICKUP) {
+         DefaultedList slots = mc.player.playerScreenHandler.slots;
+         if (var1.getSlotId() >= 0 && var1.getSlotId() < slots.size()) {
+            ItemStack stack = ((Slot)slots.get(var1.getSlotId())).getStack();
+            if (!stack.isEmpty()) {
+               TextSetting setting = this.getSlotSetting(this.pickingForSlot);
+               if (setting != null) {
+                  setting.setText(Registries.ITEM.getId(stack.getItem()).toString());
+                  this.invalidateCachedStack(this.pickingForSlot);
                }
+               var1.cancel();
+               this.pickingForSlot = -1;
+               mc.setScreen(null);
             }
          }
       }
@@ -169,9 +163,7 @@ public class AutoSwap extends ModuleStructure {
 
    @EventHandler
    public void onKey(KeyEvent var1) {
-      if (mc.player == null) {
-         return;
-      }
+      if (mc.player == null) return;
 
       if (this.swapBind.getKey() != -1 && var1.isKeyDown(this.swapBind.getKey(), true)) {
          this.pendingItem = this.resolveTargetItem();
@@ -184,13 +176,10 @@ public class AutoSwap extends ModuleStructure {
             this.setCursorUnlocked(true);
          } else if (var1.isKeyReleased(this.wheelBind.getKey(), true) && this.wheelOpen) {
             if (this.lastHover != -1) {
-               TextSetting setting = this.getSlotSetting(this.lastHover);
-               Item picked = this.parseItem(setting != null ? setting.getText() : null);
-               if (picked != null) {
-                  this.pendingItem = picked;
-               }
+               TextSetting s = this.getSlotSetting(this.lastHover);
+               Item picked = this.parseItem(s != null ? s.getText() : null);
+               if (picked != null) this.pendingItem = picked;
             }
-
             this.wheelOpen = false;
             this.lastHover = -1;
             this.setCursorUnlocked(false);
@@ -205,11 +194,16 @@ public class AutoSwap extends ModuleStructure {
          return;
       }
 
+      if (this.postSwapPauseTicks > 0) {
+         this.postSwapPauseTicks--;
+         return;
+      }
+
       if (this.swapPhase == PHASE_IDLE) {
          if (this.pendingItem != null) {
-            Item var2 = this.pendingItem;
+            Item item = this.pendingItem;
             this.pendingItem = null;
-            this.beginSwap(var2);
+            this.beginSwap(item);
             return;
          }
 
@@ -219,7 +213,6 @@ public class AutoSwap extends ModuleStructure {
                this.beginSwap(desired);
             }
          }
-
          return;
       }
 
@@ -233,9 +226,7 @@ public class AutoSwap extends ModuleStructure {
          this.sentSprintStop = true;
       }
 
-      if (this.stopMovement.isValue()) {
-         this.haltMovement();
-      }
+      if (this.stopMovement.isValue()) this.haltMovement();
 
       if (this.phaseTimer > 0) {
          this.phaseTimer--;
@@ -247,29 +238,20 @@ public class AutoSwap extends ModuleStructure {
             this.openedInventoryScreen = true;
             mc.setScreen(new InventoryScreen(mc.player));
          }
-
          this.swapPhase = PHASE_AFTER_OPEN;
          this.phaseTimer = this.delayTicks(this.afterOpenDelay);
          return;
       }
 
       if (this.swapPhase == PHASE_AFTER_OPEN) {
-         if (!(mc.currentScreen instanceof InventoryScreen)) {
-            this.resetSwap();
-            return;
-         }
-
+         if (!(mc.currentScreen instanceof InventoryScreen)) { this.resetSwap(); return; }
          this.swapPhase = PHASE_BEFORE_CLICK;
          this.phaseTimer = this.delayTicks(this.beforeClickDelay);
          return;
       }
 
       if (this.swapPhase == PHASE_BEFORE_CLICK) {
-         if (!(mc.currentScreen instanceof InventoryScreen)) {
-            this.resetSwap();
-            return;
-         }
-
+         if (!(mc.currentScreen instanceof InventoryScreen)) { this.resetSwap(); return; }
          this.executeOffhandSwap(this.targetItem);
          this.swapPhase = PHASE_CLOSING;
          this.phaseTimer = this.delayTicks(this.closeDelay);
@@ -280,47 +262,39 @@ public class AutoSwap extends ModuleStructure {
          if (mc.currentScreen instanceof InventoryScreen && this.openedInventoryScreen) {
             mc.setScreen(null);
          }
-
          this.resetSwap();
+         // После legit-свапа выставляем tick-паузу, чтобы клиент успел обновить offhand
+         this.postSwapPauseTicks = POST_SWAP_PAUSE_TICKS;
       }
    }
 
-   private void beginSwap(Item var1) {
-      if (mc.player == null || var1 == null || var1 == Items.AIR) {
-         return;
-      }
+   private void beginSwap(Item item) {
+      if (mc.player == null || item == null || item == Items.AIR) return;
 
       long now = System.currentTimeMillis();
-      if (now - this.lastSwapMs < (long)this.cooldown.getInt()) {
-         return;
-      }
+      if (now - this.lastSwapMs < (long)this.cooldown.getInt()) return;
 
-      if (mc.player.getOffHandStack().getItem() == var1) {
-         return;
-      }
+      if (mc.player.getOffHandStack().getItem() == item) return;
 
-      Slot slot = this.findSlotForItem(var1);
-      if (slot == null) {
-         return;
-      }
+      Slot slot = this.findSlotForItem(item);
+      if (slot == null) return;
 
-      if (mc.currentScreen != null && !(mc.currentScreen instanceof InventoryScreen)) {
-         return;
-      }
+      if (mc.currentScreen != null && !(mc.currentScreen instanceof InventoryScreen)) return;
 
-      this.targetItem = var1;
+      // Ставим метку времени сразу, чтобы двойной триггер не прошёл даже если legit занимает несколько тиков
+      this.lastSwapMs = now;
+      this.targetItem = item;
 
       if (this.swapMode.isSelected("Packet")) {
-         this.executeOffhandSwap(var1);
+         this.executeOffhandSwap(item);
          this.targetItem = null;
+         this.postSwapPauseTicks = POST_SWAP_PAUSE_TICKS;
          return;
       }
 
       this.sentSprintStop = false;
       SUPPRESS_SPRINT = true;
-      if (this.stopMovement.isValue()) {
-         this.haltMovement();
-      }
+      if (this.stopMovement.isValue()) this.haltMovement();
 
       if (mc.currentScreen instanceof InventoryScreen) {
          this.openedInventoryScreen = false;
@@ -333,138 +307,87 @@ public class AutoSwap extends ModuleStructure {
       }
    }
 
+   // Ручной/колёсный: первый найденный в инвентаре
    private Item resolveTargetItem() {
-      Item var1 = this.parseItem(this.slot1.getText());
-      if (var1 != null && this.findSlotForItem(var1) != null) {
-         return var1;
+      for (int i = 0; i < 3; i++) {
+         Item it = this.parseItem(this.getSlotSetting(i) != null ? this.getSlotSetting(i).getText() : null);
+         if (it != null && this.findSlotForItem(it) != null) return it;
       }
-
-      Item var2 = this.parseItem(this.slot2.getText());
-      if (var2 != null && this.findSlotForItem(var2) != null) {
-         return var2;
-      }
-
-      Item var3 = this.parseItem(this.slot3.getText());
-      if (var3 != null && this.findSlotForItem(var3) != null) {
-         return var3;
-      }
-
-      return var1 != null ? var1 : (var2 != null ? var2 : var3);
-   }
-
-   private Item resolveDesiredOffhandItem() {
-      Item offhand = mc.player != null ? mc.player.getOffHandStack().getItem() : Items.AIR;
-
-      Item var1 = this.parseItem(this.slot1.getText());
-      if (var1 != null && (offhand == var1 || this.findSlotForItem(var1) != null)) {
-         return var1;
-      }
-
-      Item var2 = this.parseItem(this.slot2.getText());
-      if (var2 != null && (offhand == var2 || this.findSlotForItem(var2) != null)) {
-         return var2;
-      }
-
-      Item var3 = this.parseItem(this.slot3.getText());
-      if (var3 != null && (offhand == var3 || this.findSlotForItem(var3) != null)) {
-         return var3;
-      }
-
       return null;
    }
 
-   private Item parseItem(String var1) {
-      if (var1 == null || var1.isBlank()) {
-         return null;
+   // Авто: предмет с наивысшим приоритетом, который есть в инвентаре ИЛИ во второй руке
+   private Item resolveDesiredOffhandItem() {
+      if (mc.player == null) return null;
+      Item offhand = mc.player.getOffHandStack().getItem();
+      for (int i = 0; i < 3; i++) {
+         Item it = this.parseItem(this.getSlotSetting(i) != null ? this.getSlotSetting(i).getText() : null);
+         if (it != null && (offhand == it || this.findSlotForItem(it) != null)) return it;
       }
+      return null;
+   }
 
-      String id = var1.trim().toLowerCase(Locale.ROOT);
-      if (id.contains("талик") || id.contains("тотем") || id.contains("totem") || id.contains("talik")) {
+   private Item parseItem(String text) {
+      if (text == null || text.isBlank()) return null;
+      String id = text.trim().toLowerCase(Locale.ROOT);
+      // Алиасы для талика — проверяем если строка содержит одно из ключевых слов
+      if (id.contains("талик") || id.contains("тотем") || id.contains("talik") || id.equals("totem") || id.equals("totem_of_undying")) {
          return Items.TOTEM_OF_UNDYING;
       }
-
-      if (!id.contains(":")) {
-         id = "minecraft:" + id;
-      }
-
-      Identifier var2 = Identifier.tryParse(id);
-      if (var2 == null) {
-         return null;
-      }
-
-      Item var3 = (Item)Registries.ITEM.get(var2);
-      return var3 != null && var3 != Items.AIR ? var3 : null;
+      // Если нет namespace — добавляем minecraft:
+      if (!id.contains(":")) id = "minecraft:" + id;
+      // totem в ID (например minecraft:totem_of_undying или minecraft:totem)
+      if (id.contains(":totem")) return Items.TOTEM_OF_UNDYING;
+      Identifier ident = Identifier.tryParse(id);
+      if (ident == null) return null;
+      Item item = Registries.ITEM.get(ident);
+      return item != null && item != Items.AIR ? item : null;
    }
 
-   private Slot findSlotForItem(Item var1) {
-      if (mc.player == null || var1 == null || var1 == Items.AIR) {
-         return null;
+   private Slot findSlotForItem(Item item) {
+      if (mc.player == null || item == null || item == Items.AIR) return null;
+      for (int i = 36; i <= 44; i++) {
+         Slot s = this.getPlayerSlot(i);
+         if (this.slotContains(s, item)) return s;
       }
-
-      for (int var2 = 36; var2 <= 44; var2++) {
-         Slot var3 = this.getPlayerSlot(var2);
-         if (this.slotContains(var3, var1)) {
-            return var3;
-         }
+      for (int i = 9; i <= 35; i++) {
+         Slot s = this.getPlayerSlot(i);
+         if (this.slotContains(s, item)) return s;
       }
-
-      for (int var4 = 9; var4 <= 35; var4++) {
-         Slot var5 = this.getPlayerSlot(var4);
-         if (this.slotContains(var5, var1)) {
-            return var5;
-         }
-      }
-
       return null;
    }
 
-   private Slot getPlayerSlot(int var1) {
-      if (mc.player == null || var1 < 0 || var1 >= mc.player.playerScreenHandler.slots.size()) {
-         return null;
-      }
-
-      return mc.player.playerScreenHandler.getSlot(var1);
+   private Slot getPlayerSlot(int id) {
+      if (mc.player == null || id < 0 || id >= mc.player.playerScreenHandler.slots.size()) return null;
+      return mc.player.playerScreenHandler.getSlot(id);
    }
 
-   private boolean slotContains(Slot var1, Item var2) {
-      return var1 != null && !var1.getStack().isEmpty() && var1.getStack().getItem() == var2;
+   private boolean slotContains(Slot slot, Item item) {
+      return slot != null && !slot.getStack().isEmpty() && slot.getStack().getItem() == item;
    }
 
-   private boolean executeOffhandSwap(Item var1) {
-      if (mc.player == null || mc.world == null || mc.interactionManager == null || var1 == null) {
-         return false;
-      }
-
-      Slot var2 = this.findSlotForItem(var1);
-      if (var2 == null) {
-         return false;
-      }
-
+   private boolean executeOffhandSwap(Item item) {
+      if (mc.player == null || mc.world == null || mc.interactionManager == null || item == null) return false;
+      Slot slot = this.findSlotForItem(item);
+      if (slot == null) return false;
       if (mc.currentScreen instanceof InventoryScreen) {
-         this.moveCursorToSlot(var2);
+         this.moveCursorToSlot(slot);
       }
-
-      int var3 = mc.player.currentScreenHandler.syncId;
-      mc.interactionManager.clickSlot(var3, var2.id, OFFHAND_BUTTON, SlotActionType.SWAP, mc.player);
-
-      this.lastSwapMs = System.currentTimeMillis();
+      mc.interactionManager.clickSlot(mc.player.currentScreenHandler.syncId, slot.id, OFFHAND_BUTTON, SlotActionType.SWAP, mc.player);
       return true;
    }
 
-   private void moveCursorToSlot(Slot var1) {
-      if (mc.getWindow() == null || var1 == null) {
-         return;
-      }
-
-      int scaledWidth = mc.getWindow().getScaledWidth();
-      int scaledHeight = mc.getWindow().getScaledHeight();
-      double guiLeft = (scaledWidth - INVENTORY_WIDTH) / 2.0;
-      double guiTop = (scaledHeight - INVENTORY_HEIGHT) / 2.0;
-      double scaledX = guiLeft + var1.x + 8.0;
-      double scaledY = guiTop + var1.y + 8.0;
-      double rawX = scaledX * mc.getWindow().getWidth() / (double)scaledWidth;
-      double rawY = scaledY * mc.getWindow().getHeight() / (double)scaledHeight;
-      GLFW.glfwSetCursorPos(mc.getWindow().getHandle(), rawX, rawY);
+   private void moveCursorToSlot(Slot slot) {
+      if (mc.getWindow() == null || slot == null) return;
+      int sw = mc.getWindow().getScaledWidth();
+      int sh = mc.getWindow().getScaledHeight();
+      double guiLeft = (sw - INVENTORY_WIDTH) / 2.0;
+      double guiTop = (sh - INVENTORY_HEIGHT) / 2.0;
+      double sx = guiLeft + slot.x + 8.0;
+      double sy = guiTop + slot.y + 8.0;
+      GLFW.glfwSetCursorPos(mc.getWindow().getHandle(),
+         sx * mc.getWindow().getWidth() / (double)sw,
+         sy * mc.getWindow().getHeight() / (double)sh);
    }
 
    private void stopServerSprint() {
@@ -492,54 +415,48 @@ public class AutoSwap extends ModuleStructure {
       SUPPRESS_SPRINT = false;
    }
 
-   private int delayTicks(SliderSettings var1) {
-      int var2 = Math.max(0, var1.getInt());
-      int var3 = Math.max(0, this.randomDelay.getInt());
-      return var2 + (var3 <= 0 ? 0 : ThreadLocalRandom.current().nextInt(var3 + 1));
+   private int delayTicks(SliderSettings s) {
+      int base = Math.max(0, s.getInt());
+      int rnd = Math.max(0, this.randomDelay.getInt());
+      return base + (rnd <= 0 ? 0 : ThreadLocalRandom.current().nextInt(rnd + 1));
    }
 
    @EventHandler
    public void onDraw(DrawEvent var1) {
-      if (mc.player == null || !this.triggerMode.isSelected("Колесо") || !this.wheelOpen || mc.currentScreen != null) {
-         return;
-      }
+      if (mc.player == null || !this.triggerMode.isSelected("Колесо") || !this.wheelOpen || mc.currentScreen != null) return;
 
       FrameProfiler profiler = FrameProfiler.getInstance();
       boolean prof = profiler.isEnabled();
       if (prof) profiler.begin("AutoSwap/wheelDraw");
       try {
          this.setCursorUnlocked(true);
-         int var2 = var1.getDrawContext().getScaledWindowWidth();
-         int var3 = var1.getDrawContext().getScaledWindowHeight();
-         float var4 = var2 / 2.0F;
-         float var5 = var3 / 2.0F;
-         float var6 = 92.0F;
-         float var7 = 54.0F;
-         float var8 = (float)(mc.mouse.getX() * var2 / mc.getWindow().getWidth());
-         float var9 = (float)(mc.mouse.getY() * var3 / mc.getWindow().getHeight());
-         byte var10 = 3;
-         int var11 = this.getHoverIndex(var8, var9, var4, var5, var7, var6, var10);
-         this.lastHover = var11;
+         int sw = var1.getDrawContext().getScaledWindowWidth();
+         int sh = var1.getDrawContext().getScaledWindowHeight();
+         float cx = sw / 2.0F, cy = sh / 2.0F;
+         float outerR = 92.0F, innerR = 54.0F;
+         float mx = (float)(mc.mouse.getX() * sw / mc.getWindow().getWidth());
+         float my = (float)(mc.mouse.getY() * sh / mc.getWindow().getHeight());
+         int count = 3;
+         int hover = this.getHoverIndex(mx, my, cx, cy, innerR, outerR, count);
+         this.lastHover = hover;
 
-         float var21 = 360.0F / var10;
-         float var22 = 2.0F;
-         WheelPipeline var14 = Initialization.getInstance().getManager().getRenderCore().getWheelPipeline();
-
-         for (int var15 = 0; var15 < var10; var15++) {
-            int var16 = var15 == var11 ? -1593847505 : 1624100301;
-            float var17 = -90.0F + var21 * var15 + var22 / 2.0F;
-            float var18 = var17 + var21 - var22;
-            var14.drawSegment(var4, var5, var7, var6, (float)Math.toRadians(var17), (float)Math.toRadians(var18), var16);
+         float segAngle = 360.0F / count;
+         float gap = 2.0F;
+         WheelPipeline wheel = Initialization.getInstance().getManager().getRenderCore().getWheelPipeline();
+         for (int i = 0; i < count; i++) {
+            int color = i == hover ? -1593847505 : 1624100301;
+            float a = -90.0F + segAngle * i + gap / 2.0F;
+            float b = a + segAngle - gap;
+            wheel.drawSegment(cx, cy, innerR, outerR, (float)Math.toRadians(a), (float)Math.toRadians(b), color);
          }
-
-         for (int var23 = 0; var23 < var10; var23++) {
-            ItemStack var24 = this.getStackForIndex(var23);
-            if (!var24.isEmpty()) {
-               float var25 = (float)Math.toRadians(-90.0F + var21 * var23 + var21 / 2.0F);
-               float var26 = (var7 + var6) / 2.0F;
-               float var19 = var4 + (float)Math.cos(var25) * var26;
-               float var20 = var5 + (float)Math.sin(var25) * var26;
-               var1.getDrawContext().drawItem(var24, (int)(var19 - 8.0F), (int)(var20 - 8.0F));
+         for (int i = 0; i < count; i++) {
+            ItemStack stack = this.getStackForIndex(i);
+            if (!stack.isEmpty()) {
+               float angle = (float)Math.toRadians(-90.0F + segAngle * i + segAngle / 2.0F);
+               float mid = (innerR + outerR) / 2.0F;
+               float ix = cx + (float)Math.cos(angle) * mid;
+               float iy = cy + (float)Math.sin(angle) * mid;
+               var1.getDrawContext().drawItem(stack, (int)(ix - 8.0F), (int)(iy - 8.0F));
             }
          }
       } finally {
@@ -547,66 +464,47 @@ public class AutoSwap extends ModuleStructure {
       }
    }
 
-   private void setCursorUnlocked(boolean var1) {
-      if (mc.mouse != null) {
-         if (var1 && !this.cursorUnlocked) {
-            mc.mouse.unlockCursor();
-            this.cursorUnlocked = true;
-         } else if (!var1 && this.cursorUnlocked) {
-            if (mc.currentScreen == null) {
-               mc.mouse.lockCursor();
-            }
-
-            this.cursorUnlocked = false;
-         }
+   private void setCursorUnlocked(boolean unlock) {
+      if (mc.mouse == null) return;
+      if (unlock && !this.cursorUnlocked) {
+         mc.mouse.unlockCursor();
+         this.cursorUnlocked = true;
+      } else if (!unlock && this.cursorUnlocked) {
+         if (mc.currentScreen == null) mc.mouse.lockCursor();
+         this.cursorUnlocked = false;
       }
    }
 
-   private ItemStack getStackForIndex(int var1) {
-      TextSetting setting = this.getSlotSetting(var1);
-      if (setting == null) {
+   private ItemStack getStackForIndex(int idx) {
+      TextSetting setting = this.getSlotSetting(idx);
+      if (setting == null) return ItemStack.EMPTY;
+      String text = setting.getText();
+      if (text == null || text.isBlank()) {
+         this.cachedIds[idx] = text == null ? "" : text;
+         this.cachedStacks[idx] = ItemStack.EMPTY;
          return ItemStack.EMPTY;
       }
-
-      String var3 = setting.getText();
-      if (var3 == null || var3.isBlank()) {
-         this.cachedIds[var1] = var3 == null ? "" : var3;
-         this.cachedStacks[var1] = ItemStack.EMPTY;
-         return ItemStack.EMPTY;
-      }
-
-      if (var3.equals(this.cachedIds[var1])) {
-         return this.cachedStacks[var1];
-      }
-
-      this.cachedIds[var1] = var3;
-      Item var5 = this.parseItem(var3);
-      this.cachedStacks[var1] = var5 != null && var5 != Items.AIR ? var5.getDefaultStack() : ItemStack.EMPTY;
-      return this.cachedStacks[var1];
+      if (text.equals(this.cachedIds[idx])) return this.cachedStacks[idx];
+      this.cachedIds[idx] = text;
+      Item item = this.parseItem(text);
+      this.cachedStacks[idx] = item != null && item != Items.AIR ? item.getDefaultStack() : ItemStack.EMPTY;
+      return this.cachedStacks[idx];
    }
 
-   private void invalidateCachedStack(int index) {
-      if (index >= 0 && index < this.cachedIds.length) {
-         this.cachedIds[index] = "";
-         this.cachedStacks[index] = ItemStack.EMPTY;
+   private void invalidateCachedStack(int idx) {
+      if (idx >= 0 && idx < this.cachedIds.length) {
+         this.cachedIds[idx] = "";
+         this.cachedStacks[idx] = ItemStack.EMPTY;
       }
    }
 
-   private int getHoverIndex(float var1, float var2, float var3, float var4, float var5, float var6, int var7) {
-      float var8 = var1 - var3;
-      float var9 = var2 - var4;
-      float var10 = (float)Math.sqrt(var8 * var8 + var9 * var9);
-      if (!(var10 < var5) && !(var10 > var6)) {
-         double var11 = Math.atan2(var9, var8) + (Math.PI / 2);
-         if (var11 < 0.0) {
-            var11 += Math.PI * 2;
-         }
-
-         int var13 = (int)Math.floor(var11 / (Math.PI * 2) * var7);
-         return Math.max(0, Math.min(var13, var7 - 1));
-      } else {
-         return -1;
-      }
+   private int getHoverIndex(float mx, float my, float cx, float cy, float inner, float outer, int count) {
+      float dx = mx - cx, dy = my - cy;
+      float dist = (float)Math.sqrt(dx * dx + dy * dy);
+      if (dist < inner || dist > outer) return -1;
+      double angle = Math.atan2(dy, dx) + (Math.PI / 2);
+      if (angle < 0) angle += Math.PI * 2;
+      return Math.max(0, Math.min((int)Math.floor(angle / (Math.PI * 2) * count), count - 1));
    }
 
    @Override
@@ -615,18 +513,18 @@ public class AutoSwap extends ModuleStructure {
       this.pendingItem = null;
       this.wheelOpen = false;
       this.lastHover = -1;
+      this.postSwapPauseTicks = 0;
       this.resetSwap();
       if (mc.currentScreen instanceof InventoryScreen && this.openedInventoryScreen) {
          mc.setScreen(null);
       }
-
       this.setCursorUnlocked(false);
    }
 
-   private TextSetting getSlotSetting(int index) {
-      if (index == 0) return this.slot1;
-      if (index == 1) return this.slot2;
-      if (index == 2) return this.slot3;
+   private TextSetting getSlotSetting(int idx) {
+      if (idx == 0) return this.slot1;
+      if (idx == 1) return this.slot2;
+      if (idx == 2) return this.slot3;
       return null;
    }
 }
