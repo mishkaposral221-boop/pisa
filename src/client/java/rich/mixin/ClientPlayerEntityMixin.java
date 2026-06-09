@@ -59,6 +59,20 @@ public abstract class ClientPlayerEntityMixin extends AbstractClientPlayerEntity
    private void onInputTick(CallbackInfo ci) {
       if (IMinecraft.mc.player == null) return;
 
+      // === AutoSwap: полное зануление input во время свапа ===
+      // Когда SUPPRESS_INPUT включён, обнуляем ВСЕ компоненты движения, чтобы
+      // игрок гарантированно стоял неподвижно — даже если игрок зажал WASD,
+      // спринт или прыжок. Без этого haltMovement() обнуляет только velocity,
+      // и в следующий же тик клиент снова применяет input от зажатых клавиш.
+      try {
+         if (AutoSwap.SUPPRESS_INPUT && input != null && input.playerInput != null) {
+            input.playerInput = new PlayerInput(false, false, false, false, false, false, false);
+            if (IMinecraft.mc.player.isSprinting()) {
+               IMinecraft.mc.player.setSprinting(false);
+            }
+         }
+      } catch (Throwable ignored) {}
+
       try {
          Triggerbot tb = Triggerbot.getInstance();
          if (Triggerbot.SUPPRESS_FORWARD && tb != null && tb.isState()
@@ -129,8 +143,6 @@ public abstract class ClientPlayerEntityMixin extends AbstractClientPlayerEntity
       if (e.isCancelled()) ci.cancel();
    }
 
-   // В 1.21.11 этот метод может не находиться в ClientPlayerEntity напрямую.
-   // require=0 не даст клиенту падать на старте, а в логах профайлера всё равно будет видно остальные причины просадок.
    @Inject(method = "move", at = @At("HEAD"), cancellable = true, require = 0)
    public void onMoveHook(MovementType type, Vec3d movement, CallbackInfo ci) {
       MoveEvent e = new MoveEvent(movement);
@@ -144,8 +156,6 @@ public abstract class ClientPlayerEntityMixin extends AbstractClientPlayerEntity
    @ModifyExpressionValue(method = {"sendMovementPackets", "tick"},
                           at = @At(value = "INVOKE", target = "Lnet/minecraft/client/network/ClientPlayerEntity;getYaw()F"))
    private float hookSilentRotationYaw(float original) {
-      // Anti-BadPacket: во время свапа сервер должен видеть строго зафиксированный yaw,
-      // иначе одна и та же тиковая отправка содержит и ClickContainer, и поворот головы.
       if (AutoSwap.LOCK_ROTATION) {
          return AutoSwap.LOCK_YAW;
       }
