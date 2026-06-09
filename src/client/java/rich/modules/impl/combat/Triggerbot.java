@@ -20,18 +20,13 @@ import java.util.concurrent.ThreadLocalRandom;
 /**
  * Triggerbot: auto-attacks targeted living entities.
  *
- * W-release mechanic (before and after EVERY hit) — millisecond precision:
+ * W-release mechanic (before EVERY hit):
+ *   1. Attack ready -> suppress W, set preAttackDeadline = now + random(1..15) ms.
+ *   2. Each tick: if now < deadline -> W suppressed, wait.
+ *   3. Deadline passed -> doAttack(), W restored immediately (no post-delay to avoid flags).
  *
- *   1. Attack decision made -> save target, generate random pre-delay [W_PRE_MIN..W_PRE_MAX] ms.
- *      W is suppressed immediately. preAttackDeadline = now + random(1..50) ms.
- *   2. Each tick: if now < preAttackDeadline -> keep W suppressed, return.
- *   3. Deadline reached: doAttack(), generate post-delay [0..W_POST_MAX] ms.
- *      W stays suppressed until postAttackDeadline.
- *   4. After postAttackDeadline: W is restored.
- *
- * Timings:
- *   Pre-attack  W release: 1 .. 50 ms (random)
- *   Post-attack W release: 1 .. 50 ms (random)
+ * No post-attack W suppress: anticheat flags sprint-off patterns after hits.
+ * Short pre-delay (1-15ms): enough for knockback boost, too short to flag.
  */
 public class Triggerbot extends ModuleStructure {
 
@@ -43,18 +38,15 @@ public class Triggerbot extends ModuleStructure {
     private static final boolean DEBUG_LOGS = Boolean.getBoolean("rich.debug.triggerbot");
     private static final long DEBUG_LOG_MIN_GAP_MS = 1000L;
 
-    // W-release timing in milliseconds
-    private static final int W_PRE_MIN  = 1;   // min ms W released before hit
-    private static final int W_PRE_MAX  = 50;  // max ms W released before hit
-    private static final int W_POST_MIN = 1;   // min ms W released after hit
-    private static final int W_POST_MAX = 50;  // max ms W released after hit
+    // W released for this long before hit (milliseconds)
+    private static final int W_PRE_MIN = 1;
+    private static final int W_PRE_MAX = 15;
 
-    private Entity  pendingTarget         = null;
-    private long    preAttackDeadline     = 0L; // System.currentTimeMillis() target
-    private long    postAttackDeadline    = 0L;
-    private boolean pendingWasForward     = false;
+    private Entity  pendingTarget     = null;
+    private long    preAttackDeadline = 0L;
+    private boolean pendingWasForward = false;
 
-    private String lastDiag = "";
+    private String lastDiag    = "";
     private long lastDiagLogMs = 0L;
     private int ticksOutOfWater = 10;
     private int ticksOnGround   = 0;
@@ -83,16 +75,15 @@ public class Triggerbot extends ModuleStructure {
     @Override
     public void deactivate() {
         super.deactivate();
-        SUPPRESS_FORWARD   = false;
-        SUPPRESS_SPRINT    = false;
-        SUPPRESS_JUMP      = false;
-        pendingTarget      = null;
-        preAttackDeadline  = 0L;
-        postAttackDeadline = 0L;
-        ticksOutOfWater    = 0;
-        ticksOnGround      = 0;
-        lastDiag           = "";
-        lastDiagLogMs      = 0L;
+        SUPPRESS_FORWARD  = false;
+        SUPPRESS_SPRINT   = false;
+        SUPPRESS_JUMP     = false;
+        pendingTarget     = null;
+        preAttackDeadline = 0L;
+        ticksOutOfWater   = 0;
+        ticksOnGround     = 0;
+        lastDiag          = "";
+        lastDiagLogMs     = 0L;
     }
 
     @EventHandler
@@ -101,9 +92,8 @@ public class Triggerbot extends ModuleStructure {
         boolean wantSuppressJump    = false;
         try {
             if (mc.player == null || mc.world == null || mc.currentScreen != null) {
-                ticksOnGround      = 0;
-                pendingTarget      = null;
-                postAttackDeadline = 0L;
+                ticksOnGround = 0;
+                pendingTarget = null;
                 return;
             }
 
@@ -115,14 +105,7 @@ public class Triggerbot extends ModuleStructure {
 
             long now = System.currentTimeMillis();
 
-            // --- Post-attack W delay ---
-            if (postAttackDeadline > 0L && now < postAttackDeadline) {
-                wantSuppressForward = true;
-                diag("POST_W", "post-attack W suppress, left=" + (postAttackDeadline - now) + "ms");
-                // don't return — charge recheck is harmless, nothing will trigger
-            }
-
-            // --- Pre-attack pending: W is released, waiting for deadline ---
+            // --- Pending: W released, waiting for deadline before hit ---
             if (pendingTarget != null) {
                 if (!isEntityValid(pendingTarget)) {
                     pendingTarget     = null;
@@ -130,22 +113,19 @@ public class Triggerbot extends ModuleStructure {
                     return;
                 }
                 if (now < preAttackDeadline) {
-                    // Still waiting — keep W suppressed
+                    // Still within W-release window
                     wantSuppressForward = true;
-                    diag("W_WAIT", "pre W suppress, left=" + (preAttackDeadline - now) + "ms");
+                    diag("W_WAIT", "pre W, left=" + (preAttackDeadline - now) + "ms");
                     return;
                 }
-                // Deadline reached — fire the hit
-                Entity t          = pendingTarget;
+                // Deadline reached — fire hit, restore W immediately
+                Entity t           = pendingTarget;
                 boolean wasForward = pendingWasForward;
-                pendingTarget     = null;
-                preAttackDeadline = 0L;
-                // Random post-attack W delay
-                int postMs        = ThreadLocalRandom.current().nextInt(W_POST_MIN, W_POST_MAX + 1);
-                postAttackDeadline = now + postMs;
-                wantSuppressForward = true; // keep W off this tick too
+                pendingTarget      = null;
+                preAttackDeadline  = 0L;
                 doAttack(t, wasForward);
-                diag("HIT_FIRE", "HIT fire fw=" + wasForward + " post=" + postMs + "ms");
+                diag("HIT_FIRE", "HIT fw=" + wasForward);
+                // wantSuppressForward stays false — W restores this tick
                 return;
             }
 
@@ -170,7 +150,7 @@ public class Triggerbot extends ModuleStructure {
                 if (charge >= need) {
                     wantSuppressForward = queueAttack(target, "NOCRIT");
                 } else {
-                    diag("NOCRIT_WAIT", "NOCRIT wait charge=" + fmt(charge));
+                    diag("NOCRIT_WAIT", "wait charge=" + fmt(charge));
                 }
                 return;
             }
@@ -190,9 +170,9 @@ public class Triggerbot extends ModuleStructure {
             if (this.isJumpHeld() || mc.player.getVelocity().y > 0.0) {
                 if (this.isJumpHeld() && charge < jumpCharge.getValue()) {
                     wantSuppressJump = true;
-                    diag("JUMP_GATE", "JUMP gate charge=" + fmt(charge));
+                    diag("JUMP_GATE", "charge=" + fmt(charge));
                 } else {
-                    diag("GROUND_HOLD", "hold for crit charge=" + fmt(charge));
+                    diag("GROUND_HOLD", "charge=" + fmt(charge));
                 }
                 return;
             }
@@ -201,7 +181,7 @@ public class Triggerbot extends ModuleStructure {
             if (charge >= GROUND_ATTACK_CHARGE && ticksOnGround >= GROUND_COMBO_DELAY) {
                 wantSuppressForward = queueAttack(target, "COMBO");
             } else {
-                diag("GROUND_WAIT", "wait charge=" + fmt(charge) + " ticks=" + ticksOnGround);
+                diag("GROUND_WAIT", "charge=" + fmt(charge) + " ticks=" + ticksOnGround);
             }
 
         } finally {
@@ -212,15 +192,15 @@ public class Triggerbot extends ModuleStructure {
     }
 
     /**
-     * Queues an attack: generates a random pre-attack delay [W_PRE_MIN..W_PRE_MAX] ms.
-     * Returns true so the caller sets wantSuppressForward = true on the queue tick.
+     * Queue attack with random W-release window of 1..15 ms.
+     * Returns true so caller sets wantSuppressForward on the queue tick.
      */
     private boolean queueAttack(Entity target, String reason) {
         pendingTarget     = target;
         pendingWasForward = mc.options.forwardKey.isPressed();
         int preMs         = ThreadLocalRandom.current().nextInt(W_PRE_MIN, W_PRE_MAX + 1);
         preAttackDeadline = System.currentTimeMillis() + preMs;
-        diag("Q_" + reason, reason + " queued, pre=" + preMs + "ms fw=" + pendingWasForward);
+        diag("Q_" + reason, reason + " queued pre=" + preMs + "ms fw=" + pendingWasForward);
         return true;
     }
 
@@ -228,8 +208,9 @@ public class Triggerbot extends ModuleStructure {
         mc.player.setSprinting(false);
         mc.interactionManager.attackEntity(mc.player, target);
         mc.player.swingHand(Hand.MAIN_HAND);
-        // Sprint will be restored after postAttackDeadline expires naturally
-        // (SUPPRESS_FORWARD returns to false, player input flows through normally)
+        if (wasForward && mc.options.forwardKey.isPressed()) {
+            mc.player.setSprinting(true);
+        }
     }
 
     private boolean isEntityValid(Entity e) {
