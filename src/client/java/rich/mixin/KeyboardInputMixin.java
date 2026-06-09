@@ -10,17 +10,42 @@ import org.spongepowered.asm.mixin.injection.At;
 import rich.IMinecraft;
 import rich.events.api.EventManager;
 import rich.events.impl.InputEvent;
+import rich.modules.impl.combat.Triggerbot;
 import rich.modules.impl.combat.aura.Angle;
 import rich.modules.impl.combat.aura.AngleConnection;
 import rich.modules.impl.combat.aura.AngleConstructor;
 
 @Mixin(KeyboardInput.class)
 public class KeyboardInputMixin {
+
    @ModifyExpressionValue(method = "tick", at = @At(value = "NEW", target = "(ZZZZZZZ)Lnet/minecraft/util/PlayerInput;"))
    private PlayerInput tickHook(PlayerInput var1) {
+      // 1) Дать модулям шанс изменить вход (как было раньше).
       InputEvent var2 = new InputEvent(var1);
       EventManager.callEvent(var2);
-      return this.transformInput(var2.getInput());
+      PlayerInput out = this.transformInput(var2.getInput());
+
+      // 2) Триггер-бот / W-tap: гасим W (и при желании sprint/jump),
+      //    пока активно окно "сброса W" перед ударом.
+      //    После одного тика без forward() движок снимет isSprinting,
+      //    и следующий тик даст fresh sprint-attack с knockback-бустом.
+      boolean suppressFwd    = Triggerbot.SUPPRESS_FORWARD;
+      boolean suppressSprint = Triggerbot.SUPPRESS_SPRINT;
+      boolean suppressJump   = Triggerbot.SUPPRESS_JUMP;
+
+      if (suppressFwd || suppressSprint || suppressJump) {
+         out = new PlayerInput(
+            suppressFwd    ? false : out.forward(),
+            out.backward(),
+            out.left(),
+            out.right(),
+            suppressJump   ? false : out.jump(),
+            out.sneak(),
+            suppressSprint ? false : out.sprint()
+         );
+      }
+
+      return out;
    }
 
    @Unique
