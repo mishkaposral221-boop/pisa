@@ -5,9 +5,11 @@ import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.Vec3d;
 import rich.Initialization;
 import rich.modules.impl.combat.aura.Angle;
+import rich.modules.impl.combat.aura.AngleConnection;
 import rich.modules.impl.combat.aura.MathAngle;
 import rich.modules.impl.combat.aura.attack.StrikeManager;
 import rich.modules.impl.combat.aura.impl.RotateConstructor;
+import rich.modules.impl.combat.aura.target.RaycastAngle;
 import rich.modules.impl.combat.aura.target.Vector;
 
 import java.util.Random;
@@ -15,36 +17,40 @@ import java.util.Random;
 /**
  * HumanAngle - anti-detect aimbot rotation.
  *
- * Key anti-detect changes vs previous version:
+ * What anti-cheats detect:
+ *   1. Large angle change per tick (>20-40 deg/tick depending on AC sensitivity)
+ *   2. Perfect linear acceleration (no noise)
+ *   3. Always snapping to exact hitbox center
+ *   4. GCD mismatch (handled by Angle.adjustSensitivity)
  *
- * 1. MAX_YAW_TICK reduced 38 -> 28 deg/tick.
- *    38 is too fast for automatic patterns — ACs flag it even with noise.
- *    28 is high-DPI achievable and much safer.
- *
- * 2. When canHit=true, NO longer use speed=1.0 (instant snap).
- *    An instant snap to exact target on every attack tick is the #1 detection signal.
- *    Now uses speed=0.90 with jitter kept ON.
-
- * 3. Aim point: always a random point on upper body, never exact center.
- *    Sigma increased slightly so the variance is human-like.
- *
- * 4. Removed RaycastAngle (was causing potential NPE on some entity states).
- *    Tracking detection now uses simple dist threshold.
+ * What this does:
+ *   - Hard cap: max 38 deg/tick yaw, 28 deg/tick pitch
+ *     -> 180 deg target = ~5 ticks (250ms). Fast but not instant.
+ *   - Distance-based easing:
+ *     Far (>60 deg): approach at max speed
+ *     Close (<15 deg): slow down precision approach
+ *   - Gaussian micro-jitter (sigma ~0.15 deg) simulates mouse tremor
+ *   - Random aim offset on hitbox (+-3% of hitbox size) so we don't
+ *     always hit the exact same point
+ *   - Near-target micro-overshoot then correction (like a real flick)
  */
 public class HumanAngle extends RotateConstructor {
 
-    // Hard cap per tick. 28/18 is fast but within human high-DPI range.
-    // DO NOT increase above 32/22 - that's where ACs start flagging auto-aim.
-    private static final float MAX_YAW_TICK   = 28.0F;
-    private static final float MAX_PITCH_TICK = 18.0F;
+    // Hard cap on how many degrees we rotate per tick.
+    // 38 deg/tick is fast but still within human-achievable range for high-DPI mice.
+    private static final float MAX_YAW_TICK   = 38.0F;
+    private static final float MAX_PITCH_TICK = 28.0F;
 
-    // Jitter state (exponential moving average of gaussian noise)
+    // Jitter state (low-pass filtered gaussian noise)
     private float jYaw   = 0.0F;
     private float jPitch = 0.0F;
 
-    // Micro-overshoot state
+    // Overshoot state
     private float osYaw   = 0.0F;
     private float osPitch = 0.0F;
+
+    // Whether we were previously on target (to detect new snaps)
+    private boolean wasTracking = false;
 
     private final Random rng = new Random();
 
@@ -54,92 +60,103 @@ public class HumanAngle extends RotateConstructor {
 
     @Override
     public Angle limitAngleChange(Angle current, Angle target, Vec3d vec, Entity entity) {
-        // Safe manager access
-        StrikeManager sm = null;
-        try {
-            sm = Initialization.getInstance().getManager().getAttackPerpetrator();
-        } catch (Exception ignored) {}
-        boolean canHit = entity != null && sm != null && sm.canAttack(null, 0);
+        StrikeManager sm   = Initialization.getInstance().getManager().getAttackPerpetrator();
+        boolean canHit     = entity != null && sm.canAttack(null, 0);
+        boolean onTarget   = false;
 
         // ── 1. Select aim point ──────────────────────────────────────────────
-        // Never aim at exact geometric center — always add small random offset.
-        // This prevents the "always perfect center" detection pattern.
         if (entity != null) {
-            float yF = entity.isOnGround() ? 0.92F : 1.35F;
-            Vec3d base = Vector.hitbox(entity, 1.0F, yF, 1.0F, 2.0F);
-            // Gaussian offset ~4% of hitbox width — visible variance, human-like
-            double ox = rng.nextGaussian() * 0.06;
-            double oy = rng.nextGaussian() * 0.04;
-            target = MathAngle.calculateAngle(new Vec3d(base.x + ox, base.y + oy, base.z + ox));
+            // Aim at upper body with tiny random offset per tick
+            float yFactor = canHit
+                ? (entity.isOnGround() ? 0.9F : 1.3F)
+                : (entity.isOnGround() ? 1.0F : 1.4F);
+            Vec3d base = Vector.hitbox(entity, 1.0F, yFactor, 1.0F, 2.0F);
+            if (canHit) {
+                // Small gaussian offset to avoid perfect-center detection
+                double ox = rng.nextGaussian() * 0.04;
+                double oy = rng.nextGaussian() * 0.025;
+                base = new Vec3d(base.x + ox, base.y + oy, base.z + ox);
+            }
+            target = MathAngle.calculateAngle(base);
+
+            // Check if we're currently tracking (already on target roughly)
+            onTarget = RaycastAngle.rayTrace(
+                AngleConnection.INSTANCE.getRotation().toVector(), 4.0, entity.getBoundingBox()
+            );
         }
 
-        // ── 2. Delta & distance ──────────────────────────────────────────────
+        // ── 2. Compute delta ─────────────────────────────────────────────────
         Angle delta = MathAngle.calculateDelta(current, target);
         float dYaw   = delta.getYaw();
         float dPitch = delta.getPitch();
         float dist   = (float) Math.hypot(dYaw, dPitch);
-        if (dist < 0.005F) return current;
+        if (dist < 0.005F) dist = 0.005F;
 
-        // ── 3. Speed factor ──────────────────────────────────────────────────
+        // Detect if target just jumped to a new position (new target or teleport)
+        boolean bigSnap = !wasTracking && dist > 80.0F;
+        wasTracking = onTarget || dist < 5.0F;
+
+        // ── 3. Speed factor (distance-based easing) ──────────────────────────
         //
-        // dist=180 -> base=0.92 -> move capped at 28°/tick -> 7 ticks to target
-        // dist=60  -> base=0.92 -> move=55° capped at 28°/tick
-        // dist=25  -> base=0.45 -> move=11.3°/tick (slowing down)
-        // dist=8   -> base=0.15 -> move=1.2°/tick (precision approach)
+        // speed = clamp(dist / 55, 0.12, 1.0) * jitter
         //
-        // canHit: use 0.90 (NOT 1.0!) — instant snap is the top detection signal.
-        //         We still hit on time because canHit window lasts multiple ticks.
+        // dist=180 -> speed=0.99 -> move=180*0.99=~178 -> capped at 38°/tick
+        // dist=60  -> speed=0.99 -> move=~59.4 -> capped at 38°/tick
+        // dist=25  -> speed=0.45 -> move=11.4°/tick  (slowing down)
+        // dist=10  -> speed=0.18 -> move=1.8°/tick   (precision)
+        // dist=3   -> speed=0.12 -> move=0.36°/tick  (micro-correction)
         //
         float speed;
         if (canHit) {
-            // Slightly randomized fast speed, but NOT instant snap
-            speed = 0.88F + rng.nextFloat() * 0.08F; // 0.88 - 0.96
+            // When attacking: go as fast as the cap allows (server needs us on target NOW)
+            speed = 1.0F;
+        } else if (bigSnap) {
+            // New target: ramp up quickly to look like a mouse flick
+            speed = 0.95F + rng.nextFloat() * 0.05F;
         } else {
-            // Distance easing: slow down as we approach target
-            speed = MathHelper.clamp(dist / 55.0F, 0.12F, 0.90F);
-            // Random tick-to-tick variation (humans are inconsistent)
-            speed *= (0.84F + rng.nextFloat() * 0.28F);
-            speed  = MathHelper.clamp(speed, 0.10F, 0.93F);
+            // Normal tracking: ease based on distance
+            speed = MathHelper.clamp(dist / 55.0F, 0.12F, 0.92F);
+            // Random variation (humans are not consistent)
+            speed *= (0.88F + rng.nextFloat() * 0.24F);
+            speed  = MathHelper.clamp(speed, 0.12F, 0.96F);
         }
 
-        // ── 4. Raw movement ──────────────────────────────────────────────────
+        // ── 4. Raw movement this tick ────────────────────────────────────────
         float moveYaw   = dYaw   * speed;
         float movePitch = dPitch * speed;
 
-        // ── 5. Hard cap (core anti-detect measure) ───────────────────────────
+        // ── 5. Hard cap per tick (the core anti-detect measure) ──────────────
         moveYaw   = MathHelper.clamp(moveYaw,   -MAX_YAW_TICK,   MAX_YAW_TICK);
         movePitch = MathHelper.clamp(movePitch, -MAX_PITCH_TICK, MAX_PITCH_TICK);
 
-        // ── 6. Micro-jitter ──────────────────────────────────────────────────
-        // ALWAYS add jitter — even when canHit=true.
-        // Reason: zero jitter during attack = detectable signature.
-        // Jitter is smaller when close (dist < 5) to avoid overshooting the hitbox.
-        float jitterScale = (dist > 5.0F) ? 1.0F : Math.max(0.2F, dist / 5.0F);
-        if (dist > 0.5F) {
-            float sigma = canHit ? 0.10F : 0.22F; // less jitter during attack
-            float tjY = (float)(rng.nextGaussian() * sigma);
-            float tjP = (float)(rng.nextGaussian() * sigma * 0.6F);
-            // Low-pass smooth so noise is correlated across ticks (real mouse behaviour)
-            jYaw   += (tjY * jitterScale - jYaw)   * 0.40F;
-            jPitch += (tjP * jitterScale - jPitch) * 0.40F;
+        // ── 6. Micro-jitter (gaussian mouse tremor) ──────────────────────────
+        // Only add noise when not on the attack tick
+        if (!canHit && dist > 1.5F) {
+            float tjY = (float)(rng.nextGaussian() * 0.20);
+            float tjP = (float)(rng.nextGaussian() * 0.12);
+            // Low-pass: smooth the jitter (don't jump instantly to new noise value)
+            jYaw   += (tjY - jYaw)   * 0.45F;
+            jPitch += (tjP - jPitch) * 0.45F;
         } else {
-            jYaw   *= 0.50F;
-            jPitch *= 0.50F;
+            // Fade out jitter when near or attacking
+            jYaw   *= 0.55F;
+            jPitch *= 0.55F;
         }
 
-        // ── 7. Micro-overshoot (only when not attacking) ─────────────────────
-        // 7% chance per tick when 1.5 < dist < 10 to add a tiny overshoot.
-        // Simulates the natural flick-past-target-then-correct pattern.
-        if (!canHit && dist > 1.5F && dist < 10.0F) {
-            if (rng.nextFloat() < 0.07F) {
-                osYaw   = (rng.nextFloat() - 0.5F) * 2.5F;
-                osPitch = (rng.nextFloat() - 0.5F) * 1.2F;
+        // ── 7. Micro-overshoot near target ───────────────────────────────────
+        // Simulate the tiny flick-overshoot that real players make when close.
+        // Probability 6% per tick when dist < 12 and not attacking.
+        if (!canHit && dist > 1.0F && dist < 12.0F) {
+            if (rng.nextFloat() < 0.06F) {
+                osYaw   = (rng.nextFloat() - 0.5F) * 3.0F;
+                osPitch = (rng.nextFloat() - 0.5F) * 1.5F;
             }
         }
-        osYaw   *= 0.70F;
-        osPitch *= 0.70F;
+        // Decay overshoot
+        osYaw   *= 0.72F;
+        osPitch *= 0.72F;
 
-        // ── 8. Final angle ───────────────────────────────────────────────────
+        // ── 8. Assemble final angle ──────────────────────────────────────────
         float finalYaw   = current.getYaw()   + moveYaw   + jYaw   + (canHit ? 0.0F : osYaw);
         float finalPitch = current.getPitch() + movePitch + jPitch + (canHit ? 0.0F : osPitch);
 
