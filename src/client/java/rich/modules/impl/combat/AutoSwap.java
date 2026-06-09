@@ -37,18 +37,12 @@ public class AutoSwap extends ModuleStructure {
    private static final int PHASE_AFTER_OPEN = 2;
    private static final int PHASE_BEFORE_CLICK = 3;
    private static final int PHASE_CLOSING = 4;
+   private static final int OFFHAND_BUTTON = 40;
 
    public final BindSetting wheelBind = new BindSetting("Бинд колеса", "Клавиша открытия колеса");
    public final SelectSetting swapMode = new SelectSetting("Режим свапа", "Legit открывает инвентарь, Packet свапает без экрана")
       .value("Legit", "Packet")
       .selected("Legit");
-   public final SelectSetting destination = new SelectSetting("Куда свапать", "Целевой слот для выбранного предмета")
-      .value("Offhand", "Current Hotbar", "Selected Hotbar")
-      .selected("Offhand");
-   public final SliderSettings hotbarSlot = new SliderSettings("Номер хотбар слота", "Слот 1-9 для Selected Hotbar")
-      .setValue(1.0F)
-      .range(1, 9)
-      .visible(() -> this.destination.isSelected("Selected Hotbar"));
    public final SliderSettings preOpenDelay = new SliderSettings("До открытия", "Задержка до открытия инвентаря в тиках")
       .setValue(1.0F)
       .range(0, 20)
@@ -57,7 +51,7 @@ public class AutoSwap extends ModuleStructure {
       .setValue(3.0F)
       .range(0, 20)
       .visible(() -> this.swapMode.isSelected("Legit"));
-   public final SliderSettings beforeClickDelay = new SliderSettings("Перед кликом", "Задержка перед свапом в тиках")
+   public final SliderSettings beforeClickDelay = new SliderSettings("Перед F", "Задержка перед нажатием F по слоту")
       .setValue(1.0F)
       .range(0, 20)
       .visible(() -> this.swapMode.isSelected("Legit"));
@@ -100,7 +94,6 @@ public class AutoSwap extends ModuleStructure {
    private boolean openedInventoryScreen = false;
    private long lastSwapMs = 0L;
 
-   // Кешируем ItemStack для колеса: Identifier parse + registry lookup не должны делаться каждый DrawEvent.
    private final String[] cachedIds = new String[]{"", "", ""};
    private final ItemStack[] cachedStacks = new ItemStack[]{ItemStack.EMPTY, ItemStack.EMPTY, ItemStack.EMPTY};
 
@@ -109,12 +102,10 @@ public class AutoSwap extends ModuleStructure {
    }
 
    public AutoSwap() {
-      super("AutoSwap", "Свап предметов", ModuleCategory.UTILITIES);
+      super("AutoSwap", "Свап талика во вторую руку", ModuleCategory.UTILITIES);
       this.settings(
          this.wheelBind,
          this.swapMode,
-         this.destination,
-         this.hotbarSlot,
          this.preOpenDelay,
          this.afterOpenDelay,
          this.beforeClickDelay,
@@ -240,7 +231,7 @@ public class AutoSwap extends ModuleStructure {
             return;
          }
 
-         this.executeSwap(this.pendingSwapSlot);
+         this.pressFOnSlot(this.pendingSwapSlot);
          this.pendingSwapSlot = -1;
          this.swapPhase = PHASE_CLOSING;
          this.phaseTimer = this.delayTicks(this.closeDelay);
@@ -300,7 +291,7 @@ public class AutoSwap extends ModuleStructure {
       }
 
       Item var2 = var1.getItem();
-      if (this.isTargetAlreadyPlaced(var2)) {
+      if (mc.player.getOffHandStack().getItem() == var2) {
          return true;
       }
 
@@ -310,7 +301,7 @@ public class AutoSwap extends ModuleStructure {
       }
 
       if (this.swapMode.isSelected("Packet")) {
-         return this.executeSwap(var3.id);
+         return this.pressFOnSlot(var3.id);
       }
 
       this.pendingSwapSlot = var3.id;
@@ -338,7 +329,7 @@ public class AutoSwap extends ModuleStructure {
          return null;
       }
 
-      // Hotbar first: if the item is already near the player, this creates the shortest and safest swap.
+      // Ищем именно слоты playerScreenHandler: это те же slotId, по которым работает F в инвентаре.
       for (int var2 = 36; var2 <= 44; var2++) {
          Slot var3 = this.getPlayerSlot(var2);
          if (this.slotContains(var3, var1)) {
@@ -346,7 +337,6 @@ public class AutoSwap extends ModuleStructure {
          }
       }
 
-      // Main inventory.
       for (int var4 = 9; var4 <= 35; var4++) {
          Slot var5 = this.getPlayerSlot(var4);
          if (this.slotContains(var5, var1)) {
@@ -354,9 +344,7 @@ public class AutoSwap extends ModuleStructure {
          }
       }
 
-      // Offhand source, useful when destination is a hotbar slot.
-      Slot var6 = this.getPlayerSlot(45);
-      return this.slotContains(var6, var1) ? var6 : null;
+      return null;
    }
 
    private Slot getPlayerSlot(int var1) {
@@ -371,62 +359,16 @@ public class AutoSwap extends ModuleStructure {
       return var1 != null && !var1.getStack().isEmpty() && var1.getStack().getItem() == var2;
    }
 
-   private boolean isTargetAlreadyPlaced(Item var1) {
-      if (mc.player == null || var1 == null) {
-         return false;
-      }
-
-      if (this.destination.isSelected("Offhand")) {
-         return mc.player.getOffHandStack().getItem() == var1;
-      }
-
-      int var2 = this.getDestinationHotbarButton();
-      if (var2 < 0 || var2 > 8) {
-         return false;
-      }
-
-      ItemStack var3 = mc.player.getInventory().getStack(var2);
-      return !var3.isEmpty() && var3.getItem() == var1;
-   }
-
-   private boolean executeSwap(int var1) {
+   private boolean pressFOnSlot(int var1) {
       if (mc.player == null || mc.world == null || mc.interactionManager == null || var1 < 0) {
          return false;
       }
 
-      if (this.destination.isSelected("Offhand")) {
-         // Это ровно действие клавиши F по слоту: SlotActionType.SWAP + button 40.
-         // Для player inventory важно брать currentScreenHandler.syncId, иначе свап из main inventory
-         // может не применяться на сервере в некоторых состояниях экрана.
-         mc.interactionManager.clickSlot(mc.player.currentScreenHandler.syncId, var1, 40, SlotActionType.SWAP, mc.player);
-         this.lastSwapMs = System.currentTimeMillis();
-         return true;
-      }
-
-      int var2 = this.getDestinationHotbarButton();
-      if (var2 < 0) {
-         return false;
-      }
-
-      mc.interactionManager.clickSlot(mc.player.currentScreenHandler.syncId, var1, var2, SlotActionType.SWAP, mc.player);
+      // Единственный оставленный свап: как будто игрок нажал F по слоту — предмет уходит во вторую руку.
+      // syncId берём у playerScreenHandler, потому что slotId тоже из playerScreenHandler.
+      mc.interactionManager.clickSlot(mc.player.playerScreenHandler.syncId, var1, OFFHAND_BUTTON, SlotActionType.SWAP, mc.player);
       this.lastSwapMs = System.currentTimeMillis();
       return true;
-   }
-
-   private int getDestinationHotbarButton() {
-      if (mc.player == null) {
-         return -1;
-      }
-
-      if (this.destination.isSelected("Current Hotbar")) {
-         return mc.player.getInventory().getSelectedSlot();
-      }
-
-      if (this.destination.isSelected("Selected Hotbar")) {
-         return Math.max(0, Math.min(8, this.hotbarSlot.getInt() - 1));
-      }
-
-      return -1;
    }
 
    private int delayTicks(SliderSettings var1) {
