@@ -41,9 +41,9 @@ import rich.util.c;
  *   - "Humanize" slider (0 = deterministic / instant)
  *
  * Charge thresholds (base, +jitter):
- *   GROUND_ATTACK_CHARGE  0.93
- *   CRIT_CHARGE           0.84
- *   GROUND_COMBO_DELAY    2
+ *   GROUND_ATTACK_CHARGE  1.0
+ *   CRIT_CHARGE           0.9
+ *   GROUND_COMBO_DELAY    3
  */
 public class Triggerbot extends ModuleStructure {
 
@@ -71,20 +71,20 @@ public class Triggerbot extends ModuleStructure {
     private int   attackDelayTicks       = 0;
     private int   targetReactionTicks    = 0;   // reaction delay on a new target
     private int   lastTargetId           = -1;  // id of the previous target
-    private float critChargeTarget       = 0.84F;
-    private float groundChargeTarget     = 0.93F;
-    private float waterChargeTarget      = 0.93F;
-    private float noCritChargeTarget     = 0.78F;
-    private int   groundComboDelayTarget = 2;
+    private float critChargeTarget       = 0.9F;
+    private float groundChargeTarget     = 1.0F;
+    private float waterChargeTarget      = 1.0F;
+    private float noCritChargeTarget     = 0.80F;
+    private int   groundComboDelayTarget = 3;
 
     // --- Timing constants ---
-    private static final int   GROUND_COMBO_DELAY   = 2;
-    private static final float GROUND_ATTACK_CHARGE = 0.93F;
-    private static final float CRIT_CHARGE          = 0.84F;
+    private static final int   GROUND_COMBO_DELAY   = 3;
+    private static final float GROUND_ATTACK_CHARGE = 1.0F;
+    private static final float CRIT_CHARGE          = 0.9F;
 
     public SliderSettings noCritCharge = new SliderSettings("Charge under debuff",
             "Min weapon charge when crit is impossible")
-            .setValue(0.78F).range(0.0F, 1.0F);
+            .setValue(0.80F).range(0.0F, 1.0F);
 
     // Timing randomness + reaction delay. 0 = strict determinism, higher =
     // stronger humanization -> fewer flags but slower reaction.
