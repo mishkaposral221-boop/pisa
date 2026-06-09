@@ -27,3 +27,7 @@ accessible	field	net/minecraft/entity/Entity	submergedFluidTag	Ljava/util/Set;
 accessible	field	net/minecraft/client/gui/hud/BossBarHud	bossBars	Ljava/util/Map;
 accessible	method	net/minecraft/client/network/ClientPlayerInteractionManager	sendSequencedPacket	(Lnet/minecraft/client/world/ClientWorld;Lnet/minecraft/client/network/SequencedPacketCreator;)V
 accessible	field	net/minecraft/client/gl/RenderPipelines	ENTITY_SNIPPET	Lcom/mojang/blaze3d/pipeline/RenderPipeline$Snippet;
+
+# Silent rotation: нужны для восстановления интерполяции камеры в 1-м лице
+accessible	field	net/minecraft/entity/Entity	prevYaw	F
+accessible	field	net/minecraft/entity/Entity	prevPitch	F
