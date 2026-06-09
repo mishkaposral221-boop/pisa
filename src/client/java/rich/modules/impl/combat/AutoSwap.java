@@ -34,6 +34,14 @@ import rich.util.render.pipeline.WheelPipeline;
 public class AutoSwap extends ModuleStructure {
    public static volatile boolean SUPPRESS_SPRINT = false;
 
+   // Anti-BadPacket rotation lock. Mixin в ClientPlayerEntity подменяет yaw/pitch в
+   // sendMovementPackets/tick на эти значения, пока LOCK_ROTATION = true. Это нужно,
+   // потому что современные AC (Polar/Spacetime) кикают за любое изменение поворота
+   // в одном тике с ClickContainer-пакетом.
+   public static volatile boolean LOCK_ROTATION = false;
+   public static volatile float LOCK_YAW = 0.0F;
+   public static volatile float LOCK_PITCH = 0.0F;
+
    private static final int PHASE_IDLE = 0;
    private static final int PHASE_PRE_OPEN = 1;
    private static final int PHASE_AFTER_OPEN = 2;
@@ -42,7 +50,8 @@ public class AutoSwap extends ModuleStructure {
    private static final int OFFHAND_BUTTON = 40;
    private static final int INVENTORY_WIDTH = 176;
    private static final int INVENTORY_HEIGHT = 166;
-   // Количество тиков паузы после любого свапа (помогает от двойного свапа)
+   // Количество тиков паузы после любого свапа (помогает от двойного свапа
+   // и держит rotation lock ещё немного после клика).
    private static final int POST_SWAP_PAUSE_TICKS = 10;
 
    public final SelectSetting triggerMode = new SelectSetting("Триггер", "Колесо — выбор через радиальное меню, Без колеса — авто-свап")
@@ -73,6 +82,8 @@ public class AutoSwap extends ModuleStructure {
    public final SliderSettings cooldown = new SliderSettings("Cooldown", "Минимальная пауза между свапами в миллисекундах")
       .setValue(1000.0F).range(0, 3000);
    public final BooleanSetting stopMovement = new BooleanSetting("Остановка", "Останавливать игрока во время свапа (важно для обхода BadPacket)")
+      .setValue(true);
+   public final BooleanSetting lockRotation = new BooleanSetting("Lock rotation", "Замораживать поворот головы во время свапа. Нужно для Polar/Spacetime, иначе BadPacket.")
       .setValue(true);
 
    public final TextSetting slot1 = new TextSetting("Предмет 1", "ID или алиас: талик/тотем/totem");
@@ -121,6 +132,7 @@ public class AutoSwap extends ModuleStructure {
          this.randomDelay,
          this.cooldown,
          this.stopMovement,
+         this.lockRotation,
          this.slot1, this.pick1,
          this.slot2, this.pick2,
          this.slot3, this.pick3
@@ -207,6 +219,10 @@ public class AutoSwap extends ModuleStructure {
 
       if (this.postSwapPauseTicks > 0) {
          this.postSwapPauseTicks--;
+         if (this.postSwapPauseTicks == 0) {
+            // Пауза кончилась — снимаем rotation lock, дальше клиент шлёт свой настоящий поворот.
+            LOCK_ROTATION = false;
+         }
          return;
       }
 
@@ -243,6 +259,9 @@ public class AutoSwap extends ModuleStructure {
       }
 
       if (this.stopMovement.isValue()) this.haltMovement();
+      // Каждый тик в фазе свапа подновляем замороженный yaw/pitch на текущие,
+      // чтобы lock был "живым" против медленного drift'а до момента click-тика.
+      if (this.lockRotation.isValue()) this.refreshRotationLock();
 
       if (this.phaseTimer > 0) {
          this.phaseTimer--;
@@ -271,6 +290,8 @@ public class AutoSwap extends ModuleStructure {
          // На тике клика ещё раз гасим спринт и движение — анти-BadPacket страховка.
          this.stopServerSprint();
          if (this.stopMovement.isValue()) this.haltMovement();
+         // И финально фиксируем rotation именно перед ClickContainer-пакетом.
+         if (this.lockRotation.isValue()) this.refreshRotationLock();
          this.executeOffhandSwap(this.targetItem);
          this.swapPhase = PHASE_CLOSING;
          this.phaseTimer = this.delayTicks(this.closeDelay);
@@ -285,8 +306,10 @@ public class AutoSwap extends ModuleStructure {
             mc.player.closeHandledScreen();
          }
          this.resetSwap();
-         // После legit-свапа выставляем tick-паузу, чтобы клиент успел обновить offhand
+         // После legit-свапа выставляем tick-паузу. Rotation lock держим всё это время,
+         // чтобы сервер не увидел резкий скачок поворота сразу после ClickContainer.
          this.postSwapPauseTicks = POST_SWAP_PAUSE_TICKS;
+         if (this.lockRotation.isValue()) this.refreshRotationLock();
       }
    }
 
@@ -308,14 +331,19 @@ public class AutoSwap extends ModuleStructure {
       this.lastSwapMs = now;
       this.targetItem = item;
 
+      // Сразу включаем rotation lock — даже если до самого click-тика ещё несколько фаз.
+      if (this.lockRotation.isValue()) this.refreshRotationLock();
+
       if (this.swapMode.isSelected("Packet")) {
-         // Анти-BadPacket: перед сырым clickSlot обязательно гасим спринт и движение,
-         // иначе сервер видит «click + sprint + forward» в одном тике и кидает BadPacket.
+         // Анти-BadPacket: перед сырым clickSlot обязательно гасим спринт, движение и фиксируем поворот,
+         // иначе сервер видит «click + sprint + forward + rotation delta» в одном тике и кидает BadPacket.
          this.stopServerSprint();
          if (this.stopMovement.isValue()) this.haltMovement();
+         if (this.lockRotation.isValue()) this.refreshRotationLock();
          this.executeOffhandSwap(item);
          this.targetItem = null;
          this.postSwapPauseTicks = POST_SWAP_PAUSE_TICKS;
+         // LOCK_ROTATION останется true ещё POST_SWAP_PAUSE_TICKS тиков (снимется в onTick).
          return;
       }
 
@@ -332,6 +360,13 @@ public class AutoSwap extends ModuleStructure {
          this.swapPhase = PHASE_PRE_OPEN;
          this.phaseTimer = this.delayTicks(this.preOpenDelay);
       }
+   }
+
+   private void refreshRotationLock() {
+      if (mc.player == null) return;
+      LOCK_YAW = mc.player.getYaw();
+      LOCK_PITCH = mc.player.getPitch();
+      LOCK_ROTATION = true;
    }
 
    // Ручной/колёсный: первый найденный в инвентаре
@@ -448,6 +483,12 @@ public class AutoSwap extends ModuleStructure {
       this.sentSprintStop = false;
       this.openedInventoryScreen = false;
       SUPPRESS_SPRINT = false;
+      // Если нет активной post-swap паузы — снимаем rotation lock тоже.
+      // Если postSwapPauseTicks > 0 (вызвали resetSwap в фазе CLOSING прямо перед паузой),
+      // lock останется на эту паузу и снимется в onTick по завершении.
+      if (this.postSwapPauseTicks == 0) {
+         LOCK_ROTATION = false;
+      }
    }
 
    private int delayTicks(SliderSettings s) {
@@ -549,6 +590,7 @@ public class AutoSwap extends ModuleStructure {
       this.wheelOpen = false;
       this.lastHover = -1;
       this.postSwapPauseTicks = 0;
+      LOCK_ROTATION = false;
       boolean weOpened = this.openedInventoryScreen;
       this.resetSwap();
       if (weOpened && mc.currentScreen instanceof InventoryScreen && mc.player != null) {

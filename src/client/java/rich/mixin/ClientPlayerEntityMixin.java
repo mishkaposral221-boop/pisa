@@ -27,6 +27,7 @@ import rich.events.impl.PlayerTravelEvent;
 import rich.events.impl.PushEvent;
 import rich.events.impl.TickEvent;
 import rich.events.impl.UsingItemEvent;
+import rich.modules.impl.combat.AutoSwap;
 import rich.modules.impl.combat.Triggerbot;
 import rich.modules.impl.combat.aura.AngleConnection;
 import rich.util.move.MoveUtil;
@@ -143,6 +144,11 @@ public abstract class ClientPlayerEntityMixin extends AbstractClientPlayerEntity
    @ModifyExpressionValue(method = {"sendMovementPackets", "tick"},
                           at = @At(value = "INVOKE", target = "Lnet/minecraft/client/network/ClientPlayerEntity;getYaw()F"))
    private float hookSilentRotationYaw(float original) {
+      // Anti-BadPacket: во время свапа сервер должен видеть строго зафиксированный yaw,
+      // иначе одна и та же тиковая отправка содержит и ClickContainer, и поворот головы.
+      if (AutoSwap.LOCK_ROTATION) {
+         return AutoSwap.LOCK_YAW;
+      }
       if (IMinecraft.mc.player != null && AngleConnection.INSTANCE.getRotation() != null) {
          float yaw = AngleConnection.INSTANCE.getRotation().getYaw();
          float body = MoveUtil.calculateBodyYaw(
@@ -162,6 +168,9 @@ public abstract class ClientPlayerEntityMixin extends AbstractClientPlayerEntity
    @ModifyExpressionValue(method = {"sendMovementPackets", "tick"},
                           at = @At(value = "INVOKE", target = "Lnet/minecraft/client/network/ClientPlayerEntity;getPitch()F"))
    private float hookSilentRotationPitch(float original) {
+      if (AutoSwap.LOCK_ROTATION) {
+         return AutoSwap.LOCK_PITCH;
+      }
       return AngleConnection.INSTANCE.getRotation() != null
          ? AngleConnection.INSTANCE.getRotation().getPitch()
          : original;
