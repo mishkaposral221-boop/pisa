@@ -1,11 +1,13 @@
 package rich.modules.impl.combat;
 
 import java.util.Locale;
+import java.util.concurrent.ThreadLocalRandom;
 import net.minecraft.client.gui.screen.ingame.InventoryScreen;
 import net.minecraft.entity.player.PlayerInventory;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
+import net.minecraft.network.packet.c2s.play.ClientCommandC2SPacket;
 import net.minecraft.network.packet.c2s.play.CloseHandledScreenC2SPacket;
 import net.minecraft.network.packet.c2s.play.PlayerActionC2SPacket;
 import net.minecraft.network.packet.c2s.play.UpdateSelectedSlotC2SPacket;
@@ -28,8 +30,10 @@ import rich.events.impl.TickEvent;
 import rich.modules.module.ModuleStructure;
 import rich.modules.module.category.ModuleCategory;
 import rich.modules.module.setting.implement.BindSetting;
+import rich.modules.module.setting.implement.BooleanSetting;
 import rich.modules.module.setting.implement.ButtonSetting;
 import rich.modules.module.setting.implement.SelectSetting;
+import rich.modules.module.setting.implement.SliderSettings;
 import rich.modules.module.setting.implement.TextSetting;
 import rich.util.c;
 import rich.util.profiler.FrameProfiler;
@@ -42,33 +46,54 @@ public class AutoSwap extends ModuleStructure {
    public static volatile float LOCK_YAW = 0.0F;
    public static volatile float LOCK_PITCH = 0.0F;
 
-   // Фазы для Legit inv-свапа (Rage идёт мгновенно, без фазовой машины).
+   // Rage — мгновенно, без фазовой машины.
+   // Legit hotbar / inv — фазовая машина с гауссом.
    private static final int PHASE_IDLE = 0;
-   private static final int PHASE_LEGIT_SCROLL = 1;
-   private static final int PHASE_LEGIT_SWAP = 2;
-   private static final int PHASE_LEGIT_RESTORE = 3;
-   private static final int PHASE_INV_OPEN = 10;
-   private static final int PHASE_INV_CLICK = 11;
-   private static final int PHASE_INV_CLOSE = 12;
-   // ClickSlot SWAP button=40 = ванильный F-в-инвентаре (Предмет → offhand без участия хотбара).
+   private static final int PHASE_SAFE_WAIT_SCROLL = 10;
+   private static final int PHASE_SAFE_SWAP = 11;
+   private static final int PHASE_SAFE_RESTORE = 12;
+   private static final int PHASE_INV_REACTION = 20;
+   private static final int PHASE_INV_AFTER_CLICK = 21;
+   private static final int PHASE_INV_AFTER_CLOSE = 22;
+   private static final int POST_SWAP_PAUSE_TICKS = 10;
+   private static final long INV_PHASE_FLOOR_MS = 150L;
+   // ClickSlot SWAP button=40 = ванильный F-в-инвентаре.
    private static final int OFFHAND_BTN = PlayerInventory.OFF_HAND_SLOT; // 40
 
    // --- Настройки ---
    public final SelectSetting mode = new SelectSetting(
          "Режим",
-         "Rage — мгновенный свап, только хотбар. Legit — тот же + свап из инвентаря (откр. инв, F, закр. инв).")
+         "Rage — мгновенно, только хотбар. Legit — гаусс, ванильные пакеты, может свапать из инвентаря.")
       .value("Legit", "Rage")
       .selected("Legit");
 
    public final SelectSetting triggerMode = new SelectSetting(
          "Триггер",
-         "Колесо — выбор предмета через радиальное меню. Без колеса — авто-свап.")
+         "Колесо — выбор через радиальное меню. Без колеса — авто-свап.")
       .value("Колесо", "Без колеса")
       .selected("Без колеса");
    public final BindSetting wheelBind = new BindSetting("Бинд колеса", "Зажми, наведи на предмет и отпусти.")
       .visible(() -> this.triggerMode.isSelected("Колесо"));
    public final BindSetting swapBind = new BindSetting("Бинд свапа", "Ручной триггер.")
       .visible(() -> this.triggerMode.isSelected("Без колеса"));
+
+   public final BooleanSetting legitInvSwap = new BooleanSetting(
+         "Свап из инвентаря",
+         "Открываем инвентарь, жмём F на предмете — он уходит в offhand. Хотбар не затрагивается. Только Legit.")
+      .setValue(true).visible(() -> this.mode.isSelected("Legit"));
+
+   public final SliderSettings legitMeanMs = new SliderSettings("Legit: среднее (мс)", "Средняя задержка гаусс-распределения. Ломает AutoTotemA/B.")
+      .setValue(220.0F).range(80, 600).visible(() -> this.mode.isSelected("Legit"));
+   public final SliderSettings legitStdMs = new SliderSettings("Legit: разброс (мс)", "Стандартное отклонение. Ломает AutoTotemA/B.")
+      .setValue(90.0F).range(20, 250).visible(() -> this.mode.isSelected("Legit"));
+   public final SliderSettings reactionFloorMs = new SliderSettings("Legit: реакция (мс)", "Мин. время от потери offhand до свапа. Ломает AutoTotemE.")
+      .setValue(150.0F).range(0, 500).visible(() -> this.mode.isSelected("Legit"));
+   public final SliderSettings outlierChance = new SliderSettings("Legit: outlier %", "Шанс медленного свапа. Ломает AutoTotemB/C.")
+      .setValue(10.0F).range(0, 30).visible(() -> this.mode.isSelected("Legit"));
+
+   public final BooleanSetting keepOriginalSlot = new BooleanSetting("Возвращать слот", "Вернуть выделение на оригинальный слот после свапа.").setValue(true);
+   public final BooleanSetting lockRotation = new BooleanSetting("Lock rotation", "Замораживать поворот во время свапа.").setValue(false);
+   public final BooleanSetting antiInventoryMove = new BooleanSetting("Анти InventoryMove", "Гасит инпут во время свапа.").setValue(false);
 
    public final TextSetting slot1 = new TextSetting("Предмет 1", "ID или алиас");
    public final ButtonSetting pick1 = new ButtonSetting("Выбрать 1", "Открыть инвентарь")
@@ -83,11 +108,18 @@ public class AutoSwap extends ModuleStructure {
    // --- Состояние ---
    private int pickingForSlot = -1;
    private Item pendingItem = null;
+   private Item targetItem = null;
    private int swapPhase = PHASE_IDLE;
+   private int phaseTimer = 0;
    private int swapHotbarSlot = -1;
    private int originalSlot = -1;
    private int invPickupSlot = -1;
    private boolean weOpenedScreen = false;
+   private boolean sentSprintStop = false;
+   private long offhandLostMs = 0L;
+   private Item lastDesiredItem = null;
+   private boolean lastHadDesired = false;
+   private int postSwapPauseTicks = 0;
    private long lastWarnMs = 0L;
    private boolean wheelOpen = false;
    private boolean cursorUnlocked = false;
@@ -98,9 +130,12 @@ public class AutoSwap extends ModuleStructure {
    public static AutoSwap getInstance() { return c.a(AutoSwap.class); }
 
    public AutoSwap() {
-      super("AutoSwap", "Свап во вторую руку", ModuleCategory.UTILITIES);
+      super("AutoSwap", "Свап во вторую руку (Legit / Rage)", ModuleCategory.UTILITIES);
       this.settings(
          this.mode, this.triggerMode, this.wheelBind, this.swapBind,
+         this.legitInvSwap,
+         this.legitMeanMs, this.legitStdMs, this.reactionFloorMs, this.outlierChance,
+         this.keepOriginalSlot, this.lockRotation, this.antiInventoryMove,
          this.slot1, this.pick1, this.slot2, this.pick2, this.slot3, this.pick3
       );
       this.slot1.setText("minecraft:totem_of_undying");
@@ -109,10 +144,7 @@ public class AutoSwap extends ModuleStructure {
    }
 
    private void openPickerFor(int var1) {
-      if (mc.player != null) {
-         this.pickingForSlot = var1;
-         mc.setScreen(new InventoryScreen(mc.player));
-      }
+      if (mc.player != null) { this.pickingForSlot = var1; mc.setScreen(new InventoryScreen(mc.player)); }
    }
 
    @EventHandler
@@ -124,13 +156,8 @@ public class AutoSwap extends ModuleStructure {
             ItemStack stack = ((Slot)slots.get(var1.getSlotId())).getStack();
             if (!stack.isEmpty()) {
                TextSetting setting = this.getSlotSetting(this.pickingForSlot);
-               if (setting != null) {
-                  setting.setText(Registries.ITEM.getId(stack.getItem()).toString());
-                  this.invalidateCachedStack(this.pickingForSlot);
-               }
-               var1.cancel();
-               this.pickingForSlot = -1;
-               mc.setScreen(null);
+               if (setting != null) { setting.setText(Registries.ITEM.getId(stack.getItem()).toString()); this.invalidateCachedStack(this.pickingForSlot); }
+               var1.cancel(); this.pickingForSlot = -1; mc.setScreen(null);
             }
          }
       }
@@ -140,56 +167,44 @@ public class AutoSwap extends ModuleStructure {
    public void onKey(KeyEvent var1) {
       if (mc.player == null) return;
       if (this.swapBind.getKey() != -1 && this.triggerMode.isSelected("Без колеса")
-            && var1.isKeyDown(this.swapBind.getKey(), true)) {
+            && var1.isKeyDown(this.swapBind.getKey(), true))
          this.pendingItem = this.resolveTargetItem();
-      }
       if (this.triggerMode.isSelected("Колесо") && this.wheelBind.getKey() != -1) {
          if (var1.isKeyDown(this.wheelBind.getKey(), true)) {
-            this.wheelOpen = true;
-            this.lastHover = -1;
-            this.pendingItem = null;
-            this.setCursorUnlocked(true);
+            this.wheelOpen = true; this.lastHover = -1; this.pendingItem = null; this.setCursorUnlocked(true);
          } else if (var1.isKeyReleased(this.wheelBind.getKey(), true) && this.wheelOpen) {
             if (this.lastHover != -1) {
                TextSetting s = this.getSlotSetting(this.lastHover);
                Item picked = this.parseItem(s != null ? s.getText() : null);
                if (picked != null) this.pendingItem = picked;
             }
-            this.wheelOpen = false;
-            this.lastHover = -1;
-            this.setCursorUnlocked(false);
+            this.wheelOpen = false; this.lastHover = -1; this.setCursorUnlocked(false);
          }
       }
    }
 
    @EventHandler
    public void onTick(TickEvent var1) {
-      if (mc.player == null || mc.world == null || mc.interactionManager == null) {
-         this.resetSwap();
+      if (mc.player == null || mc.world == null || mc.interactionManager == null) { this.resetSwap(); return; }
+      this.trackOffhandLoss();
+      if (this.postSwapPauseTicks > 0) {
+         this.postSwapPauseTicks--;
+         if (this.postSwapPauseTicks == 0) LOCK_ROTATION = false;
          return;
       }
       if (this.wheelOpen) return;
-
       if (this.swapPhase == PHASE_IDLE) {
          if (this.pendingItem != null) {
-            Item item = this.pendingItem;
-            this.pendingItem = null;
-            this.beginSwap(item);
-            return;
+            Item item = this.pendingItem; this.pendingItem = null; this.beginSwap(item); return;
          }
          if (this.triggerMode.isSelected("Без колеса") && mc.currentScreen == null) {
             Item desired = this.resolveDesiredOffhandItem();
-            if (desired != null && mc.player.getOffHandStack().getItem() != desired) {
-               this.beginSwap(desired);
-            }
+            if (desired != null && mc.player.getOffHandStack().getItem() != desired) this.beginSwap(desired);
          }
          return;
       }
-
-      // Legit inv-свап: фазы
-      if (this.swapPhase >= PHASE_INV_OPEN) { this.tickInvPhase(); return; }
-      // Legit hotbar: фазы
-      this.tickLegitHotbarPhase();
+      if (this.swapPhase >= PHASE_INV_REACTION) { this.tickInvSwapPhase(); return; }
+      this.tickSafePhase();
    }
 
    // ---------------------------------------------------------------------------
@@ -198,11 +213,10 @@ public class AutoSwap extends ModuleStructure {
    private void beginSwap(Item item) {
       if (mc.player == null || item == null || item == Items.AIR) return;
       if (mc.currentScreen != null && !(mc.currentScreen instanceof InventoryScreen)) return;
-
       int hotbar = this.findHotbarSlotForItem(item);
 
+      // RAGE: мгновенно, без фазовой машины
       if (this.mode.isSelected("Rage")) {
-         // --- RAGE: всё за один вызов, без фазовой машины ---
          if (hotbar == -1) { this.warnTargetNotInHotbar(item); return; }
          int orig = this.getSelectedSlot();
          if (orig != hotbar && orig >= 0) this.sendScrollPacket(hotbar);
@@ -212,115 +226,143 @@ public class AutoSwap extends ModuleStructure {
          return;
       }
 
-      // --- LEGIT ---
-      if (hotbar != -1) {
-         this.originalSlot = this.getSelectedSlot();
-         this.swapHotbarSlot = hotbar;
-         if (this.originalSlot != hotbar && this.originalSlot >= 0) {
-            this.sendScrollPacket(hotbar);
-            this.swapPhase = PHASE_LEGIT_SCROLL;
-         } else {
-            this.swapPhase = PHASE_LEGIT_SWAP;
-         }
-         return;
-      }
-      // Талик в инвентаре
+      // LEGIT
+      if (hotbar != -1) { this.beginSafeSwap(item, hotbar); return; }
+      if (!this.legitInvSwap.isValue()) { this.warnTargetNotInHotbar(item); return; }
       int inv = this.findInvSlotForItem(item);
       if (inv == -1) { this.warnTargetNotInHotbar(item); return; }
-      this.originalSlot = this.getSelectedSlot();
-      this.swapHotbarSlot = -1;
-      this.invPickupSlot = inv;
-      this.weOpenedScreen = false;
-      if (mc.currentScreen == null) {
-         mc.setScreen(new InventoryScreen(mc.player));
-         this.weOpenedScreen = true;
-      }
-      this.swapPhase = PHASE_INV_OPEN;
+      this.beginLegitInvSwap(item, inv);
    }
 
    // ---------------------------------------------------------------------------
-   // Legit хотбар: 1 тик на фазу
+   // Legit hotbar
    // ---------------------------------------------------------------------------
-   private void tickLegitHotbarPhase() {
-      if (this.swapPhase == PHASE_LEGIT_SCROLL) {
-         this.swapPhase = PHASE_LEGIT_SWAP; return;
+   private void beginSafeSwap(Item item, int hotbar) {
+      this.targetItem = item;
+      this.originalSlot = this.getSelectedSlot();
+      this.swapHotbarSlot = hotbar;
+      this.sentSprintStop = false;
+      long now = System.currentTimeMillis();
+      long reactNeeded = this.reactionFloorMs.getInt();
+      long sinceLoss = this.offhandLostMs == 0L ? Long.MAX_VALUE / 4 : (now - this.offhandLostMs);
+      long waitMs = this.computeLegitDelayMs();
+      if (sinceLoss < reactNeeded) waitMs = Math.max(waitMs, reactNeeded - sinceLoss);
+      int outlier = this.outlierChance.getInt();
+      if (outlier > 0 && ThreadLocalRandom.current().nextInt(100) < outlier)
+         waitMs += 300L + ThreadLocalRandom.current().nextInt(500);
+      int waitTicks = Math.max(1, (int)Math.ceil(waitMs / 50.0));
+      if (this.originalSlot != hotbar && this.originalSlot >= 0) {
+         this.sendScrollPacket(hotbar);
+         this.swapPhase = PHASE_SAFE_WAIT_SCROLL;
+         this.phaseTimer = Math.max(1, waitTicks);
+      } else {
+         this.swapPhase = PHASE_SAFE_SWAP;
+         this.phaseTimer = waitTicks;
       }
-      if (this.swapPhase == PHASE_LEGIT_SWAP) {
+   }
+
+   private void tickSafePhase() {
+      if (this.antiInventoryMove.isValue()) {
+         if (!this.sentSprintStop) { this.stopServerSprint(); this.sentSprintStop = true; }
+         SUPPRESS_SPRINT = true; SUPPRESS_INPUT = true;
+      }
+      if (this.lockRotation.isValue()) this.refreshRotationLock();
+      if (this.phaseTimer > 0) { this.phaseTimer--; return; }
+      if (this.swapPhase == PHASE_SAFE_WAIT_SCROLL) { this.swapPhase = PHASE_SAFE_SWAP; this.phaseTimer = 0; return; }
+      if (this.swapPhase == PHASE_SAFE_SWAP) {
          this.sendSwapWithOffhandPacket();
          this.mirrorOffhandSwap(this.swapHotbarSlot);
-         if (this.originalSlot != this.swapHotbarSlot && this.originalSlot >= 0) {
-            this.swapPhase = PHASE_LEGIT_RESTORE;
+         if (this.keepOriginalSlot.isValue() && this.originalSlot != this.swapHotbarSlot && this.originalSlot >= 0) {
+            this.swapPhase = PHASE_SAFE_RESTORE;
+            this.phaseTimer = Math.max(1, (int)Math.ceil(this.computeLegitDelayMs() / 50.0));
          } else { this.finishSwap(); }
          return;
       }
-      if (this.swapPhase == PHASE_LEGIT_RESTORE) {
+      if (this.swapPhase == PHASE_SAFE_RESTORE) {
          this.sendScrollPacket(this.originalSlot);
          this.finishSwap();
       }
    }
 
    // ---------------------------------------------------------------------------
-   // Legit inv: открыть → ClickSlot(F) → закрыть. 1 тик на фазу.
+   // Legit inv: открыть → ждать → ClickSlot(F/button=40) → ждать → закрыть → ждать → финиш.
    // ---------------------------------------------------------------------------
-   private void tickInvPhase() {
-      if (this.swapPhase == PHASE_INV_OPEN) {
-         // Инвентарь уже открыт, ждём тик и шлём click.
-         this.swapPhase = PHASE_INV_CLICK;
+   private void beginLegitInvSwap(Item item, int invSlot) {
+      this.targetItem = item;
+      this.originalSlot = this.getSelectedSlot();
+      this.swapHotbarSlot = -1;
+      this.invPickupSlot = invSlot;
+      this.sentSprintStop = false;
+      this.weOpenedScreen = false;
+      if (mc.currentScreen == null) { mc.setScreen(new InventoryScreen(mc.player)); this.weOpenedScreen = true; }
+      this.swapPhase = PHASE_INV_REACTION;
+      long waitMs = Math.max(INV_PHASE_FLOOR_MS, this.computeLegitDelayMs() - 40L);
+      this.phaseTimer = Math.max(3, (int)Math.ceil(waitMs / 50.0));
+   }
+
+   private void tickInvSwapPhase() {
+      if (!this.sentSprintStop) { this.stopServerSprint(); this.sentSprintStop = true; }
+      SUPPRESS_SPRINT = true; SUPPRESS_INPUT = true;
+      if (this.lockRotation.isValue()) this.refreshRotationLock();
+      if (this.phaseTimer > 0) { this.phaseTimer--; return; }
+
+      if (this.swapPhase == PHASE_INV_REACTION) {
+         if (mc.player == null || mc.interactionManager == null) { this.finishSwap(); return; }
+         // Ванильный F-в-инвентаре: предмет идёт прямо в offhand, хотбар не затронут.
+         mc.interactionManager.clickSlot(mc.player.playerScreenHandler.syncId, this.invPickupSlot, OFFHAND_BTN, SlotActionType.SWAP, mc.player);
+         this.swapPhase = PHASE_INV_AFTER_CLICK;
+         long waitMs = Math.max(INV_PHASE_FLOOR_MS, this.computeLegitDelayMs() - 60L);
+         this.phaseTimer = Math.max(3, (int)Math.ceil(waitMs / 50.0));
          return;
       }
-      if (this.swapPhase == PHASE_INV_CLICK) {
-         if (mc.player != null && mc.interactionManager != null) {
-            int syncId = mc.player.playerScreenHandler.syncId;
-            mc.interactionManager.clickSlot(syncId, this.invPickupSlot, OFFHAND_BTN, SlotActionType.SWAP, mc.player);
-         }
-         this.swapPhase = PHASE_INV_CLOSE;
-         return;
-      }
-      if (this.swapPhase == PHASE_INV_CLOSE) {
+      if (this.swapPhase == PHASE_INV_AFTER_CLICK) {
          if (this.weOpenedScreen) {
-            if (mc.getNetworkHandler() != null && mc.player != null) {
+            if (mc.getNetworkHandler() != null && mc.player != null)
                mc.getNetworkHandler().sendPacket(new CloseHandledScreenC2SPacket(mc.player.playerScreenHandler.syncId));
-            }
             if (mc.currentScreen instanceof InventoryScreen) mc.setScreen(null);
             this.weOpenedScreen = false;
          }
+         this.swapPhase = PHASE_INV_AFTER_CLOSE;
+         long waitMs = Math.max(INV_PHASE_FLOOR_MS, this.computeLegitDelayMs() - 60L);
+         this.phaseTimer = Math.max(3, (int)Math.ceil(waitMs / 50.0));
+         return;
+      }
+      if (this.swapPhase == PHASE_INV_AFTER_CLOSE) {
          this.finishSwap();
       }
    }
 
+   // ---------------------------------------------------------------------------
+   // Общее
+   // ---------------------------------------------------------------------------
    private void finishSwap() {
-      this.swapPhase = PHASE_IDLE;
-      this.swapHotbarSlot = -1; this.originalSlot = -1;
-      this.invPickupSlot = -1;
+      this.targetItem = null;
+      this.swapHotbarSlot = -1; this.originalSlot = -1; this.invPickupSlot = -1;
       if (this.weOpenedScreen) {
-         if (mc.getNetworkHandler() != null && mc.player != null) {
+         if (mc.getNetworkHandler() != null && mc.player != null)
             mc.getNetworkHandler().sendPacket(new CloseHandledScreenC2SPacket(mc.player.playerScreenHandler.syncId));
-         }
          if (mc.currentScreen instanceof InventoryScreen) mc.setScreen(null);
          this.weOpenedScreen = false;
       }
+      this.swapPhase = PHASE_IDLE; this.phaseTimer = 0;
+      this.sentSprintStop = false;
       SUPPRESS_SPRINT = false; SUPPRESS_INPUT = false;
-      LOCK_ROTATION = false;
+      this.postSwapPauseTicks = POST_SWAP_PAUSE_TICKS;
+      if (this.lockRotation.isValue()) this.refreshRotationLock();
    }
 
    private void resetSwap() {
-      this.swapPhase = PHASE_IDLE;
-      this.swapHotbarSlot = -1; this.originalSlot = -1;
-      this.invPickupSlot = -1;
-      this.weOpenedScreen = false;
+      this.swapPhase = PHASE_IDLE; this.phaseTimer = 0;
+      this.targetItem = null; this.swapHotbarSlot = -1; this.originalSlot = -1; this.invPickupSlot = -1;
+      this.weOpenedScreen = false; this.sentSprintStop = false;
       SUPPRESS_SPRINT = false; SUPPRESS_INPUT = false;
-      LOCK_ROTATION = false;
+      if (this.postSwapPauseTicks == 0) LOCK_ROTATION = false;
    }
 
-   // ---------------------------------------------------------------------------
-   // Пакеты
-   // ---------------------------------------------------------------------------
    private void sendScrollPacket(int hotbarSlot) {
       if (mc.getNetworkHandler() == null) return;
       mc.getNetworkHandler().sendPacket(new UpdateSelectedSlotC2SPacket(hotbarSlot));
-      if (mc.player != null) {
-         try { mc.player.getInventory().setSelectedSlot(hotbarSlot); } catch (Throwable ignored) {}
-      }
+      if (mc.player != null) try { mc.player.getInventory().setSelectedSlot(hotbarSlot); } catch (Throwable ignored) {}
    }
 
    private void sendSwapWithOffhandPacket() {
@@ -338,12 +380,40 @@ public class AutoSwap extends ModuleStructure {
       mc.player.setStackInHand(Hand.OFF_HAND, h);
    }
 
-   // ---------------------------------------------------------------------------
-   // Поиск предметов
-   // ---------------------------------------------------------------------------
-   private int getSelectedSlot() {
-      return mc.player == null ? -1 : mc.player.getInventory().getSelectedSlot();
+   private long computeLegitDelayMs() {
+      double mean = this.legitMeanMs.getInt();
+      double std = this.legitStdMs.getInt();
+      double g = ThreadLocalRandom.current().nextGaussian() * std + mean;
+      return (long)Math.max(Math.max(50.0, mean - std * 1.5), Math.min(mean + std * 3.0 + 100.0, g));
    }
+
+   private void trackOffhandLoss() {
+      if (mc.player == null) return;
+      Item desired = this.resolveDesiredOffhandItem();
+      if (desired == null) { this.lastDesiredItem = null; this.lastHadDesired = false; this.offhandLostMs = 0L; return; }
+      Item current = mc.player.getOffHandStack().getItem();
+      boolean has = (current == desired);
+      if (this.lastDesiredItem != desired) {
+         this.lastDesiredItem = desired; this.lastHadDesired = has;
+         this.offhandLostMs = has ? 0L : System.currentTimeMillis(); return;
+      }
+      if (has) { this.lastHadDesired = true; this.offhandLostMs = 0L; }
+      else { if (this.lastHadDesired || this.offhandLostMs == 0L) this.offhandLostMs = System.currentTimeMillis(); this.lastHadDesired = false; }
+   }
+
+   private void refreshRotationLock() {
+      if (mc.player == null) return;
+      LOCK_YAW = mc.player.getYaw(); LOCK_PITCH = mc.player.getPitch(); LOCK_ROTATION = true;
+   }
+
+   private void stopServerSprint() {
+      if (mc.player != null && mc.getNetworkHandler() != null) {
+         mc.player.setSprinting(false);
+         mc.getNetworkHandler().sendPacket(new ClientCommandC2SPacket(mc.player, ClientCommandC2SPacket.Mode.STOP_SPRINTING));
+      }
+   }
+
+   private int getSelectedSlot() { return mc.player == null ? -1 : mc.player.getInventory().getSelectedSlot(); }
 
    private int findHotbarSlotForItem(Item item) {
       if (mc.player == null || item == null || item == Items.AIR) return -1;
@@ -383,8 +453,7 @@ public class AutoSwap extends ModuleStructure {
    private Item parseItem(String text) {
       if (text == null || text.isBlank()) return null;
       String id = text.trim().toLowerCase(Locale.ROOT);
-      if (id.contains("талик") || id.contains("тотем") || id.contains("talik") || id.equals("totem") || id.equals("totem_of_undying"))
-         return Items.TOTEM_OF_UNDYING;
+      if (id.contains("талик") || id.contains("тотем") || id.contains("talik") || id.equals("totem") || id.equals("totem_of_undying")) return Items.TOTEM_OF_UNDYING;
       if (!id.contains(":")) id = "minecraft:" + id;
       if (id.contains(":totem")) return Items.TOTEM_OF_UNDYING;
       Identifier ident = Identifier.tryParse(id);
@@ -401,10 +470,9 @@ public class AutoSwap extends ModuleStructure {
       String name = item.getName().getString();
       String msg = this.mode.isSelected("Rage")
          ? "Rage: положи «" + name + "» в хотбар."
-         : "«" + name + "» не найден ни в хотбаре, ни в инвентаре.";
+         : (!this.legitInvSwap.isValue() ? "Нет «" + name + "» в хотбаре. Включи «Свап из инвентаря»." : "«" + name + "» не найден.");
       mc.player.sendMessage(
-         Text.literal("[AutoSwap] ").formatted(Formatting.YELLOW).append(Text.literal(msg).formatted(Formatting.GRAY)),
-         true);
+         Text.literal("[AutoSwap] ").formatted(Formatting.YELLOW).append(Text.literal(msg).formatted(Formatting.GRAY)), true);
    }
 
    // ---------------------------------------------------------------------------
@@ -446,29 +514,20 @@ public class AutoSwap extends ModuleStructure {
                var1.getDrawContext().drawItem(stack, (int)(ix - 8.0F), (int)(iy - 8.0F));
             }
          }
-      } finally {
-         if (prof) profiler.end();
-      }
+      } finally { if (prof) profiler.end(); }
    }
 
    private void setCursorUnlocked(boolean unlock) {
       if (mc.mouse == null) return;
       if (unlock && !this.cursorUnlocked) { mc.mouse.unlockCursor(); this.cursorUnlocked = true; }
-      else if (!unlock && this.cursorUnlocked) {
-         if (mc.currentScreen == null) mc.mouse.lockCursor();
-         this.cursorUnlocked = false;
-      }
+      else if (!unlock && this.cursorUnlocked) { if (mc.currentScreen == null) mc.mouse.lockCursor(); this.cursorUnlocked = false; }
    }
 
    private ItemStack getStackForIndex(int idx) {
       TextSetting setting = this.getSlotSetting(idx);
       if (setting == null) return ItemStack.EMPTY;
       String text = setting.getText();
-      if (text == null || text.isBlank()) {
-         this.cachedIds[idx] = text == null ? "" : text;
-         this.cachedStacks[idx] = ItemStack.EMPTY;
-         return ItemStack.EMPTY;
-      }
+      if (text == null || text.isBlank()) { this.cachedIds[idx] = text == null ? "" : text; this.cachedStacks[idx] = ItemStack.EMPTY; return ItemStack.EMPTY; }
       if (text.equals(this.cachedIds[idx])) return this.cachedStacks[idx];
       this.cachedIds[idx] = text;
       Item item = this.parseItem(text);
@@ -491,15 +550,11 @@ public class AutoSwap extends ModuleStructure {
 
    @Override
    public void deactivate() {
-      this.pickingForSlot = -1;
-      this.pendingItem = null;
-      this.wheelOpen = false;
-      this.lastHover = -1;
-      LOCK_ROTATION = false;
+      this.pickingForSlot = -1; this.pendingItem = null; this.wheelOpen = false; this.lastHover = -1;
+      this.postSwapPauseTicks = 0; LOCK_ROTATION = false;
       if (this.weOpenedScreen) {
-         if (mc.getNetworkHandler() != null && mc.player != null) {
+         if (mc.getNetworkHandler() != null && mc.player != null)
             mc.getNetworkHandler().sendPacket(new CloseHandledScreenC2SPacket(mc.player.playerScreenHandler.syncId));
-         }
          if (mc.currentScreen instanceof InventoryScreen) mc.setScreen(null);
          this.weOpenedScreen = false;
       }
@@ -508,9 +563,6 @@ public class AutoSwap extends ModuleStructure {
    }
 
    private TextSetting getSlotSetting(int idx) {
-      if (idx == 0) return this.slot1;
-      if (idx == 1) return this.slot2;
-      if (idx == 2) return this.slot3;
-      return null;
+      if (idx == 0) return this.slot1; if (idx == 1) return this.slot2; if (idx == 2) return this.slot3; return null;
    }
 }
