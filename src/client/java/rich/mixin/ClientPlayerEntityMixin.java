@@ -169,7 +169,13 @@ public abstract class ClientPlayerEntityMixin extends AbstractClientPlayerEntity
       ci.cancel();
    }
 
-   @ModifyExpressionValue(method = {"sendMovementPackets", "tick"},
+   /**
+    * Спуфим yaw/pitch ТОЛЬКО в sendMovementPackets — там формируется пакет для сервера.
+    * НЕ трогаем tick() — там getYaw() используется для расчёта вектора движения.
+    * Если спуфить yaw в tick(), при взгляде вниз на врага вектор движения получает
+    * вертикальную составляющую → сервер прижимает к земле → флаги анти-чита.
+    */
+   @ModifyExpressionValue(method = "sendMovementPackets",
                           at = @At(value = "INVOKE", target = "Lnet/minecraft/client/network/ClientPlayerEntity;getYaw()F"))
    private float hookSilentRotationYaw(float original) {
       if (AutoSwap.LOCK_ROTATION) {
@@ -191,7 +197,7 @@ public abstract class ClientPlayerEntityMixin extends AbstractClientPlayerEntity
       return original;
    }
 
-   @ModifyExpressionValue(method = {"sendMovementPackets", "tick"},
+   @ModifyExpressionValue(method = "sendMovementPackets",
                           at = @At(value = "INVOKE", target = "Lnet/minecraft/client/network/ClientPlayerEntity;getPitch()F"))
    private float hookSilentRotationPitch(float original) {
       if (AutoSwap.LOCK_ROTATION) {
