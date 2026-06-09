@@ -25,27 +25,37 @@ import rich.modules.module.setting.implement.BooleanSetting;
 import rich.modules.module.setting.implement.SliderSettings;
 import rich.util.c;
 
+/**
+ * KillAura — TestSmooth-style rotation (волны + lerp 0.6f).
+ *
+ * Silent: onWorldRender восстанавливает realYaw/realPitch перед рендером.
+ *   → от 1-го лица камера не двигается; пакеты уходят с curYaw.
+ *
+ * W-release: SUPPRESS_FORWARD, как в Triggerbot.
+ */
 public class KillAuraSpooky extends ModuleStructure {
 
+    // ── Настройки ──────────────────────────────────────────────────────────
     public final SliderSettings range      = new SliderSettings("Range",     "Attack range")       .setValue(3.1F).range(1.0F, 6.0F);
-    public final SliderSettings fovSetting = new SliderSettings("FOV",       "Max angle to target").setValue(180.0F).range(10.0F, 180.0F);
+    public final SliderSettings fovSetting = new SliderSettings("FOV",       "Max FOV to target")  .setValue(180.0F).range(10.0F, 180.0F);
     public final BooleanSetting onlySword  = new BooleanSetting("OnlySword", "Only sword/axe")     .setValue(true);
     public final BooleanSetting silentRot  = new BooleanSetting("Silent",    "Silent rotation")    .setValue(true);
-    public final BooleanSetting swayOn     = new BooleanSetting("Sway",      "SPAngle idle sway")  .setValue(true);
 
+    // ── Ротация ────────────────────────────────────────────────────────────
     private final Random rng = new Random();
-    private float   curYaw;
-    private float   curPitch;
+
+    /** Текущий серверный угол */
+    private float curYaw;
+    private float curPitch;
     private boolean hasRotation = false;
 
-    private float   realYaw;
-    private float   realPitch;
+    /** Реальные углы камеры игрока */
+    private float realYaw;
+    private float realPitch;
 
     private Entity lockedTarget = null;
-    private long   targetLostMs = 0;
-    private float  holdYaw;
-    private float  holdPitch;
 
+    // ── Атака / W-release ─────────────────────────────────────────────────
     private Entity  pendingAttack     = null;
     private long    preAttackDeadline = 0L;
     private boolean pendingWasForward = false;
@@ -63,8 +73,8 @@ public class KillAuraSpooky extends ModuleStructure {
     private static final int   GROUND_COMBO_DELAY   = 2;
 
     public KillAuraSpooky() {
-        super("KillAura", "SpookyTime kill-aura (SPAngle)", ModuleCategory.UTILITIES);
-        this.settings(range, fovSetting, onlySword, silentRot, swayOn);
+        super("KillAura", "SpookyTime kill-aura (TestSmooth)", ModuleCategory.UTILITIES);
+        this.settings(range, fovSetting, onlySword, silentRot);
     }
 
     public static KillAuraSpooky getInstance() {
@@ -78,6 +88,9 @@ public class KillAuraSpooky extends ModuleStructure {
         fullReset();
     }
 
+    // ══════════════════════════════════════════════════════════════════════
+    // ГЛАВНЫЙ ТИК
+    // ══════════════════════════════════════════════════════════════════════
     @EventHandler
     public void onTick(TickEvent event) {
         boolean wantSuppress = false;
@@ -88,11 +101,13 @@ public class KillAuraSpooky extends ModuleStructure {
             }
             ClientPlayerEntity player = mc.player;
 
+            // Сохраняем реальные углы камеры до любых наших изменений
             realYaw   = player.getYaw();
             realPitch = player.getPitch();
 
             updateGroundWaterState(player);
 
+            // ── Pending attack: ждём W-release ─────────────────────────────────
             if (pendingAttack != null) {
                 if (!isEntityValid(pendingAttack)) {
                     pendingAttack = null;
@@ -112,55 +127,27 @@ public class KillAuraSpooky extends ModuleStructure {
                 return;
             }
 
+            // ── Поиск цели ─────────────────────────────────────────────────
             Entity target = findTarget(player);
-            long now = System.currentTimeMillis();
 
-            if (target != null) {
-                lockedTarget = target;
-                targetLostMs = 0;
-            } else if (lockedTarget != null) {
-                if (targetLostMs == 0) {
-                    targetLostMs = now;
-                    holdYaw   = curYaw;
-                    holdPitch = curPitch;
-                }
-                long elapsed = now - targetLostMs;
-                if (elapsed < 50L) {
-                    if (hasRotation) setPacketRotation(player, holdYaw, holdPitch);
-                    return;
-                } else if (elapsed < 550L) {
-                    float t     = (float)(elapsed - 50L) / 500.0F;
-                    float eased = t * (0.5F + 0.5F * t);
-                    float retYaw   = holdYaw   + MathHelper.wrapDegrees(realYaw   - holdYaw)   * eased;
-                    float retPitch = holdPitch + (realPitch - holdPitch) * eased;
-                    if (hasRotation) setPacketRotation(player, retYaw, retPitch);
-                    return;
-                } else {
-                    lockedTarget = null;
-                    hasRotation  = false;
-                    return;
-                }
-            } else {
-                hasRotation = false;
+            if (target == null) {
+                lockedTarget = null;
+                hasRotation  = false;
                 return;
             }
+            lockedTarget = target;
 
+            // ── TestSmooth-style rotation ─────────────────────────────────
             Vec3d aimPoint = getNearestVisiblePoint(player, target);
-
-            float prevYaw   = hasRotation ? curYaw   : realYaw;
-            float prevPitch = hasRotation ? curPitch : realPitch;
-
-            float[] next = spAngle(prevYaw, prevPitch, player.getEyePos(), aimPoint);
+            float[] next   = testSmoothRotate(player, aimPoint);
             curYaw   = next[0];
             curPitch = next[1];
             hasRotation = true;
 
-            float[] snapped = gcdSnap(player, prevYaw, prevPitch, curYaw, curPitch);
-            curYaw   = snapped[0];
-            curPitch = snapped[1];
-
+            // Отправляем пакет с curYaw (silentRot: onWorldRender вернёт реальную камеру)
             setPacketRotation(player, curYaw, curPitch);
 
+            // Атака
             tickAttack(player, target);
 
         } finally {
@@ -168,19 +155,81 @@ public class KillAuraSpooky extends ModuleStructure {
         }
     }
 
-    /**
-     * До рендера — восстанавливаем камеру игрока (пакет уже ушёл с curYaw).
-     * Камера в 1-м лице не движется — рисуется с realYaw.
-     */
+    // ══════════════════════════════════════════════════════════════════════
+    // RENDER: восстанавливаем камеру — от 1-го лица ничего не движется
+    // ══════════════════════════════════════════════════════════════════════
     @EventHandler
     public void onWorldRender(WorldRenderEvent event) {
         if (!silentRot.isValue()) return;
         if (mc.player == null || !this.isState()) return;
-        ClientPlayerEntity player = mc.player;
-        player.setYaw(realYaw);
-        player.setPitch(realPitch);
+        mc.player.setYaw(realYaw);
+        mc.player.setPitch(realPitch);
     }
 
+    // ══════════════════════════════════════════════════════════════════════
+    // TestSmooth-style алгоритм (волновой шум + lerp 0.6f)
+    // ══════════════════════════════════════════════════════════════════════
+    private float[] testSmoothRotate(ClientPlayerEntity player, Vec3d aimPoint) {
+        Vec3d eye  = player.getEyePos();
+        double dx  = aimPoint.x - eye.x;
+        double dy  = aimPoint.y - eye.y;
+        double dz  = aimPoint.z - eye.z;
+        double hd  = Math.sqrt(dx * dx + dz * dz);
+
+        float targetYaw   = (float)  Math.toDegrees(Math.atan2(-dx, dz));
+        float targetPitch = (float)(-Math.toDegrees(Math.atan2(dy, hd)));
+
+        float fromYaw   = hasRotation ? curYaw   : realYaw;
+        float fromPitch = hasRotation ? curPitch : realPitch;
+
+        // Дельты
+        float yawDelta   = MathHelper.wrapDegrees(targetYaw   - fromYaw);
+        float pitchDelta = targetPitch - fromPitch;
+        float rotDiff    = (float) Math.max(Math.hypot(Math.abs(yawDelta), Math.abs(pitchDelta)), 0.0001);
+
+        // Базовые скорости (randomLerp)
+        float baseSpeedYaw   = randomLerp(45f, 67f);
+        float baseSpeedPitch = randomLerp(10f, 25f);
+        if (rotDiff < 10f) {
+            baseSpeedYaw   *= (rotDiff / 10f);
+            baseSpeedPitch *= (rotDiff / 10f);
+        }
+
+        float straightYaw   = Math.abs(yawDelta   / rotDiff) * baseSpeedYaw;
+        float straightPitch = Math.abs(pitchDelta / rotDiff) * baseSpeedPitch;
+
+        // Волновой шум (из TestSmooth)
+        long ms     = System.currentTimeMillis();
+        float wave1 = (float)(Math.sin(ms / 60.0) * 5.0);
+        float wave2 = (float)(Math.cos(ms / 50.0) * 4.0);
+        float wave3 = (float)(Math.sin(ms / 70.0) * 3.0);
+
+        float yawNoise   = ((wave1 + wave3) * 0.15f) + randomLerp(-0.5f, 0.5f);
+        float pitchNoise = ( wave2          * 0.15f) + randomLerp(-0.5f, 0.5f);
+
+        // desired
+        float desiredYaw   = fromYaw   + MathHelper.clamp(yawDelta,   -straightYaw,   straightYaw)   + yawNoise;
+        float desiredPitch = fromPitch + MathHelper.clamp(pitchDelta, -straightPitch, straightPitch) + pitchNoise;
+
+        // lerp 0.6f — плавность, как в TestSmooth
+        float finalYaw   = lerp(fromYaw,   desiredYaw,   0.6f);
+        float finalPitch = lerp(fromPitch, desiredPitch, 0.6f);
+        finalPitch = MathHelper.clamp(finalPitch, -90f, 90f);
+
+        return new float[]{ finalYaw, finalPitch };
+    }
+
+    private float randomLerp(float min, float max) {
+        return min + rng.nextFloat() * (max - min);
+    }
+
+    private static float lerp(float a, float b, float t) {
+        return a + (b - a) * t;
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // setPacketRotation
+    // ══════════════════════════════════════════════════════════════════════
     private void setPacketRotation(ClientPlayerEntity player, float yaw, float pitch) {
         player.setYaw(yaw);
         player.setPitch(pitch);
@@ -188,75 +237,9 @@ public class KillAuraSpooky extends ModuleStructure {
         player.bodyYaw = yaw;
     }
 
-    private float[] spAngle(float curYaw, float curPitch, Vec3d eye, Vec3d aim) {
-        double dx = aim.x - eye.x;
-        double dy = aim.y - eye.y;
-        double dz = aim.z - eye.z;
-        double hd = Math.sqrt(dx * dx + dz * dz);
-
-        float tYaw   = (float)  Math.toDegrees(Math.atan2(-dx, dz));
-        float tPitch = (float)(-Math.toDegrees(Math.atan2(dy, hd)));
-
-        float yawD   = MathHelper.wrapDegrees(tYaw   - curYaw);
-        float pitchD = tPitch - curPitch;
-        float total  = (float) Math.hypot(yawD, pitchD);
-
-        if (total < 0.001F) return new float[]{ curYaw, curPitch };
-
-        float yawLimit   = Math.min(Math.abs(yawD),   74.0F + (float)(rng.nextDouble() * 1.03));
-        float pitchLimit = Math.min(Math.abs(pitchD), 32.33F);
-
-        boolean yawReached = Math.abs(yawD)   >= yawLimit;
-        float   yawStep    = yawReached ? 65.0F + rng.nextFloat() * 35.0F
-                                       :  7.7F + rng.nextFloat() *  4.4F;
-        float   yawScale   = Math.min(total, yawStep) / total;
-        if (!yawReached) yawScale = yawScale * (0.5F + 0.5F * yawScale);
-        float   applyYaw   = MathHelper.clamp(yawD,  -yawLimit, yawLimit) * yawScale;
-
-        boolean pitchReached = Math.abs(pitchD) >= pitchLimit;
-        float   pitchStep    = pitchReached ? 65.0F + rng.nextFloat() * 35.0F
-                                           :  7.7F + rng.nextFloat() *  4.4F;
-        float   pitchScale   = Math.min(total, pitchStep) / total;
-        if (!pitchReached) pitchScale = pitchScale * (0.5F + 0.5F * pitchScale);
-        float   applyPitch   = MathHelper.clamp(pitchD, -pitchLimit, pitchLimit) * pitchScale;
-
-        float nextYaw   = curYaw   + applyYaw;
-        float nextPitch = MathHelper.clamp(curPitch + applyPitch, -89.0F, 90.0F);
-
-        if (swayOn.isValue()) {
-            long ms = System.currentTimeMillis();
-            float phase = (float)((ms % 12000L) / 1200.0 * 3.0 * (Math.PI * 2.0));
-            nextYaw += (float)(Math.sin(phase) * 1.15 * rng.nextGaussian());
-        }
-
-        return new float[]{ nextYaw, nextPitch };
-    }
-
-    private float[] gcdSnap(ClientPlayerEntity player,
-                             float prevYaw, float prevPitch,
-                             float nextYaw, float nextPitch) {
-        Object raw = mc.options.getMouseSensitivity().getValue();
-        float sens;
-        if (raw instanceof Double) {
-            sens = ((Double) raw).floatValue() * 0.6F + 0.2F;
-        } else if (raw instanceof Number) {
-            sens = ((Number) raw).floatValue() * 0.6F + 0.2F;
-        } else {
-            sens = 0.5F * 0.6F + 0.2F;
-        }
-        float gcd = sens * sens * sens * 1.2F * 0.15F;
-        if (gcd < 1e-4F) return new float[]{ nextYaw, nextPitch };
-
-        float dY = MathHelper.wrapDegrees(nextYaw   - prevYaw);
-        float dP = nextPitch - prevPitch;
-        dY = Math.round(dY / gcd) * gcd;
-        dP = Math.round(dP / gcd) * gcd;
-        return new float[]{
-            prevYaw   + dY,
-            MathHelper.clamp(prevPitch + dP, -90.0F, 90.0F)
-        };
-    }
-
+    // ══════════════════════════════════════════════════════════════════════
+    // АТАКА
+    // ══════════════════════════════════════════════════════════════════════
     private void tickAttack(ClientPlayerEntity player, Entity target) {
         if (!canHit(player, target)) return;
         float charge = player.getAttackCooldownProgress(0.0F);
@@ -265,25 +248,18 @@ public class KillAuraSpooky extends ModuleStructure {
             if (charge >= GROUND_ATTACK_CHARGE) queueAttack(target);
             return;
         }
-
-        boolean critPossible = critAchievable(player);
-
-        if (!critPossible) {
+        if (!critAchievable(player)) {
             if (charge >= GROUND_ATTACK_CHARGE) queueAttack(target);
             return;
         }
-
         if (!player.isOnGround()) {
             if (critBlocker(player) == null && charge >= CRIT_CHARGE) {
-                wasFalling = false;
-                fallGroundTicks = 0;
+                wasFalling = false; fallGroundTicks = 0;
                 queueAttack(target);
             }
             return;
         }
-
         if (wasFalling) return;
-
         if (charge >= GROUND_ATTACK_CHARGE && ticksOnGround >= GROUND_COMBO_DELAY) {
             queueAttack(target);
         }
@@ -305,30 +281,29 @@ public class KillAuraSpooky extends ModuleStructure {
         }
     }
 
+    // ══════════════════════════════════════════════════════════════════════
+    // ПОИСК ЦЕЛИ
+    // ══════════════════════════════════════════════════════════════════════
     private Entity findTarget(ClientPlayerEntity player) {
         if (mc.world == null) return null;
         Entity best      = null;
         double bestScore = Double.MAX_VALUE;
-
         for (Entity e : mc.world.getEntities()) {
             if (e == player || !(e instanceof PlayerEntity)) continue;
             PlayerEntity pe = (PlayerEntity) e;
             if (!pe.isAlive() || pe.isSpectator()) continue;
-
             double dist = player.distanceTo(pe);
             if (dist > range.getValue()) continue;
-
             Vec3d diff = pe.getEyePos().subtract(player.getEyePos());
             double hd  = Math.sqrt(diff.x * diff.x + diff.z * diff.z);
-            double tY  =  Math.toDegrees(Math.atan2(-diff.x, diff.z));
+            float  tY  = (float)  Math.toDegrees(Math.atan2(-diff.x, diff.z));
             double tP  = -Math.toDegrees(Math.atan2(diff.y, hd));
             float baseYaw   = hasRotation ? curYaw   : realYaw;
             float basePitch = hasRotation ? curPitch : realPitch;
-            double dY  = MathHelper.wrapDegrees((float)(tY - baseYaw));
+            double dY  = MathHelper.wrapDegrees(tY - baseYaw);
             double dP  = tP - basePitch;
             double ang = Math.sqrt(dY * dY + dP * dP);
             if (ang > fovSetting.getValue()) continue;
-
             double score = ang + dist * 0.1;
             if (score < bestScore) { bestScore = score; best = e; }
         }
@@ -339,23 +314,20 @@ public class KillAuraSpooky extends ModuleStructure {
         Box   box    = target.getBoundingBox();
         Vec3d eye    = player.getEyePos();
         Vec3d center = box.getCenter();
-
         Vec3d eyeLevel = new Vec3d(
             center.x,
             MathHelper.clamp((float) eye.y, (float) box.minY, (float) box.maxY),
             center.z
         );
         if (canSee(player, eyeLevel)) return eyeLevel;
-
         float baseYaw   = hasRotation ? curYaw   : realYaw;
         float basePitch = hasRotation ? curPitch : realPitch;
         float yaw   = baseYaw   * (float)(Math.PI / 180);
         float pitch = basePitch * (float)(Math.PI / 180);
-        double lx   = -Math.sin(yaw) * Math.cos(pitch);
-        double ly   = -Math.sin(pitch);
-        double lz   =  Math.cos(yaw) * Math.cos(pitch);
+        double lx = -Math.sin(yaw) * Math.cos(pitch);
+        double ly = -Math.sin(pitch);
+        double lz =  Math.cos(yaw) * Math.cos(pitch);
         Vec3d crosshair = eye.add(new Vec3d(lx, ly, lz).multiply(eye.distanceTo(center)));
-
         return new Vec3d(
             MathHelper.clamp(crosshair.x, box.minX, box.maxX),
             MathHelper.clamp(crosshair.y, box.minY, box.maxY),
@@ -372,10 +344,12 @@ public class KillAuraSpooky extends ModuleStructure {
         return hit.getType() == HitResult.Type.MISS || hit.getPos().distanceTo(point) < 1.0;
     }
 
+    // ══════════════════════════════════════════════════════════════════════
+    // ВСПОМОГАТЕЛЬНЫЕ
+    // ══════════════════════════════════════════════════════════════════════
     private void updateGroundWaterState(ClientPlayerEntity player) {
         if (isInWater()) { ticksOutOfWater = 0; }
         else if (ticksOutOfWater < 100) { ticksOutOfWater++; }
-
         if (player.isOnGround()) {
             if (ticksOnGround < 100) ticksOnGround++;
             if (wasFalling && ++fallGroundTicks >= FALL_GATE_TICKS) {
@@ -435,9 +409,10 @@ public class KillAuraSpooky extends ModuleStructure {
     }
 
     private void fullReset() {
-        lockedTarget = null; targetLostMs = 0; hasRotation = false;
-        holdYaw = 0; holdPitch = 0;
+        lockedTarget = null;
+        hasRotation  = false;
         realYaw = 0; realPitch = 0;
+        curYaw  = 0; curPitch  = 0;
         pendingAttack = null; preAttackDeadline = 0L;
         ticksOnGround = 0; wasFalling = false; fallGroundTicks = 0;
         ticksOutOfWater = 10;
