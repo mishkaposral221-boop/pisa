@@ -20,12 +20,15 @@ import java.util.concurrent.ThreadLocalRandom;
 /**
  * Triggerbot: auto-attacks targeted living entities.
  *
- * Приоритет ударов:
- *   1. CRIT  — если крит достижим (падение, fallDistance>0): всегда крит.
- *   2. COMBO — только если крит невозможен (debuff, вода и т.д.).
- *   3. Если крит достижим и игрок на земле/в прыжке — ждём падения, не даём комбу.
+ * W-release mechanic (before EVERY hit):
+ *   1. Attack ready -> suppress W, set preAttackDeadline = now + random(1..15) ms.
+ *   2. Each tick: if now < deadline -> W suppressed, wait.
+ *   3. Deadline passed -> doAttack(), W restored immediately.
  *
- * W-release: перед каждым ударом отпускаем W на 1-15мс.
+ * Falling rule: if player was falling (velocity.y < 0 in air), on landing
+ * we do NOT fire a combo — we wait for the next jump-crit opportunity.
+ * wasFalling resets only after a successful crit fires or after
+ * COMBO_ALLOWED_AFTER_FALL_TICKS ground ticks (safety valve ~2s).
  */
 public class Triggerbot extends ModuleStructure {
 
@@ -40,6 +43,9 @@ public class Triggerbot extends ModuleStructure {
     private static final int W_PRE_MIN = 1;
     private static final int W_PRE_MAX = 15;
 
+    // After falling, block combo for this many ground ticks (safety valve ~2s).
+    private static final int COMBO_ALLOWED_AFTER_FALL_TICKS = 40;
+
     private Entity  pendingTarget     = null;
     private long    preAttackDeadline = 0L;
     private boolean pendingWasForward = false;
@@ -48,6 +54,10 @@ public class Triggerbot extends ModuleStructure {
     private long lastDiagLogMs = 0L;
     private int ticksOutOfWater = 10;
     private int ticksOnGround   = 0;
+    // True when player was descending in air (velocity.y < 0).
+    // Cleared only when a crit fires or after COMBO_ALLOWED_AFTER_FALL_TICKS on ground.
+    private boolean wasFalling  = false;
+    private int ticksOnGroundAfterFall = 0;
 
     private static final int   GROUND_COMBO_DELAY   = 2;
     private static final float GROUND_ATTACK_CHARGE = 0.93F;
@@ -80,6 +90,8 @@ public class Triggerbot extends ModuleStructure {
         preAttackDeadline = 0L;
         ticksOutOfWater   = 0;
         ticksOnGround     = 0;
+        wasFalling        = false;
+        ticksOnGroundAfterFall = 0;
         lastDiag          = "";
         lastDiagLogMs     = 0L;
     }
@@ -98,8 +110,26 @@ public class Triggerbot extends ModuleStructure {
             if (isInWater()) { ticksOutOfWater = 0; }
             else if (ticksOutOfWater < 100) { ticksOutOfWater++; }
 
+            // Track ground ticks
             if (mc.player.isOnGround()) { if (ticksOnGround < 100) ticksOnGround++; }
             else { ticksOnGround = 0; }
+
+            // Track falling: player is in air descending
+            if (!mc.player.isOnGround() && mc.player.getVelocity().y < 0.0) {
+                wasFalling = true;
+                ticksOnGroundAfterFall = 0;
+            } else if (mc.player.isOnGround()) {
+                if (wasFalling) {
+                    ticksOnGroundAfterFall++;
+                    // Safety valve: if on ground too long, allow combo anyway
+                    if (ticksOnGroundAfterFall >= COMBO_ALLOWED_AFTER_FALL_TICKS) {
+                        wasFalling = false;
+                        ticksOnGroundAfterFall = 0;
+                    }
+                }
+            } else {
+                // In air but ascending — keep wasFalling state as-is
+            }
 
             long now = System.currentTimeMillis();
 
@@ -139,7 +169,7 @@ public class Triggerbot extends ModuleStructure {
                 return;
             }
 
-            // --- No-crit path: крит невозможен (дебафф и т.д.) — комба ---
+            // --- No-crit path ---
             if (!critPossible) {
                 float need = noCritCharge.getValue();
                 if (charge >= need) {
@@ -150,12 +180,13 @@ public class Triggerbot extends ModuleStructure {
                 return;
             }
 
-            // Ниже — крит достижим. Комба никогда не даётся.
-
-            // --- Air crit: падение (fallDistance > 0) ---
+            // --- Air crit path ---
             if (!mc.player.isOnGround()) {
                 String blocker = critBlocker();
                 if (blocker == null && charge >= CRIT_CHARGE) {
+                    // Successful crit: clear wasFalling
+                    wasFalling = false;
+                    ticksOnGroundAfterFall = 0;
                     wantSuppressForward = queueAttack(target, "CRIT");
                 } else {
                     diag("AIR_BLOCK", "block=" + blocker + " charge=" + fmt(charge));
@@ -163,8 +194,7 @@ public class Triggerbot extends ModuleStructure {
                 return;
             }
 
-            // --- На земле, но крит достижим ---
-            // Прыжок нажат или в восхождении — ждём отрыва
+            // --- Ground jump-crit gate ---
             if (this.isJumpHeld() || mc.player.getVelocity().y > 0.0) {
                 if (this.isJumpHeld() && charge < jumpCharge.getValue()) {
                     wantSuppressJump = true;
@@ -175,9 +205,18 @@ public class Triggerbot extends ModuleStructure {
                 return;
             }
 
-            // На земле, прыжок не нажат, velocity.y <= 0: ждём прыжка для крита.
-            // Комба здесь не даётся никогда пока крит достижим.
-            diag("GROUND_CRIT_WAIT", "waiting for jump, charge=" + fmt(charge));
+            // --- Ground combo ---
+            // Blocked if player was recently falling (wait for next jump-crit).
+            if (wasFalling) {
+                diag("FALL_WAIT", "was falling, waiting for crit. groundTicks=" + ticksOnGroundAfterFall);
+                return;
+            }
+
+            if (charge >= GROUND_ATTACK_CHARGE && ticksOnGround >= GROUND_COMBO_DELAY) {
+                wantSuppressForward = queueAttack(target, "COMBO");
+            } else {
+                diag("GROUND_WAIT", "charge=" + fmt(charge) + " ticks=" + ticksOnGround);
+            }
 
         } finally {
             SUPPRESS_FORWARD = wantSuppressForward;
@@ -241,15 +280,15 @@ public class Triggerbot extends ModuleStructure {
     }
 
     private String critBlocker() {
-        if (!(mc.player.fallDistance > 0.0))                      return "fall<=0";
-        if (ticksOutOfWater < 3)                                  return "justLeftWater";
-        if (mc.player.isOnGround())                               return "onGround";
-        if (mc.player.isClimbing())                               return "climbing";
-        if (mc.player.isTouchingWater())                          return "water";
+        if (!(mc.player.fallDistance > 0.0))                     return "fall<=0";
+        if (ticksOutOfWater < 3)                                 return "justLeftWater";
+        if (mc.player.isOnGround())                              return "onGround";
+        if (mc.player.isClimbing())                              return "climbing";
+        if (mc.player.isTouchingWater())                         return "water";
         if (mc.player.hasStatusEffect(StatusEffects.LEVITATION))  return "levitation";
         if (mc.player.hasStatusEffect(StatusEffects.BLINDNESS))   return "blindness";
-        if (mc.player.hasVehicle())                               return "vehicle";
-        if (mc.player.getAbilities().flying)                      return "flying";
+        if (mc.player.hasVehicle())                              return "vehicle";
+        if (mc.player.getAbilities().flying)                     return "flying";
         return null;
     }
 
