@@ -3,16 +3,21 @@ package rich.modules.impl.combat;
 import java.util.Locale;
 import java.util.concurrent.ThreadLocalRandom;
 import net.minecraft.client.gui.screen.ingame.InventoryScreen;
+import net.minecraft.entity.player.PlayerInventory;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
 import net.minecraft.network.packet.c2s.play.ClientCommandC2SPacket;
+import net.minecraft.network.packet.c2s.play.PlayerActionC2SPacket;
+import net.minecraft.network.packet.c2s.play.UpdateSelectedSlotC2SPacket;
 import net.minecraft.registry.Registries;
 import net.minecraft.screen.slot.Slot;
 import net.minecraft.screen.slot.SlotActionType;
+import net.minecraft.util.Hand;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.collection.DefaultedList;
-import org.lwjgl.glfw.GLFW;
+import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.Direction;
 import rich.Initialization;
 import rich.events.api.EventHandler;
 import rich.events.impl.ClickSlotEvent;
@@ -34,24 +39,20 @@ import rich.util.render.pipeline.WheelPipeline;
 public class AutoSwap extends ModuleStructure {
    public static volatile boolean SUPPRESS_SPRINT = false;
 
-   // Anti-BadPacket rotation lock. Mixin в ClientPlayerEntity подменяет yaw/pitch в
-   // sendMovementPackets/tick на эти значения, пока LOCK_ROTATION = true. Это нужно,
-   // потому что современные AC (Polar/Spacetime) кикают за любое изменение поворота
-   // в одном тике с ClickContainer-пакетом.
+   // Anti-BadPacket rotation lock. Миксин в ClientPlayerEntity подменяет yaw/pitch в
+   // sendMovementPackets/tick на эти значения, пока LOCK_ROTATION = true.
    public static volatile boolean LOCK_ROTATION = false;
    public static volatile float LOCK_YAW = 0.0F;
    public static volatile float LOCK_PITCH = 0.0F;
 
    private static final int PHASE_IDLE = 0;
-   private static final int PHASE_PRE_OPEN = 1;
-   private static final int PHASE_AFTER_OPEN = 2;
-   private static final int PHASE_BEFORE_CLICK = 3;
-   private static final int PHASE_CLOSING = 4;
-   private static final int OFFHAND_BUTTON = 40;
+   // Новые фазы ванильной F-последовательности:
+   private static final int PHASE_SCROLL_TO = 1;   // ждём preOpenDelay, потом скроллим на хотбар-слот с предметом
+   private static final int PHASE_DO_SWAP = 2;     // ждём afterOpenDelay, потом PlayerAction(SWAP_WITH_OFFHAND)
+   private static final int PHASE_RESTORE = 3;     // ждём closeDelay, потом скроллим обратно
    private static final int INVENTORY_WIDTH = 176;
    private static final int INVENTORY_HEIGHT = 166;
-   // Количество тиков паузы после любого свапа (помогает от двойного свапа
-   // и держит rotation lock ещё немного после клика).
+   // Количество тиков паузы после любого свапа.
    private static final int POST_SWAP_PAUSE_TICKS = 10;
 
    public final SelectSetting triggerMode = new SelectSetting("Триггер", "Колесо — выбор через радиальное меню, Без колеса — авто-свап")
@@ -61,38 +62,35 @@ public class AutoSwap extends ModuleStructure {
       .visible(() -> this.triggerMode.isSelected("Колесо"));
    public final BindSetting swapBind = new BindSetting("Бинд свапа", "Ручной триггер свапа (работает только в режиме «Без колеса»)")
       .visible(() -> this.triggerMode.isSelected("Без колеса"));
-   public final SelectSetting swapMode = new SelectSetting("Режим свапа", "Legit открывает инвентарь, Packet свапает без экрана")
+   public final SelectSetting swapMode = new SelectSetting("Режим свапа", "Legit — разтягивает F-пакеты во времени, Packet — всё в один тик")
       .value("Legit", "Packet")
       .selected("Legit");
-   public final SliderSettings preOpenDelay = new SliderSettings("До открытия", "Задержка до открытия инвентаря в тиках")
+   public final SliderSettings preOpenDelay = new SliderSettings("До скролла", "Тиков перед первым UpdateSelectedSlot")
+      .setValue(1.0F).range(0, 20)
+      .visible(() -> this.swapMode.isSelected("Legit"));
+   public final SliderSettings afterOpenDelay = new SliderSettings("Перед F", "Тиков между UpdateSelectedSlot и PlayerAction(SWAP)")
+      .setValue(3.0F).range(0, 20)
+      .visible(() -> this.swapMode.isSelected("Legit"));
+   public final SliderSettings closeDelay = new SliderSettings("Перед возвратом", "Тиков между F и возвратом слота")
       .setValue(2.0F).range(0, 20)
-      .visible(() -> this.swapMode.isSelected("Legit"));
-   public final SliderSettings afterOpenDelay = new SliderSettings("После открытия", "Задержка после открытия инвентаря в тиках")
-      .setValue(5.0F).range(0, 20)
-      .visible(() -> this.swapMode.isSelected("Legit"));
-   public final SliderSettings beforeClickDelay = new SliderSettings("Перед F", "Задержка перед нажатием F по слоту")
-      .setValue(3.0F).range(0, 20)
-      .visible(() -> this.swapMode.isSelected("Legit"));
-   public final SliderSettings closeDelay = new SliderSettings("Перед закрытием", "Задержка перед закрытием инвентаря в тиках")
-      .setValue(3.0F).range(0, 20)
       .visible(() -> this.swapMode.isSelected("Legit"));
    public final SliderSettings randomDelay = new SliderSettings("Рандом задержки", "Дополнительный случайный разброс в тиках")
       .setValue(2.0F).range(0, 10)
       .visible(() -> this.swapMode.isSelected("Legit"));
    public final SliderSettings cooldown = new SliderSettings("Cooldown", "Минимальная пауза между свапами в миллисекундах")
       .setValue(1000.0F).range(0, 3000);
-   public final BooleanSetting stopMovement = new BooleanSetting("Остановка", "Останавливать игрока во время свапа (важно для обхода BadPacket)")
-      .setValue(true);
-   public final BooleanSetting lockRotation = new BooleanSetting("Lock rotation", "Замораживать поворот головы во время свапа. Нужно для Polar/Spacetime, иначе BadPacket.")
-      .setValue(true);
+   public final BooleanSetting stopMovement = new BooleanSetting("Остановка", "Останавливать игрока во время свапа")
+      .setValue(false);
+   public final BooleanSetting lockRotation = new BooleanSetting("Lock rotation", "Замораживать поворот головы во время свапа")
+      .setValue(false);
 
-   public final TextSetting slot1 = new TextSetting("Предмет 1", "ID или алиас: талик/тотем/totem");
+   public final TextSetting slot1 = new TextSetting("Предмет 1", "ID или алиас (должен лежать в хотбаре!)");
    public final ButtonSetting pick1 = new ButtonSetting("Выбрать 1", "Открыть инвентарь")
       .setButtonName("Выбрать").setRunnable(() -> this.openPickerFor(0));
-   public final TextSetting slot2 = new TextSetting("Предмет 2", "ID или алиас");
+   public final TextSetting slot2 = new TextSetting("Предмет 2", "ID или алиас (должен лежать в хотбаре!)");
    public final ButtonSetting pick2 = new ButtonSetting("Выбрать 2", "Открыть инвентарь")
       .setButtonName("Выбрать").setRunnable(() -> this.openPickerFor(1));
-   public final TextSetting slot3 = new TextSetting("Предмет 3", "ID или алиас");
+   public final TextSetting slot3 = new TextSetting("Предмет 3", "ID или алиас (должен лежать в хотбаре!)");
    public final ButtonSetting pick3 = new ButtonSetting("Выбрать 3", "Открыть инвентарь")
       .setButtonName("Выбрать").setRunnable(() -> this.openPickerFor(2));
 
@@ -101,11 +99,10 @@ public class AutoSwap extends ModuleStructure {
    private Item targetItem = null;
    private int swapPhase = PHASE_IDLE;
    private int phaseTimer = 0;
+   private int swapHotbarSlot = -1;     // хотбар 0..8, куда «скроллим» для F-трика
+   private int originalSlot = -1;       // хотбар 0..8, в который возвращаемся
    private boolean sentSprintStop = false;
-   private boolean openedInventoryScreen = false;
-   // ms-кулдаун: выставляется в начале beginSwap, не только после фактического клика
    private long lastSwapMs = 0L;
-   // Тик-кулдаун после свапа (защита от двойного свапа пока клиент обновляет offhand)
    private int postSwapPauseTicks = 0;
 
    private boolean wheelOpen = false;
@@ -119,7 +116,7 @@ public class AutoSwap extends ModuleStructure {
    }
 
    public AutoSwap() {
-      super("AutoSwap", "Свап талика во вторую руку", ModuleCategory.UTILITIES);
+      super("AutoSwap", "Свап во вторую руку ванильными F-пакетами", ModuleCategory.UTILITIES);
       this.settings(
          this.triggerMode,
          this.wheelBind,
@@ -127,7 +124,6 @@ public class AutoSwap extends ModuleStructure {
          this.swapMode,
          this.preOpenDelay,
          this.afterOpenDelay,
-         this.beforeClickDelay,
          this.closeDelay,
          this.randomDelay,
          this.cooldown,
@@ -167,9 +163,8 @@ public class AutoSwap extends ModuleStructure {
                }
                var1.cancel();
                this.pickingForSlot = -1;
-               // Закрываем через ванильный путь — шлём CloseHandledScreenC2SPacket,
-               // иначе у сервера остаётся «открытый» контейнер.
-               mc.player.closeHandledScreen();
+               // Чисто клиентское закрытие, без close-пакета.
+               mc.setScreen(null);
             }
          }
       }
@@ -179,10 +174,6 @@ public class AutoSwap extends ModuleStructure {
    public void onKey(KeyEvent var1) {
       if (mc.player == null) return;
 
-      // swapBind работает ТОЛЬКО в режиме «Без колеса».
-      // В режиме «Колесо» свап идёт ИСКЛЮЧИТЕЛЬНО через выбор в колесе,
-      // иначе при совпадении/наложении клавиш получается двойной свап:
-      //   keyDown swapBind → pendingItem (свап #1) + keyRelease wheelBind → picked (свап #2).
       if (this.swapBind.getKey() != -1
             && this.triggerMode.isSelected("Без колеса")
             && var1.isKeyDown(this.swapBind.getKey(), true)) {
@@ -193,8 +184,6 @@ public class AutoSwap extends ModuleStructure {
          if (var1.isKeyDown(this.wheelBind.getKey(), true)) {
             this.wheelOpen = true;
             this.lastHover = -1;
-            // Сбрасываем любой pendingItem, который мог остаться от предыдущих событий
-            // — в режиме «Колесо» выбор фиксируется ТОЛЬКО на release.
             this.pendingItem = null;
             this.setCursorUnlocked(true);
          } else if (var1.isKeyReleased(this.wheelBind.getKey(), true) && this.wheelOpen) {
@@ -220,16 +209,12 @@ public class AutoSwap extends ModuleStructure {
       if (this.postSwapPauseTicks > 0) {
          this.postSwapPauseTicks--;
          if (this.postSwapPauseTicks == 0) {
-            // Пауза кончилась — снимаем rotation lock, дальше клиент шлёт свой настоящий поворот.
             LOCK_ROTATION = false;
          }
          return;
       }
 
-      // Пока колесо открыто — никаких свапов, ждём выбор пользователя
-      if (this.wheelOpen) {
-         return;
-      }
+      if (this.wheelOpen) return;
 
       if (this.swapPhase == PHASE_IDLE) {
          if (this.pendingItem != null) {
@@ -248,19 +233,12 @@ public class AutoSwap extends ModuleStructure {
          return;
       }
 
-      if (mc.currentScreen != null && !(mc.currentScreen instanceof InventoryScreen)) {
-         this.resetSwap();
-         return;
-      }
-
-      if (!this.sentSprintStop) {
+      // В Legit фазах держим rotation lock и stop-sprint если включены.
+      if (!this.sentSprintStop && this.stopMovement.isValue()) {
          this.stopServerSprint();
          this.sentSprintStop = true;
       }
-
       if (this.stopMovement.isValue()) this.haltMovement();
-      // Каждый тик в фазе свапа подновляем замороженный yaw/pitch на текущие,
-      // чтобы lock был "живым" против медленного drift'а до момента click-тика.
       if (this.lockRotation.isValue()) this.refreshRotationLock();
 
       if (this.phaseTimer > 0) {
@@ -268,123 +246,148 @@ public class AutoSwap extends ModuleStructure {
          return;
       }
 
-      if (this.swapPhase == PHASE_PRE_OPEN) {
-         if (!(mc.currentScreen instanceof InventoryScreen)) {
-            this.openedInventoryScreen = true;
-            mc.setScreen(new InventoryScreen(mc.player));
-         }
-         this.swapPhase = PHASE_AFTER_OPEN;
+      if (this.swapPhase == PHASE_SCROLL_TO) {
+         this.sendScrollPacket(this.swapHotbarSlot);
+         this.swapPhase = PHASE_DO_SWAP;
          this.phaseTimer = this.delayTicks(this.afterOpenDelay);
          return;
       }
 
-      if (this.swapPhase == PHASE_AFTER_OPEN) {
-         if (!(mc.currentScreen instanceof InventoryScreen)) { this.resetSwap(); return; }
-         this.swapPhase = PHASE_BEFORE_CLICK;
-         this.phaseTimer = this.delayTicks(this.beforeClickDelay);
-         return;
-      }
-
-      if (this.swapPhase == PHASE_BEFORE_CLICK) {
-         if (!(mc.currentScreen instanceof InventoryScreen)) { this.resetSwap(); return; }
-         // На тике клика ещё раз гасим спринт и движение — анти-BadPacket страховка.
-         this.stopServerSprint();
-         if (this.stopMovement.isValue()) this.haltMovement();
-         // И финально фиксируем rotation именно перед ClickContainer-пакетом.
-         if (this.lockRotation.isValue()) this.refreshRotationLock();
-         this.executeOffhandSwap(this.targetItem);
-         this.swapPhase = PHASE_CLOSING;
+      if (this.swapPhase == PHASE_DO_SWAP) {
+         this.sendSwapWithOffhandPacket();
+         this.mirrorOffhandSwap(this.swapHotbarSlot);
+         this.swapPhase = PHASE_RESTORE;
          this.phaseTimer = this.delayTicks(this.closeDelay);
          return;
       }
 
-      if (this.swapPhase == PHASE_CLOSING) {
-         if (mc.currentScreen instanceof InventoryScreen && this.openedInventoryScreen) {
-            // Корректное ванильное закрытие: шлём CloseHandledScreenC2SPacket + сбрасываем экран.
-            // Без этого пакета сервер думает, что инвентарь всё ещё «открыт» — и следующий
-            // ClickContainer ловится как BadPacket.
-            mc.player.closeHandledScreen();
+      if (this.swapPhase == PHASE_RESTORE) {
+         if (this.originalSlot != this.swapHotbarSlot && this.originalSlot >= 0) {
+            this.sendScrollPacket(this.originalSlot);
          }
-         this.resetSwap();
-         // После legit-свапа выставляем tick-паузу. Rotation lock держим всё это время,
-         // чтобы сервер не увидел резкий скачок поворота сразу после ClickContainer.
-         this.postSwapPauseTicks = POST_SWAP_PAUSE_TICKS;
-         if (this.lockRotation.isValue()) this.refreshRotationLock();
+         this.finishSwap();
       }
    }
 
    private void beginSwap(Item item) {
       if (mc.player == null || item == null || item == Items.AIR) return;
-
       long now = System.currentTimeMillis();
       if (now - this.lastSwapMs < (long)this.cooldown.getInt()) return;
 
-      // Не блокируем «тотем→тотем» / «талисман→талисман»: если в инвентаре есть подходящий стак,
-      // позволяем заменить оффхенд свежим. Автотриггер сам зовёт beginSwap только когда offhand != desired
-      // (см. onTick), так что бесконечного цикла не будет.
-      Slot slot = this.findSlotForItem(item);
-      if (slot == null) return;
+      // Ищем предмет ИСКЛЮЧИТЕЛЬНО в хотбаре (0..8): под ванильный F-трик.
+      int hotbar = this.findHotbarSlotForItem(item);
+      if (hotbar == -1) return;
 
       if (mc.currentScreen != null && !(mc.currentScreen instanceof InventoryScreen)) return;
 
-      // Ставим метку времени сразу, чтобы двойной триггер не прошёл даже если legit занимает несколько тиков
       this.lastSwapMs = now;
       this.targetItem = item;
+      this.swapHotbarSlot = hotbar;
+      this.originalSlot = this.getSelectedSlot();
 
-      // Сразу включаем rotation lock — даже если до самого click-тика ещё несколько фаз.
       if (this.lockRotation.isValue()) this.refreshRotationLock();
 
       if (this.swapMode.isSelected("Packet")) {
-         // Анти-BadPacket: перед сырым clickSlot обязательно гасим спринт, движение и фиксируем поворот,
-         // иначе сервер видит «click + sprint + forward + rotation delta» в одном тике и кидает BadPacket.
-         this.stopServerSprint();
-         if (this.stopMovement.isValue()) this.haltMovement();
-         if (this.lockRotation.isValue()) this.refreshRotationLock();
-         this.executeOffhandSwap(item);
-         this.targetItem = null;
-         this.postSwapPauseTicks = POST_SWAP_PAUSE_TICKS;
-         // LOCK_ROTATION останется true ещё POST_SWAP_PAUSE_TICKS тиков (снимется в onTick).
+         // Packet: все три ванильных пакета в один тик.
+         if (this.stopMovement.isValue()) {
+            this.stopServerSprint();
+            this.haltMovement();
+         }
+         if (this.originalSlot != this.swapHotbarSlot) {
+            this.sendScrollPacket(this.swapHotbarSlot);
+         }
+         this.sendSwapWithOffhandPacket();
+         this.mirrorOffhandSwap(this.swapHotbarSlot);
+         if (this.originalSlot != this.swapHotbarSlot && this.originalSlot >= 0) {
+            this.sendScrollPacket(this.originalSlot);
+         }
+         this.finishSwap();
          return;
       }
 
+      // Legit: разносим пакеты по тикам.
       this.sentSprintStop = false;
-      SUPPRESS_SPRINT = true;
-      if (this.stopMovement.isValue()) this.haltMovement();
-
-      if (mc.currentScreen instanceof InventoryScreen) {
-         this.openedInventoryScreen = false;
-         this.swapPhase = PHASE_AFTER_OPEN;
+      SUPPRESS_SPRINT = this.stopMovement.isValue();
+      if (this.originalSlot == this.swapHotbarSlot) {
+         // Не нужен скролл — сразу фаза DO_SWAP.
+         this.swapPhase = PHASE_DO_SWAP;
          this.phaseTimer = this.delayTicks(this.afterOpenDelay);
       } else {
-         this.openedInventoryScreen = false;
-         this.swapPhase = PHASE_PRE_OPEN;
+         this.swapPhase = PHASE_SCROLL_TO;
          this.phaseTimer = this.delayTicks(this.preOpenDelay);
       }
    }
 
-   private void refreshRotationLock() {
-      if (mc.player == null) return;
-      LOCK_YAW = mc.player.getYaw();
-      LOCK_PITCH = mc.player.getPitch();
-      LOCK_ROTATION = true;
+   private void finishSwap() {
+      this.targetItem = null;
+      this.swapHotbarSlot = -1;
+      this.originalSlot = -1;
+      this.swapPhase = PHASE_IDLE;
+      this.phaseTimer = 0;
+      this.sentSprintStop = false;
+      SUPPRESS_SPRINT = false;
+      this.postSwapPauseTicks = POST_SWAP_PAUSE_TICKS;
+      if (this.lockRotation.isValue()) this.refreshRotationLock();
    }
 
-   // Ручной/колёсный: первый найденный в инвентаре
+   // === Ванильные пакеты F-трика ===
+
+   private void sendScrollPacket(int hotbarSlot) {
+      if (mc.getNetworkHandler() == null) return;
+      mc.getNetworkHandler().sendPacket(new UpdateSelectedSlotC2SPacket(hotbarSlot));
+   }
+
+   private void sendSwapWithOffhandPacket() {
+      if (mc.getNetworkHandler() == null) return;
+      mc.getNetworkHandler().sendPacket(new PlayerActionC2SPacket(
+         PlayerActionC2SPacket.Action.SWAP_ITEM_WITH_OFFHAND,
+         BlockPos.ORIGIN,
+         Direction.DOWN));
+   }
+
+   // Сервер после SWAP_ITEM_WITH_OFFHAND свопит основную руку (хотбар[swapHotbarSlot]) с оффхендом.
+   // Делаем то же самое в локальном инвентаре, чтобы не было визуального рассинхрона.
+   private void mirrorOffhandSwap(int hotbarSlot) {
+      if (mc.player == null) return;
+      PlayerInventory inv = mc.player.getInventory();
+      ItemStack inHotbar = inv.getStack(hotbarSlot).copy();
+      ItemStack inOffhand = mc.player.getStackInHand(Hand.OFF_HAND).copy();
+      inv.setStack(hotbarSlot, inOffhand);
+      mc.player.setStackInHand(Hand.OFF_HAND, inHotbar);
+   }
+
+   private int getSelectedSlot() {
+      if (mc.player == null) return -1;
+      return mc.player.getInventory().getSelectedSlot();
+   }
+
+   // Ищем предмет только в хотбаре.
+   private int findHotbarSlotForItem(Item item) {
+      if (mc.player == null || item == null || item == Items.AIR) return -1;
+      PlayerInventory inv = mc.player.getInventory();
+      for (int i = 0; i < 9; i++) {
+         ItemStack s = inv.getStack(i);
+         if (!s.isEmpty() && s.getItem() == item) return i;
+      }
+      return -1;
+   }
+
    private Item resolveTargetItem() {
       for (int i = 0; i < 3; i++) {
          Item it = this.parseItem(this.getSlotSetting(i) != null ? this.getSlotSetting(i).getText() : null);
-         if (it != null && this.findSlotForItem(it) != null) return it;
+         if (it != null && this.findHotbarSlotForItem(it) != -1) return it;
       }
       return null;
    }
 
-   // Авто: предмет с наивысшим приоритетом, который есть в инвентаре ИЛИ во второй руке
    private Item resolveDesiredOffhandItem() {
       if (mc.player == null) return null;
       Item offhand = mc.player.getOffHandStack().getItem();
       for (int i = 0; i < 3; i++) {
          Item it = this.parseItem(this.getSlotSetting(i) != null ? this.getSlotSetting(i).getText() : null);
-         if (it != null && (offhand == it || this.findSlotForItem(it) != null)) return it;
+         if (it == null) continue;
+         if (offhand == it) return it;
+         if (this.findHotbarSlotForItem(it) != -1) return it;
       }
       return null;
    }
@@ -392,13 +395,10 @@ public class AutoSwap extends ModuleStructure {
    private Item parseItem(String text) {
       if (text == null || text.isBlank()) return null;
       String id = text.trim().toLowerCase(Locale.ROOT);
-      // Алиасы для талика — проверяем если строка содержит одно из ключевых слов
       if (id.contains("талик") || id.contains("тотем") || id.contains("talik") || id.equals("totem") || id.equals("totem_of_undying")) {
          return Items.TOTEM_OF_UNDYING;
       }
-      // Если нет namespace — добавляем minecraft:
       if (!id.contains(":")) id = "minecraft:" + id;
-      // totem в ID (например minecraft:totem_of_undying или minecraft:totem)
       if (id.contains(":totem")) return Items.TOTEM_OF_UNDYING;
       Identifier ident = Identifier.tryParse(id);
       if (ident == null) return null;
@@ -406,58 +406,11 @@ public class AutoSwap extends ModuleStructure {
       return item != null && item != Items.AIR ? item : null;
    }
 
-   private Slot findSlotForItem(Item item) {
-      if (mc.player == null || item == null || item == Items.AIR) return null;
-      ItemStack mainHand = mc.player.getMainHandStack();
-      // 1) Сначала ищем в основной части инвентаря (9..35) — не трогаем хотбар,
-      //    чтобы свап не утаскивал предмет, который сейчас в руке (это давало эффект «обратного» свапа).
-      for (int i = 9; i <= 35; i++) {
-         Slot s = this.getPlayerSlot(i);
-         if (this.slotContains(s, item)) return s;
-      }
-      // 2) Затем — хотбар (36..44), но слот основной руки откладываем на потом.
-      Slot heldFallback = null;
-      for (int i = 36; i <= 44; i++) {
-         Slot s = this.getPlayerSlot(i);
-         if (!this.slotContains(s, item)) continue;
-         if (s.getStack() == mainHand) { if (heldFallback == null) heldFallback = s; continue; }
-         return s;
-      }
-      // 3) Крайний случай: предмет есть только в основной руке.
-      return heldFallback;
-   }
-
-   private Slot getPlayerSlot(int id) {
-      if (mc.player == null || id < 0 || id >= mc.player.playerScreenHandler.slots.size()) return null;
-      return mc.player.playerScreenHandler.getSlot(id);
-   }
-
-   private boolean slotContains(Slot slot, Item item) {
-      return slot != null && !slot.getStack().isEmpty() && slot.getStack().getItem() == item;
-   }
-
-   private boolean executeOffhandSwap(Item item) {
-      if (mc.player == null || mc.world == null || mc.interactionManager == null || item == null) return false;
-      Slot slot = this.findSlotForItem(item);
-      if (slot == null) return false;
-      if (mc.currentScreen instanceof InventoryScreen) {
-         this.moveCursorToSlot(slot);
-      }
-      mc.interactionManager.clickSlot(mc.player.currentScreenHandler.syncId, slot.id, OFFHAND_BUTTON, SlotActionType.SWAP, mc.player);
-      return true;
-   }
-
-   private void moveCursorToSlot(Slot slot) {
-      if (mc.getWindow() == null || slot == null) return;
-      int sw = mc.getWindow().getScaledWidth();
-      int sh = mc.getWindow().getScaledHeight();
-      double guiLeft = (sw - INVENTORY_WIDTH) / 2.0;
-      double guiTop = (sh - INVENTORY_HEIGHT) / 2.0;
-      double sx = guiLeft + slot.x + 8.0;
-      double sy = guiTop + slot.y + 8.0;
-      GLFW.glfwSetCursorPos(mc.getWindow().getHandle(),
-         sx * mc.getWindow().getWidth() / (double)sw,
-         sy * mc.getWindow().getHeight() / (double)sh);
+   private void refreshRotationLock() {
+      if (mc.player == null) return;
+      LOCK_YAW = mc.player.getYaw();
+      LOCK_PITCH = mc.player.getPitch();
+      LOCK_ROTATION = true;
    }
 
    private void stopServerSprint() {
@@ -480,12 +433,10 @@ public class AutoSwap extends ModuleStructure {
       this.swapPhase = PHASE_IDLE;
       this.phaseTimer = 0;
       this.targetItem = null;
+      this.swapHotbarSlot = -1;
+      this.originalSlot = -1;
       this.sentSprintStop = false;
-      this.openedInventoryScreen = false;
       SUPPRESS_SPRINT = false;
-      // Если нет активной post-swap паузы — снимаем rotation lock тоже.
-      // Если postSwapPauseTicks > 0 (вызвали resetSwap в фазе CLOSING прямо перед паузой),
-      // lock останется на эту паузу и снимется в onTick по завершении.
       if (this.postSwapPauseTicks == 0) {
          LOCK_ROTATION = false;
       }
@@ -591,11 +542,9 @@ public class AutoSwap extends ModuleStructure {
       this.lastHover = -1;
       this.postSwapPauseTicks = 0;
       LOCK_ROTATION = false;
-      boolean weOpened = this.openedInventoryScreen;
       this.resetSwap();
-      if (weOpened && mc.currentScreen instanceof InventoryScreen && mc.player != null) {
-         // Ванильное закрытие со close-пакетом, чтобы не оставить сервер в "open container" state.
-         mc.player.closeHandledScreen();
+      if (mc.currentScreen instanceof InventoryScreen && mc.player != null) {
+         mc.setScreen(null);
       }
       this.setCursorUnlocked(false);
    }
