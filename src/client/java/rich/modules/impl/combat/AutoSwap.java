@@ -45,9 +45,10 @@ public class AutoSwap extends ModuleStructure {
    public static volatile float LOCK_PITCH = 0.0F;
 
    private static final int PHASE_IDLE = 0;
-   private static final int PHASE_SCROLL_TO = 1;
-   private static final int PHASE_DO_SWAP = 2;
-   private static final int PHASE_RESTORE = 3;
+   private static final int PHASE_RELOCATE = 1;
+   private static final int PHASE_SCROLL_TO = 2;
+   private static final int PHASE_DO_SWAP = 3;
+   private static final int PHASE_RESTORE = 4;
    private static final int POST_SWAP_PAUSE_TICKS = 10;
 
    public final SelectSetting triggerMode = new SelectSetting("Триггер", "Колесо — выбор через радиальное меню, Без колеса — авто-свап")
@@ -72,6 +73,8 @@ public class AutoSwap extends ModuleStructure {
    public final SliderSettings randomDelay = new SliderSettings("Рандом задержки", "Дополнительный случайный разброс в тиках")
       .setValue(2.0F).range(0, 10)
       .visible(() -> this.swapMode.isSelected("Legit"));
+   public final SliderSettings relocateHaltTicks = new SliderSettings("Стоп перед ClickSlot", "Тиков «стационарного» состояния перед каждым ClickSlot для перемещения из инвентаря. Минимум 2 рекомендуется для Polar/Spacetime InventoryMove-чека.")
+      .setValue(3.0F).range(1, 10);
    public final SliderSettings cooldown = new SliderSettings("Cooldown", "Минимальная пауза между свапами в миллисекундах")
       .setValue(1000.0F).range(0, 3000);
    public final BooleanSetting stopMovement = new BooleanSetting("Остановка", "Останавливать игрока во время свапа")
@@ -80,7 +83,9 @@ public class AutoSwap extends ModuleStructure {
       .setValue(false);
    public final BooleanSetting restoreAfterRelocate = new BooleanSetting("Возврат после перекидывания", "Если предмет был в основной части инвентаря — вернуть содержимое хотбара на место (ванильным 1-9 пакетом)")
       .setValue(true);
-   public final BooleanSetting maskInventory = new BooleanSetting("Маскировка ClickSlot", "После каждого SWAP-клика шлём CloseHandledScreen(0). Обходит InventoryMove-проверки (Grim/Polar/Spacetime). На сервере это no-op для плеер-инвентаря.")
+   public final BooleanSetting maskInventory = new BooleanSetting("Маскировка ClickSlot", "После каждого SWAP-клика шлём CloseHandledScreen(0). Обходит InventoryMove-проверки (Grim/Polar/Spacetime).")
+      .setValue(true);
+   public final BooleanSetting antiInventoryMove = new BooleanSetting("Анти InventoryMove", "Перед каждым ClickSlot принудительно шлём STOP_SPRINTING + обнуляем скорость + держим игрока в стационарном состоянии N тиков. Обязательно для свапа из основного инвентаря во время движения.")
       .setValue(true);
 
    public final TextSetting slot1 = new TextSetting("Предмет 1", "ID или алиас");
@@ -101,6 +106,8 @@ public class AutoSwap extends ModuleStructure {
    private int swapHotbarSlot = -1;
    private int originalSlot = -1;
    private int relocateFromInvSlot = -1;
+   private int pendingRelocateInvSlot = -1;
+   private int pendingRelocateStash = -1;
    private boolean sentSprintStop = false;
    private long lastSwapMs = 0L;
    private int postSwapPauseTicks = 0;
@@ -126,11 +133,13 @@ public class AutoSwap extends ModuleStructure {
          this.afterOpenDelay,
          this.closeDelay,
          this.randomDelay,
+         this.relocateHaltTicks,
          this.cooldown,
          this.stopMovement,
          this.lockRotation,
          this.restoreAfterRelocate,
          this.maskInventory,
+         this.antiInventoryMove,
          this.slot1, this.pick1,
          this.slot2, this.pick2,
          this.slot3, this.pick3
@@ -234,15 +243,40 @@ public class AutoSwap extends ModuleStructure {
          return;
       }
 
-      if (!this.sentSprintStop && this.stopMovement.isValue()) {
-         this.stopServerSprint();
-         this.sentSprintStop = true;
+      // While any swap phase is active, force player stationary on the server.
+      // Mandatory during PHASE_RELOCATE — that's exactly what AC inspects for InventoryMove.
+      boolean forceHalt = this.swapPhase == PHASE_RELOCATE
+            || (this.relocateFromInvSlot != -1 && this.antiInventoryMove.isValue())
+            || this.stopMovement.isValue();
+      if (forceHalt) {
+         if (!this.sentSprintStop) {
+            this.stopServerSprint();
+            this.sentSprintStop = true;
+         }
+         this.haltMovement();
+         SUPPRESS_SPRINT = true;
       }
-      if (this.stopMovement.isValue()) this.haltMovement();
       if (this.lockRotation.isValue()) this.refreshRotationLock();
 
       if (this.phaseTimer > 0) {
          this.phaseTimer--;
+         return;
+      }
+
+      if (this.swapPhase == PHASE_RELOCATE) {
+         this.sendVanillaSwapClick(this.pendingRelocateInvSlot, this.pendingRelocateStash);
+         this.relocateFromInvSlot = this.pendingRelocateInvSlot;
+         this.swapHotbarSlot = this.pendingRelocateStash;
+         this.pendingRelocateInvSlot = -1;
+         this.pendingRelocateStash = -1;
+
+         if (this.originalSlot == this.swapHotbarSlot) {
+            this.swapPhase = PHASE_DO_SWAP;
+            this.phaseTimer = this.delayTicks(this.afterOpenDelay);
+         } else {
+            this.swapPhase = PHASE_SCROLL_TO;
+            this.phaseTimer = this.delayTicks(this.preOpenDelay);
+         }
          return;
       }
 
@@ -289,20 +323,20 @@ public class AutoSwap extends ModuleStructure {
       this.targetItem = item;
       this.originalSlot = this.getSelectedSlot();
       this.relocateFromInvSlot = -1;
-
-      if (hotbar == -1) {
-         int stash = this.findEmptyHotbarSlot();
-         if (stash == -1) stash = this.originalSlot >= 0 ? this.originalSlot : 0;
-         this.sendVanillaSwapClick(invSlot, stash);
-         this.relocateFromInvSlot = invSlot;
-         hotbar = stash;
-      }
-      this.swapHotbarSlot = hotbar;
-
-      if (this.lockRotation.isValue()) this.refreshRotationLock();
+      this.sentSprintStop = false;
 
       if (this.swapMode.isSelected("Packet")) {
-         if (this.stopMovement.isValue()) {
+         // Packet mode: everything in one tick. sendVanillaSwapClick handles STOP_SPRINTING + halt.
+         if (hotbar == -1) {
+            int stash = this.findEmptyHotbarSlot();
+            if (stash == -1) stash = this.originalSlot >= 0 ? this.originalSlot : 0;
+            this.sendVanillaSwapClick(invSlot, stash);
+            this.relocateFromInvSlot = invSlot;
+            hotbar = stash;
+         }
+         this.swapHotbarSlot = hotbar;
+         if (this.lockRotation.isValue()) this.refreshRotationLock();
+         if (this.stopMovement.isValue() || this.antiInventoryMove.isValue()) {
             this.stopServerSprint();
             this.haltMovement();
          }
@@ -321,8 +355,28 @@ public class AutoSwap extends ModuleStructure {
          return;
       }
 
-      this.sentSprintStop = false;
-      SUPPRESS_SPRINT = this.stopMovement.isValue();
+      // Legit mode.
+      if (this.lockRotation.isValue()) this.refreshRotationLock();
+      SUPPRESS_SPRINT = this.stopMovement.isValue() || this.antiInventoryMove.isValue();
+
+      if (hotbar == -1) {
+         // Inv-area item: enter PHASE_RELOCATE first to give server N ticks of stationary
+         // state BEFORE the ClickSlot fires. This is what fixes the InventoryMove kick
+         // when player is moving/sprinting at the moment of swap trigger.
+         int stash = this.findEmptyHotbarSlot();
+         if (stash == -1) stash = this.originalSlot >= 0 ? this.originalSlot : 0;
+         this.pendingRelocateInvSlot = invSlot;
+         this.pendingRelocateStash = stash;
+         this.swapPhase = PHASE_RELOCATE;
+         int haltTicks = this.antiInventoryMove.isValue()
+               ? Math.max(1, this.relocateHaltTicks.getInt())
+               : Math.max(0, this.preOpenDelay.getInt());
+         int rnd = Math.max(0, this.randomDelay.getInt());
+         this.phaseTimer = haltTicks + (rnd <= 0 ? 0 : ThreadLocalRandom.current().nextInt(rnd + 1));
+         return;
+      }
+
+      this.swapHotbarSlot = hotbar;
       if (this.originalSlot == this.swapHotbarSlot) {
          this.swapPhase = PHASE_DO_SWAP;
          this.phaseTimer = this.delayTicks(this.afterOpenDelay);
@@ -337,6 +391,8 @@ public class AutoSwap extends ModuleStructure {
       this.swapHotbarSlot = -1;
       this.originalSlot = -1;
       this.relocateFromInvSlot = -1;
+      this.pendingRelocateInvSlot = -1;
+      this.pendingRelocateStash = -1;
       this.swapPhase = PHASE_IDLE;
       this.phaseTimer = 0;
       this.sentSprintStop = false;
@@ -360,12 +416,21 @@ public class AutoSwap extends ModuleStructure {
 
    /**
     * Ванильный ClickSlot формы «цифры 1-9 над слотом в инвентаре».
-    * После пакета — маскирующий CloseHandledScreen(0): сбрасывает эвристику AC
-    * «игрок двигается с открытым инвентарём». Известный обход Grim/Polar/Spacetime
-    * (GrimAnticheat Issue #1829). Сервер игнорирует CloseHandledScreen для syncId=0.
+    *
+    * Анти-кик-комбо вокруг каждого клика:
+    *  1. STOP_SPRINTING — сервер сразу видит, что игрок «остановился».
+    *  2. haltMovement — обнуляем форвард/сайд + xz-velocity. Следующий PlayerMoveC2SPacket
+    *     (отсылается ваниллой в конце тика) покажет нулевой дельта-шаг, и InventoryMove-чек
+    *     Polar/Spacetime/Grim не зафлажится.
+    *  3. ClickSlot(SWAP).
+    *  4. CloseHandledScreen(0) — сбрасывает эвристику «открыт инвентарь» (GrimAC #1829).
     */
    private void sendVanillaSwapClick(int screenSlotId, int hotbarButton) {
       if (mc.player == null || mc.interactionManager == null) return;
+      if (this.antiInventoryMove.isValue()) {
+         this.stopServerSprint();
+         this.haltMovement();
+      }
       mc.interactionManager.clickSlot(
          mc.player.playerScreenHandler.syncId,
          screenSlotId,
@@ -495,6 +560,8 @@ public class AutoSwap extends ModuleStructure {
       this.swapHotbarSlot = -1;
       this.originalSlot = -1;
       this.relocateFromInvSlot = -1;
+      this.pendingRelocateInvSlot = -1;
+      this.pendingRelocateStash = -1;
       this.sentSprintStop = false;
       SUPPRESS_SPRINT = false;
       if (this.postSwapPauseTicks == 0) {
