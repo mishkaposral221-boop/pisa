@@ -11,8 +11,10 @@ import net.minecraft.screen.slot.Slot;
 import net.minecraft.screen.slot.SlotActionType;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.collection.DefaultedList;
+import rich.Initialization;
 import rich.events.api.EventHandler;
 import rich.events.impl.ClickSlotEvent;
+import rich.events.impl.DrawEvent;
 import rich.events.impl.KeyEvent;
 import rich.events.impl.TickEvent;
 import rich.modules.module.ModuleStructure;
@@ -24,6 +26,8 @@ import rich.modules.module.setting.implement.SelectSetting;
 import rich.modules.module.setting.implement.SliderSettings;
 import rich.modules.module.setting.implement.TextSetting;
 import rich.util.c;
+import rich.util.profiler.FrameProfiler;
+import rich.util.render.pipeline.WheelPipeline;
 
 public class AutoSwap extends ModuleStructure {
    public static volatile boolean SUPPRESS_SPRINT = false;
@@ -36,50 +40,55 @@ public class AutoSwap extends ModuleStructure {
    private static final int OFFHAND_BUTTON = 40;
    private static final int OFFHAND_SLOT = 45;
 
-   public final BindSetting swapBind = new BindSetting("\u0411\u0438\u043d\u0434 \u0441\u0432\u0430\u043f\u0430", "\u041e\u043f\u0446\u0438\u043e\u043d\u0430\u043b\u044c\u043d\u044b\u0439 \u0440\u0443\u0447\u043d\u043e\u0439 \u0442\u0440\u0438\u0433\u0433\u0435\u0440 \u0441\u0432\u0430\u043f\u0430");
-   public final BooleanSetting autoSwap = new BooleanSetting("\u0410\u0432\u0442\u043e-\u0441\u0432\u0430\u043f", "\u0421\u0432\u0430\u043f\u0430\u0442\u044c \u0430\u0432\u0442\u043e\u043c\u0430\u0442\u0438\u0447\u0435\u0441\u043a\u0438, \u043f\u043e\u043a\u0430 \u043c\u043e\u0434\u0443\u043b\u044c \u0432\u043a\u043b\u044e\u0447\u0451\u043d")
-      .setValue(true);
-   public final SelectSetting swapMode = new SelectSetting("\u0420\u0435\u0436\u0438\u043c \u0441\u0432\u0430\u043f\u0430", "Legit \u043e\u0442\u043a\u0440\u044b\u0432\u0430\u0435\u0442 \u0438\u043d\u0432\u0435\u043d\u0442\u0430\u0440\u044c, Packet \u0441\u0432\u0430\u043f\u0430\u0435\u0442 \u0431\u0435\u0437 \u044d\u043a\u0440\u0430\u043d\u0430")
+   public final SelectSetting triggerMode = new SelectSetting("Триггер", "Колесо — выбор предмета через радиальное меню, Без колеса — авто-свап")
+      .value("Колесо", "Без колеса")
+      .selected("Без колеса");
+   public final BindSetting wheelBind = new BindSetting("Бинд колеса", "Клавиша открытия колеса (режим Колесо)");
+   public final BindSetting swapBind = new BindSetting("Бинд свапа", "Опциональный ручной триггер свапа");
+   public final BooleanSetting autoSwap = new BooleanSetting("Авто-свап", "Свапать автоматически, пока модуль включён (режим Без колеса)")
+      .setValue(true)
+      .visible(() -> this.triggerMode.isSelected("Без колеса"));
+   public final SelectSetting swapMode = new SelectSetting("Режим свапа", "Legit открывает инвентарь, Packet свапает без экрана")
       .value("Legit", "Packet")
       .selected("Legit");
-   public final SliderSettings preOpenDelay = new SliderSettings("\u0414\u043e \u043e\u0442\u043a\u0440\u044b\u0442\u0438\u044f", "\u0417\u0430\u0434\u0435\u0440\u0436\u043a\u0430 \u0434\u043e \u043e\u0442\u043a\u0440\u044b\u0442\u0438\u044f \u0438\u043d\u0432\u0435\u043d\u0442\u0430\u0440\u044f \u0432 \u0442\u0438\u043a\u0430\u0445")
+   public final SliderSettings preOpenDelay = new SliderSettings("До открытия", "Задержка до открытия инвентаря в тиках")
       .setValue(1.0F)
       .range(0, 20)
       .visible(() -> this.swapMode.isSelected("Legit"));
-   public final SliderSettings afterOpenDelay = new SliderSettings("\u041f\u043e\u0441\u043b\u0435 \u043e\u0442\u043a\u0440\u044b\u0442\u0438\u044f", "\u0417\u0430\u0434\u0435\u0440\u0436\u043a\u0430 \u043f\u043e\u0441\u043b\u0435 \u043e\u0442\u043a\u0440\u044b\u0442\u0438\u044f \u0438\u043d\u0432\u0435\u043d\u0442\u0430\u0440\u044f \u0432 \u0442\u0438\u043a\u0430\u0445")
+   public final SliderSettings afterOpenDelay = new SliderSettings("После открытия", "Задержка после открытия инвентаря в тиках")
       .setValue(3.0F)
       .range(0, 20)
       .visible(() -> this.swapMode.isSelected("Legit"));
-   public final SliderSettings beforeClickDelay = new SliderSettings("\u041f\u0435\u0440\u0435\u0434 F", "\u0417\u0430\u0434\u0435\u0440\u0436\u043a\u0430 \u043f\u0435\u0440\u0435\u0434 \u043d\u0430\u0436\u0430\u0442\u0438\u0435\u043c F \u043f\u043e \u0441\u043b\u043e\u0442\u0443")
+   public final SliderSettings beforeClickDelay = new SliderSettings("Перед F", "Задержка перед нажатием F по слоту")
       .setValue(1.0F)
       .range(0, 20)
       .visible(() -> this.swapMode.isSelected("Legit"));
-   public final SliderSettings closeDelay = new SliderSettings("\u041f\u0435\u0440\u0435\u0434 \u0437\u0430\u043a\u0440\u044b\u0442\u0438\u0435\u043c", "\u0417\u0430\u0434\u0435\u0440\u0436\u043a\u0430 \u043f\u0435\u0440\u0435\u0434 \u0437\u0430\u043a\u0440\u044b\u0442\u0438\u0435\u043c \u0438\u043d\u0432\u0435\u043d\u0442\u0430\u0440\u044f \u0432 \u0442\u0438\u043a\u0430\u0445")
+   public final SliderSettings closeDelay = new SliderSettings("Перед закрытием", "Задержка перед закрытием инвентаря в тиках")
       .setValue(1.0F)
       .range(0, 20)
       .visible(() -> this.swapMode.isSelected("Legit"));
-   public final SliderSettings randomDelay = new SliderSettings("\u0420\u0430\u043d\u0434\u043e\u043c \u0437\u0430\u0434\u0435\u0440\u0436\u043a\u0438", "\u0414\u043e\u043f\u043e\u043b\u043d\u0438\u0442\u0435\u043b\u044c\u043d\u044b\u0439 \u0441\u043b\u0443\u0447\u0430\u0439\u043d\u044b\u0439 \u0440\u0430\u0437\u0431\u0440\u043e\u0441 \u0432 \u0442\u0438\u043a\u0430\u0445")
+   public final SliderSettings randomDelay = new SliderSettings("Рандом задержки", "Дополнительный случайный разброс в тиках")
       .setValue(1.0F)
       .range(0, 10)
       .visible(() -> this.swapMode.isSelected("Legit"));
-   public final SliderSettings cooldown = new SliderSettings("Cooldown", "\u041c\u0438\u043d\u0438\u043c\u0430\u043b\u044c\u043d\u0430\u044f \u043f\u0430\u0443\u0437\u0430 \u043c\u0435\u0436\u0434\u0443 \u0441\u0432\u0430\u043f\u0430\u043c\u0438 \u0432 \u043c\u0438\u043b\u043b\u0438\u0441\u0435\u043a\u0443\u043d\u0434\u0430\u0445")
+   public final SliderSettings cooldown = new SliderSettings("Cooldown", "Минимальная пауза между свапами в миллисекундах")
       .setValue(250.0F)
       .range(0, 3000);
-   public final BooleanSetting stopMovement = new BooleanSetting("\u041e\u0441\u0442\u0430\u043d\u043e\u0432\u043a\u0430", "\u041e\u0441\u0442\u0430\u043d\u0430\u0432\u043b\u0438\u0432\u0430\u0442\u044c \u0438\u0433\u0440\u043e\u043a\u0430 \u0432\u043e \u0432\u0440\u0435\u043c\u044f legit-\u0441\u0432\u0430\u043f\u0430")
+   public final BooleanSetting stopMovement = new BooleanSetting("Остановка", "Останавливать игрока во время legit-свапа")
       .setValue(true)
       .visible(() -> this.swapMode.isSelected("Legit"));
 
-   public final TextSetting slot1 = new TextSetting("\u041f\u0440\u0435\u0434\u043c\u0435\u0442 1", "ID \u043f\u0440\u0435\u0434\u043c\u0435\u0442\u0430");
-   public final ButtonSetting pick1 = new ButtonSetting("\u0412\u044b\u0431\u0440\u0430\u0442\u044c \u043f\u0440\u0435\u0434\u043c\u0435\u0442 1", "\u041e\u0442\u043a\u0440\u044b\u0442\u044c \u0438\u043d\u0432\u0435\u043d\u0442\u0430\u0440\u044c")
-      .setButtonName("\u0412\u044b\u0431\u0440\u0430\u0442\u044c")
+   public final TextSetting slot1 = new TextSetting("Предмет 1", "ID предмета");
+   public final ButtonSetting pick1 = new ButtonSetting("Выбрать предмет 1", "Открыть инвентарь")
+      .setButtonName("Выбрать")
       .setRunnable(() -> this.openPickerFor(0));
-   public final TextSetting slot2 = new TextSetting("\u041f\u0440\u0435\u0434\u043c\u0435\u0442 2", "ID \u043f\u0440\u0435\u0434\u043c\u0435\u0442\u0430");
-   public final ButtonSetting pick2 = new ButtonSetting("\u0412\u044b\u0431\u0440\u0430\u0442\u044c \u043f\u0440\u0435\u0434\u043c\u0435\u0442 2", "\u041e\u0442\u043a\u0440\u044b\u0442\u044c \u0438\u043d\u0432\u0435\u043d\u0442\u0430\u0440\u044c")
-      .setButtonName("\u0412\u044b\u0431\u0440\u0430\u0442\u044c")
+   public final TextSetting slot2 = new TextSetting("Предмет 2", "ID предмета");
+   public final ButtonSetting pick2 = new ButtonSetting("Выбрать предмет 2", "Открыть инвентарь")
+      .setButtonName("Выбрать")
       .setRunnable(() -> this.openPickerFor(1));
-   public final TextSetting slot3 = new TextSetting("\u041f\u0440\u0435\u0434\u043c\u0435\u0442 3", "ID \u043f\u0440\u0435\u0434\u043c\u0435\u0442\u0430");
-   public final ButtonSetting pick3 = new ButtonSetting("\u0412\u044b\u0431\u0440\u0430\u0442\u044c \u043f\u0440\u0435\u0434\u043c\u0435\u0442 3", "\u041e\u0442\u043a\u0440\u044b\u0442\u044c \u0438\u043d\u0432\u0435\u043d\u0442\u0430\u0440\u044c")
-      .setButtonName("\u0412\u044b\u0431\u0440\u0430\u0442\u044c")
+   public final TextSetting slot3 = new TextSetting("Предмет 3", "ID предмета");
+   public final ButtonSetting pick3 = new ButtonSetting("Выбрать предмет 3", "Открыть инвентарь")
+      .setButtonName("Выбрать")
       .setRunnable(() -> this.openPickerFor(2));
 
    private int pickingForSlot = -1;
@@ -91,13 +100,21 @@ public class AutoSwap extends ModuleStructure {
    private boolean openedInventoryScreen = false;
    private long lastSwapMs = 0L;
 
+   private boolean wheelOpen = false;
+   private boolean cursorUnlocked = false;
+   private int lastHover = -1;
+   private final String[] cachedIds = new String[]{"", "", ""};
+   private final ItemStack[] cachedStacks = new ItemStack[]{ItemStack.EMPTY, ItemStack.EMPTY, ItemStack.EMPTY};
+
    public static AutoSwap getInstance() {
       return c.a(AutoSwap.class);
    }
 
    public AutoSwap() {
-      super("AutoSwap", "\u0421\u0432\u0430\u043f \u0442\u0430\u043b\u0438\u043a\u0430 \u0432\u043e \u0432\u0442\u043e\u0440\u0443\u044e \u0440\u0443\u043a\u0443", ModuleCategory.UTILITIES);
+      super("AutoSwap", "Свап талика во вторую руку", ModuleCategory.UTILITIES);
       this.settings(
+         this.triggerMode,
+         this.wheelBind,
          this.swapBind,
          this.autoSwap,
          this.swapMode,
@@ -139,6 +156,7 @@ public class AutoSwap extends ModuleStructure {
                   TextSetting setting = this.getSlotSetting(this.pickingForSlot);
                   if (setting != null) {
                      setting.setText(var4.toString());
+                     this.invalidateCachedStack(this.pickingForSlot);
                   }
 
                   var1.cancel();
@@ -152,9 +170,23 @@ public class AutoSwap extends ModuleStructure {
 
    @EventHandler
    public void onKey(KeyEvent var1) {
-      if (mc.player != null && this.swapBind.getKey() != -1) {
-         if (var1.isKeyDown(this.swapBind.getKey(), true)) {
-            this.pendingItem = this.resolveTargetItem();
+      if (mc.player == null) {
+         return;
+      }
+
+      // Ручной бинд свапа — работает в любом режиме.
+      if (this.swapBind.getKey() != -1 && var1.isKeyDown(this.swapBind.getKey(), true)) {
+         this.pendingItem = this.resolveTargetItem();
+      }
+
+      // Колесо открывается своим биндом только в режиме "Колесо".
+      if (this.triggerMode.isSelected("Колесо") && this.wheelBind.getKey() != -1 && var1.isKeyDown(this.wheelBind.getKey(), true)) {
+         this.wheelOpen = !this.wheelOpen;
+         if (this.wheelOpen) {
+            this.lastHover = -1;
+            this.setCursorUnlocked(true);
+         } else {
+            this.setCursorUnlocked(false);
          }
       }
    }
@@ -174,14 +206,11 @@ public class AutoSwap extends ModuleStructure {
             return;
          }
 
-         // \u0410\u0432\u0442\u043e-\u0442\u0440\u0438\u0433\u0433\u0435\u0440: \u0434\u0435\u0440\u0436\u0438\u043c \u0432\u044b\u0431\u0440\u0430\u043d\u043d\u044b\u0439 \u043f\u0440\u0435\u0434\u043c\u0435\u0442 \u0432\u043e \u0432\u0442\u043e\u0440\u043e\u0439 \u0440\u0443\u043a\u0435, \u043f\u043e\u043a\u0430 \u043c\u043e\u0434\u0443\u043b\u044c \u0432\u043a\u043b\u044e\u0447\u0451\u043d.
-         if (this.autoSwap.isValue() && mc.currentScreen == null) {
-            Item offhand = mc.player.getOffHandStack().getItem();
-            if (!this.isConfiguredItem(offhand)) {
-               Item auto = this.resolveTargetItem();
-               if (auto != null && offhand != auto) {
-                  this.beginSwap(auto);
-               }
+         // Авто-триггер (режим Без колеса): держим во второй руке предмет с наивысшим приоритетом из доступных.
+         if (this.triggerMode.isSelected("Без колеса") && this.autoSwap.isValue() && mc.currentScreen == null) {
+            Item desired = this.resolveDesiredOffhandItem();
+            if (desired != null && mc.player.getOffHandStack().getItem() != desired) {
+               this.beginSwap(desired);
             }
          }
 
@@ -297,6 +326,7 @@ public class AutoSwap extends ModuleStructure {
       }
    }
 
+   // Ручной/колёсный путь: первый сконфигурированный предмет, присутствующий в инвентаре.
    private Item resolveTargetItem() {
       Item var1 = this.parseItem(this.slot1.getText());
       if (var1 != null && this.findSlotForItem(var1) != null) {
@@ -313,19 +343,31 @@ public class AutoSwap extends ModuleStructure {
          return var3;
       }
 
-      // \u041d\u0438\u0447\u0435\u0433\u043e \u043d\u0435\u0442 \u0432 \u0438\u043d\u0432\u0435\u043d\u0442\u0430\u0440\u0435 \u2014 \u0432\u043e\u0437\u0432\u0440\u0430\u0449\u0430\u0435\u043c \u043f\u0435\u0440\u0432\u044b\u0439 \u0432\u0430\u043b\u0438\u0434\u043d\u044b\u0439, \u0447\u0442\u043e\u0431\u044b beginSwap \u043a\u043e\u0440\u0440\u0435\u043a\u0442\u043d\u043e \u043d\u0438\u0447\u0435\u0433\u043e \u043d\u0435 \u0441\u0434\u0435\u043b\u0430\u043b.
       return var1 != null ? var1 : (var2 != null ? var2 : var3);
    }
 
-   private boolean isConfiguredItem(Item var1) {
-      if (var1 == null || var1 == Items.AIR) {
-         return false;
+   // Авто-путь: предмет с наивысшим приоритетом, который есть во второй руке ИЛИ в инвентаре.
+   // Если он уже во второй руке — desired совпадёт с offhand и свапа не будет.
+   // Если предмет выше приоритетом лежит в инвентаре, а во второй руке предмет ниже приоритетом — он будет вытеснен.
+   private Item resolveDesiredOffhandItem() {
+      Item offhand = mc.player != null ? mc.player.getOffHandStack().getItem() : Items.AIR;
+
+      Item var1 = this.parseItem(this.slot1.getText());
+      if (var1 != null && (offhand == var1 || this.findSlotForItem(var1) != null)) {
+         return var1;
       }
 
-      Item var2 = this.parseItem(this.slot1.getText());
-      Item var3 = this.parseItem(this.slot2.getText());
-      Item var4 = this.parseItem(this.slot3.getText());
-      return var1 == var2 || var1 == var3 || var1 == var4;
+      Item var2 = this.parseItem(this.slot2.getText());
+      if (var2 != null && (offhand == var2 || this.findSlotForItem(var2) != null)) {
+         return var2;
+      }
+
+      Item var3 = this.parseItem(this.slot3.getText());
+      if (var3 != null && (offhand == var3 || this.findSlotForItem(var3) != null)) {
+         return var3;
+      }
+
+      return null;
    }
 
    private Item parseItem(String var1) {
@@ -388,10 +430,10 @@ public class AutoSwap extends ModuleStructure {
 
       int var3 = mc.player.currentScreenHandler.syncId;
 
-      // \u041e\u0441\u043d\u043e\u0432\u043d\u043e\u0439 \u043f\u0443\u0442\u044c \u2014 \u043a\u0430\u043a F \u043f\u043e \u0441\u043b\u043e\u0442\u0443: SlotActionType.SWAP + button 40.
+      // Основной путь — как F по слоту: SlotActionType.SWAP + button 40.
       mc.interactionManager.clickSlot(var3, var2.id, OFFHAND_BUTTON, SlotActionType.SWAP, mc.player);
 
-      // Fallback, \u0435\u0441\u043b\u0438 SWAP \u043d\u0435 \u043f\u0440\u0438\u043c\u0435\u043d\u0438\u043b\u0441\u044f: \u043e\u0431\u044b\u0447\u043d\u044b\u0435 PICKUP-\u043a\u043b\u0438\u043a\u0438 \u0432\u0437\u044f\u0442\u044c/\u043f\u043e\u043b\u043e\u0436\u0438\u0442\u044c/\u0432\u0435\u0440\u043d\u0443\u0442\u044c.
+      // Fallback, если SWAP не применился: обычные PICKUP-клики взять/положить/вернуть.
       if (mc.player.getOffHandStack().getItem() != var1) {
          mc.interactionManager.clickSlot(var3, var2.id, 0, SlotActionType.PICKUP, mc.player);
          mc.interactionManager.clickSlot(var3, OFFHAND_SLOT, 0, SlotActionType.PICKUP, mc.player);
@@ -433,14 +475,145 @@ public class AutoSwap extends ModuleStructure {
       return var2 + (var3 <= 0 ? 0 : ThreadLocalRandom.current().nextInt(var3 + 1));
    }
 
+   @EventHandler
+   public void onDraw(DrawEvent var1) {
+      if (mc.player == null || !this.triggerMode.isSelected("Колесо") || !this.wheelOpen || mc.currentScreen != null) {
+         return;
+      }
+
+      FrameProfiler profiler = FrameProfiler.getInstance();
+      boolean prof = profiler.isEnabled();
+      if (prof) profiler.begin("AutoSwap/wheelDraw");
+      try {
+         this.setCursorUnlocked(true);
+         int var2 = var1.getDrawContext().getScaledWindowWidth();
+         int var3 = var1.getDrawContext().getScaledWindowHeight();
+         float var4 = var2 / 2.0F;
+         float var5 = var3 / 2.0F;
+         float var6 = 92.0F;
+         float var7 = 54.0F;
+         float var8 = (float)(mc.mouse.getX() * var2 / mc.getWindow().getWidth());
+         float var9 = (float)(mc.mouse.getY() * var3 / mc.getWindow().getHeight());
+         byte var10 = 3;
+         int var11 = this.getHoverIndex(var8, var9, var4, var5, var7, var6, var10);
+         if (var11 != -1 && var11 != this.lastHover) {
+            this.lastHover = var11;
+            Item picked = this.parseItem(this.getSlotSetting(var11) != null ? this.getSlotSetting(var11).getText() : null);
+            if (picked != null) {
+               this.pendingItem = picked;
+               this.wheelOpen = false;
+               this.lastHover = -1;
+               this.setCursorUnlocked(false);
+               return;
+            }
+         }
+
+         float var21 = 360.0F / var10;
+         float var22 = 2.0F;
+         WheelPipeline var14 = Initialization.getInstance().getManager().getRenderCore().getWheelPipeline();
+
+         for (int var15 = 0; var15 < var10; var15++) {
+            int var16 = var15 == var11 ? -1593847505 : 1624100301;
+            float var17 = -90.0F + var21 * var15 + var22 / 2.0F;
+            float var18 = var17 + var21 - var22;
+            var14.drawSegment(var4, var5, var7, var6, (float)Math.toRadians(var17), (float)Math.toRadians(var18), var16);
+         }
+
+         for (int var23 = 0; var23 < var10; var23++) {
+            ItemStack var24 = this.getStackForIndex(var23);
+            if (!var24.isEmpty()) {
+               float var25 = (float)Math.toRadians(-90.0F + var21 * var23 + var21 / 2.0F);
+               float var26 = (var7 + var6) / 2.0F;
+               float var19 = var4 + (float)Math.cos(var25) * var26;
+               float var20 = var5 + (float)Math.sin(var25) * var26;
+               var1.getDrawContext().drawItem(var24, (int)(var19 - 8.0F), (int)(var20 - 8.0F));
+            }
+         }
+      } finally {
+         if (prof) profiler.end();
+      }
+   }
+
+   private void setCursorUnlocked(boolean var1) {
+      if (mc.mouse != null) {
+         if (var1 && !this.cursorUnlocked) {
+            mc.mouse.unlockCursor();
+            this.cursorUnlocked = true;
+         } else if (!var1 && this.cursorUnlocked) {
+            if (mc.currentScreen == null) {
+               mc.mouse.lockCursor();
+            }
+
+            this.cursorUnlocked = false;
+         }
+      }
+   }
+
+   private ItemStack getStackForIndex(int var1) {
+      TextSetting setting = this.getSlotSetting(var1);
+      if (setting == null) {
+         return ItemStack.EMPTY;
+      }
+
+      String var3 = setting.getText();
+      if (var3 == null || var3.isBlank()) {
+         this.cachedIds[var1] = var3 == null ? "" : var3;
+         this.cachedStacks[var1] = ItemStack.EMPTY;
+         return ItemStack.EMPTY;
+      }
+
+      if (var3.equals(this.cachedIds[var1])) {
+         return this.cachedStacks[var1];
+      }
+
+      this.cachedIds[var1] = var3;
+      Identifier var4 = Identifier.tryParse(var3);
+      if (var4 == null) {
+         this.cachedStacks[var1] = ItemStack.EMPTY;
+         return ItemStack.EMPTY;
+      }
+
+      Item var5 = (Item)Registries.ITEM.get(var4);
+      this.cachedStacks[var1] = var5 != null && var5 != Items.AIR ? var5.getDefaultStack() : ItemStack.EMPTY;
+      return this.cachedStacks[var1];
+   }
+
+   private void invalidateCachedStack(int index) {
+      if (index >= 0 && index < this.cachedIds.length) {
+         this.cachedIds[index] = "";
+         this.cachedStacks[index] = ItemStack.EMPTY;
+      }
+   }
+
+   private int getHoverIndex(float var1, float var2, float var3, float var4, float var5, float var6, int var7) {
+      float var8 = var1 - var3;
+      float var9 = var2 - var4;
+      float var10 = (float)Math.sqrt(var8 * var8 + var9 * var9);
+      if (!(var10 < var5) && !(var10 > var6)) {
+         double var11 = Math.atan2(var9, var8) + (Math.PI / 2);
+         if (var11 < 0.0) {
+            var11 += Math.PI * 2;
+         }
+
+         int var13 = (int)Math.floor(var11 / (Math.PI * 2) * var7);
+         return Math.max(0, Math.min(var13, var7 - 1));
+      } else {
+         return -1;
+      }
+   }
+
    @Override
    public void deactivate() {
       this.pickingForSlot = -1;
       this.pendingItem = null;
+      this.wheelOpen = false;
+      this.lastHover = -1;
       this.resetSwap();
       if (mc.currentScreen instanceof InventoryScreen && this.openedInventoryScreen) {
          mc.setScreen(null);
       }
+
+      this.setCursorUnlocked(false);
    }
 
    private TextSetting getSlotSetting(int index) {
