@@ -18,7 +18,6 @@ import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.At.Shift;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 import rich.events.api.EventManager;
@@ -47,12 +46,6 @@ public abstract class LivingEntityMixin {
    private static Method getPathingBehaviorMethod;
    @Unique
    private static Method isPathingMethod;
-
-   // Fields for travel yaw swap
-   @Unique
-   private float   rich$silentSavedYaw   = 0.0F;
-   @Unique
-   private boolean rich$didSilentYawSwap = false;
 
    @Shadow
    public abstract boolean hasStatusEffect(RegistryEntry<StatusEffect> var1);
@@ -218,37 +211,5 @@ public abstract class LivingEntityMixin {
             }
          }
       }
-   }
-
-   // ---------------------------------------------------------------------------
-   // Silent yaw swap around travel() — fixes ground-push flag from Grim.
-   // travel() is called from LivingEntity.tickMovement(), so we hook here.
-   // Only applies to the local player.
-   // ---------------------------------------------------------------------------
-
-   @Inject(method = "tickMovement",
-           at = @At(value = "INVOKE",
-                    target = "Lnet/minecraft/entity/LivingEntity;travel(Lnet/minecraft/util/math/Vec3d;)V"))
-   private void preTravelSilentYawSwap(CallbackInfo ci) {
-      try {
-         if ((Object)this != client.player) return;
-         if (AngleConnection.INSTANCE.getRotation() == null) return;
-         rich$silentSavedYaw   = client.player.getYaw();
-         client.player.setYaw(AngleConnection.INSTANCE.getRotation().getYaw());
-         rich$didSilentYawSwap = true;
-      } catch (Throwable ignored) {}
-   }
-
-   @Inject(method = "tickMovement",
-           at = @At(value = "INVOKE",
-                    target = "Lnet/minecraft/entity/LivingEntity;travel(Lnet/minecraft/util/math/Vec3d;)V",
-                    shift = Shift.AFTER))
-   private void postTravelRestoreSilentYaw(CallbackInfo ci) {
-      try {
-         if (rich$didSilentYawSwap && client.player != null) {
-            client.player.setYaw(rich$silentSavedYaw);
-            rich$didSilentYawSwap = false;
-         }
-      } catch (Throwable ignored) {}
    }
 }
