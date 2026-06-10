@@ -57,8 +57,6 @@ public abstract class ClientPlayerEntityMixin extends AbstractClientPlayerEntity
    /**
     * КРИТИЧНО: занулять input ДО Input.tick(), иначе Input.tick() уже
     * посчитает движение из реального WASD и игрок начнёт двигаться.
-    * Зануление playerInput post-factum (как было раньше) не отменяет уже
-    * применённое движение — отсюда «залаг» и кик за InventoryMove.
     */
    @Inject(method = "tickMovement", at = @At("HEAD"))
    private void onTickMovementHead(CallbackInfo ci) {
@@ -78,8 +76,7 @@ public abstract class ClientPlayerEntityMixin extends AbstractClientPlayerEntity
    private void onInputTick(CallbackInfo ci) {
       if (IMinecraft.mc.player == null) return;
 
-      // Доп. подстраховка post-Input.tick() — если playerInput кем-то восстановили
-      // между HEAD-хуком и tick(), зануляем повторно.
+      // Доп. подстраховка post-Input.tick()
       try {
          if (AutoSwap.SUPPRESS_INPUT && input != null && input.playerInput != null) {
             input.playerInput = new PlayerInput(false, false, false, false, false, false, false);
@@ -133,6 +130,32 @@ public abstract class ClientPlayerEntityMixin extends AbstractClientPlayerEntity
       } catch (Throwable ignored) {}
 
       EventManager.callEvent(new PlayerTravelEvent(Vec3d.ZERO, false));
+
+      // -----------------------------------------------------------------------
+      // MoveFix для silent rotation:
+      // Ротируем input.movementForward/movementSideways на дельту (aimYaw - realYaw)
+      // ПОСЛЕ Input.tick() и ДО travel().
+      // Только горизонтальный поворот -- pitch НЕ трогаем, иначе travel() добавит
+      // вертикальную составляющую и сервер прижмёт к земле.
+      // Input.tick() на следующем тике перезапишет значения из клавиш -- restore не нужен.
+      // -----------------------------------------------------------------------
+      try {
+         rich.modules.impl.combat.aura.Angle silentAngle = AngleConnection.INSTANCE.getRotation();
+         if (silentAngle != null && IMinecraft.mc.player != null && input != null) {
+            float realYaw = IMinecraft.mc.player.getYaw();
+            float aimYaw  = silentAngle.getYaw();
+            float delta   = aimYaw - realYaw;
+            if (Math.abs(delta) > 0.01F) {
+               float rad  = (float) Math.toRadians(delta);
+               float cos  = (float) Math.cos(rad);
+               float sin  = (float) Math.sin(rad);
+               float fwd  = input.movementForward;
+               float side = input.movementSideways;
+               input.movementForward  = fwd * cos - side * sin;
+               input.movementSideways = fwd * sin + side * cos;
+            }
+         }
+      } catch (Throwable ignored) {}
    }
 
    @Redirect(method = "applyMovementSpeedFactors",
@@ -170,10 +193,9 @@ public abstract class ClientPlayerEntityMixin extends AbstractClientPlayerEntity
    }
 
    /**
-    * Спуфим yaw/pitch ТОЛЬКО в sendMovementPackets — там формируется пакет для сервера.
-    * НЕ трогаем tick() — там getYaw() используется для расчёта вектора движения.
-    * Если спуфить yaw в tick(), при взгляде вниз на врага вектор движения получает
-    * вертикальную составляющую → сервер прижимает к земле → флаги анти-чита.
+    * Спуфим yaw/pitch ТОЛЬКО в sendMovementPackets -- там формируется пакет для сервера.
+    * НЕ трогаем player.yaw в tick() напрямую -- это сдвинет камеру и добавит вертикаль.
+    * MoveFix реализован через ротацию input до travel() (см. onInputTick выше).
     */
    @ModifyExpressionValue(method = "sendMovementPackets",
                           at = @At(value = "INVOKE", target = "Lnet/minecraft/client/network/ClientPlayerEntity;getYaw()F"))
