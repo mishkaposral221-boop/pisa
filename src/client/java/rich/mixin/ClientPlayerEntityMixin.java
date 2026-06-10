@@ -28,7 +28,6 @@ import rich.events.impl.PushEvent;
 import rich.events.impl.TickEvent;
 import rich.events.impl.UsingItemEvent;
 import rich.modules.impl.combat.AutoSwap;
-import rich.modules.impl.combat.KillAuraSpooky;
 import rich.modules.impl.combat.Triggerbot;
 import rich.modules.impl.combat.aura.AngleConnection;
 import rich.util.move.MoveUtil;
@@ -75,7 +74,7 @@ public abstract class ClientPlayerEntityMixin extends AbstractClientPlayerEntity
    }
 
    // ---------------------------------------------------------------------------
-   // Input suppression (after Input.tick) — Triggerbot + KillAuraSpooky
+   // Input suppression (after Input.tick) — Triggerbot
    // ---------------------------------------------------------------------------
 
    @Inject(method = "tickMovement",
@@ -125,34 +124,6 @@ public abstract class ClientPlayerEntityMixin extends AbstractClientPlayerEntity
       try {
          Triggerbot tb = Triggerbot.getInstance();
          if (Triggerbot.SUPPRESS_JUMP && tb != null && tb.isState()
-               && input != null && input.playerInput != null
-               && input.playerInput.jump()) {
-            PlayerInput pi = input.playerInput;
-            input.playerInput = new PlayerInput(
-               pi.forward(), pi.backward(), pi.left(), pi.right(),
-               false, pi.sneak(), pi.sprint()
-            );
-         }
-      } catch (Throwable ignored) {}
-
-      // KillAuraSpooky: suppress forward (W-release before hit)
-      try {
-         if (KillAuraSpooky.SUPPRESS_FORWARD
-               && input != null && input.playerInput != null) {
-            PlayerInput pi = input.playerInput;
-            if (pi.forward() || pi.sprint()) {
-               input.playerInput = new PlayerInput(
-                  false, pi.backward(), pi.left(), pi.right(),
-                  pi.jump(), pi.sneak(), false
-               );
-            }
-            if (IMinecraft.mc.player.isSprinting()) IMinecraft.mc.player.setSprinting(false);
-         }
-      } catch (Throwable ignored) {}
-
-      // KillAuraSpooky: suppress jump (gate during jump-charge wait)
-      try {
-         if (KillAuraSpooky.SUPPRESS_JUMP
                && input != null && input.playerInput != null
                && input.playerInput.jump()) {
             PlayerInput pi = input.playerInput;
