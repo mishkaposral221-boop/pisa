@@ -28,6 +28,7 @@ import rich.events.impl.PushEvent;
 import rich.events.impl.TickEvent;
 import rich.events.impl.UsingItemEvent;
 import rich.modules.impl.combat.AutoSwap;
+import rich.modules.impl.combat.KillAuraSpooky;
 import rich.modules.impl.combat.Triggerbot;
 import rich.modules.impl.combat.aura.AngleConnection;
 import rich.util.move.MoveUtil;
@@ -38,7 +39,11 @@ public abstract class ClientPlayerEntityMixin extends AbstractClientPlayerEntity
    @Shadow public Input input;
    private double prevX = 0.0;
    private double prevZ = 0.0;
-   private float prevBodyYaw = 0.0F;
+   private float  prevBodyYaw = 0.0F;
+
+   /** Saved real yaw before we swap it for travel(). */
+   private float   silentSavedYaw      = 0.0F;
+   private boolean didSilentYawSwap    = false;
 
    @Shadow protected abstract void autoJump(float dx, float dz);
    @Shadow public abstract boolean isUsingItem();
@@ -47,6 +52,10 @@ public abstract class ClientPlayerEntityMixin extends AbstractClientPlayerEntity
       super(world, profile);
    }
 
+   // ---------------------------------------------------------------------------
+   // Tick event
+   // ---------------------------------------------------------------------------
+
    @Inject(method = "tick", at = @At("HEAD"))
    public void tick(CallbackInfo ci) {
       if (client.player != null && client.world != null) {
@@ -54,33 +63,39 @@ public abstract class ClientPlayerEntityMixin extends AbstractClientPlayerEntity
       }
    }
 
+   // ---------------------------------------------------------------------------
+   // Input suppression (AutoSwap)
+   // ---------------------------------------------------------------------------
+
    @Inject(method = "tickMovement", at = @At("HEAD"))
    private void onTickMovementHead(CallbackInfo ci) {
       if (IMinecraft.mc.player == null) return;
       try {
          if (AutoSwap.SUPPRESS_INPUT && input != null && input.playerInput != null) {
             input.playerInput = new PlayerInput(false, false, false, false, false, false, false);
-            if (IMinecraft.mc.player.isSprinting()) {
-               IMinecraft.mc.player.setSprinting(false);
-            }
+            if (IMinecraft.mc.player.isSprinting()) IMinecraft.mc.player.setSprinting(false);
          }
       } catch (Throwable ignored) {}
    }
+
+   // ---------------------------------------------------------------------------
+   // Input suppression (after Input.tick) — Triggerbot + KillAuraSpooky
+   // ---------------------------------------------------------------------------
 
    @Inject(method = "tickMovement",
            at = @At(value = "INVOKE", target = "Lnet/minecraft/client/input/Input;tick()V", shift = Shift.AFTER))
    private void onInputTick(CallbackInfo ci) {
       if (IMinecraft.mc.player == null) return;
 
+      // AutoSwap full suppress
       try {
          if (AutoSwap.SUPPRESS_INPUT && input != null && input.playerInput != null) {
             input.playerInput = new PlayerInput(false, false, false, false, false, false, false);
-            if (IMinecraft.mc.player.isSprinting()) {
-               IMinecraft.mc.player.setSprinting(false);
-            }
+            if (IMinecraft.mc.player.isSprinting()) IMinecraft.mc.player.setSprinting(false);
          }
       } catch (Throwable ignored) {}
 
+      // Triggerbot: suppress forward
       try {
          Triggerbot tb = Triggerbot.getInstance();
          if (Triggerbot.SUPPRESS_FORWARD && tb != null && tb.isState()
@@ -92,12 +107,11 @@ public abstract class ClientPlayerEntityMixin extends AbstractClientPlayerEntity
                   pi.jump(), pi.sneak(), false
                );
             }
-            if (IMinecraft.mc.player.isSprinting()) {
-               IMinecraft.mc.player.setSprinting(false);
-            }
+            if (IMinecraft.mc.player.isSprinting()) IMinecraft.mc.player.setSprinting(false);
          }
       } catch (Throwable ignored) {}
 
+      // Triggerbot: suppress sprint
       try {
          Triggerbot tb = Triggerbot.getInstance();
          if (Triggerbot.SUPPRESS_SPRINT && tb != null && tb.isState()
@@ -111,6 +125,7 @@ public abstract class ClientPlayerEntityMixin extends AbstractClientPlayerEntity
          }
       } catch (Throwable ignored) {}
 
+      // Triggerbot: suppress jump
       try {
          Triggerbot tb = Triggerbot.getInstance();
          if (Triggerbot.SUPPRESS_JUMP && tb != null && tb.isState()
@@ -124,8 +139,72 @@ public abstract class ClientPlayerEntityMixin extends AbstractClientPlayerEntity
          }
       } catch (Throwable ignored) {}
 
+      // KillAuraSpooky: suppress forward (W-release before hit)
+      try {
+         if (KillAuraSpooky.SUPPRESS_FORWARD
+               && input != null && input.playerInput != null) {
+            PlayerInput pi = input.playerInput;
+            if (pi.forward() || pi.sprint()) {
+               input.playerInput = new PlayerInput(
+                  false, pi.backward(), pi.left(), pi.right(),
+                  pi.jump(), pi.sneak(), false
+               );
+            }
+            if (IMinecraft.mc.player.isSprinting()) IMinecraft.mc.player.setSprinting(false);
+         }
+      } catch (Throwable ignored) {}
+
+      // KillAuraSpooky: suppress jump (gate during jump-charge wait)
+      try {
+         if (KillAuraSpooky.SUPPRESS_JUMP
+               && input != null && input.playerInput != null
+               && input.playerInput.jump()) {
+            PlayerInput pi = input.playerInput;
+            input.playerInput = new PlayerInput(
+               pi.forward(), pi.backward(), pi.left(), pi.right(),
+               false, pi.sneak(), pi.sprint()
+            );
+         }
+      } catch (Throwable ignored) {}
+
       EventManager.callEvent(new PlayerTravelEvent(Vec3d.ZERO, false));
    }
+
+   // ---------------------------------------------------------------------------
+   // Silent rotation: swap player.yaw to aimYaw BEFORE travel() so that
+   // physics/movement use aimYaw (matching the spoofed packet) then restore
+   // the real yaw AFTER travel() so the camera never moves visually.
+   // ---------------------------------------------------------------------------
+
+   @Inject(method = "tickMovement",
+           at = @At(value = "INVOKE",
+                    target = "Lnet/minecraft/entity/LivingEntity;travel(Lnet/minecraft/util/math/Vec3d;)V"))
+   private void preTravelSilentYawSwap(CallbackInfo ci) {
+      try {
+         if (IMinecraft.mc.player != null && AngleConnection.INSTANCE.getRotation() != null) {
+            silentSavedYaw   = IMinecraft.mc.player.getYaw();
+            IMinecraft.mc.player.setYaw(AngleConnection.INSTANCE.getRotation().getYaw());
+            didSilentYawSwap = true;
+         }
+      } catch (Throwable ignored) {}
+   }
+
+   @Inject(method = "tickMovement",
+           at = @At(value = "INVOKE",
+                    target = "Lnet/minecraft/entity/LivingEntity;travel(Lnet/minecraft/util/math/Vec3d;)V",
+                    shift = Shift.AFTER))
+   private void postTravelRestoreSilentYaw(CallbackInfo ci) {
+      try {
+         if (didSilentYawSwap && IMinecraft.mc.player != null) {
+            IMinecraft.mc.player.setYaw(silentSavedYaw);
+            didSilentYawSwap = false;
+         }
+      } catch (Throwable ignored) {}
+   }
+
+   // ---------------------------------------------------------------------------
+   // Misc hooks
+   // ---------------------------------------------------------------------------
 
    @Redirect(method = "applyMovementSpeedFactors",
              at = @At(value = "INVOKE",
@@ -161,18 +240,17 @@ public abstract class ClientPlayerEntityMixin extends AbstractClientPlayerEntity
       ci.cancel();
    }
 
-   /**
-    * Spoof yaw/pitch ONLY in sendMovementPackets (packet to server).
-    * Does NOT touch player.yaw -- camera always shows real mouse yaw.
-    */
+   // ---------------------------------------------------------------------------
+   // Packet yaw/pitch spoof (sendMovementPackets)
+   // ---------------------------------------------------------------------------
+
    @ModifyExpressionValue(method = "sendMovementPackets",
-                          at = @At(value = "INVOKE", target = "Lnet/minecraft/client/network/ClientPlayerEntity;getYaw()F"))
+                          at = @At(value = "INVOKE",
+                                   target = "Lnet/minecraft/client/network/ClientPlayerEntity;getYaw()F"))
    private float hookSilentRotationYaw(float original) {
-      if (AutoSwap.LOCK_ROTATION) {
-         return AutoSwap.LOCK_YAW;
-      }
+      if (AutoSwap.LOCK_ROTATION) return AutoSwap.LOCK_YAW;
       if (IMinecraft.mc.player != null && AngleConnection.INSTANCE.getRotation() != null) {
-         float yaw = AngleConnection.INSTANCE.getRotation().getYaw();
+         float yaw  = AngleConnection.INSTANCE.getRotation().getYaw();
          float body = MoveUtil.calculateBodyYaw(
             yaw, prevBodyYaw, prevX, prevZ,
             IMinecraft.mc.player.getX(), IMinecraft.mc.player.getZ(),
@@ -188,11 +266,10 @@ public abstract class ClientPlayerEntityMixin extends AbstractClientPlayerEntity
    }
 
    @ModifyExpressionValue(method = "sendMovementPackets",
-                          at = @At(value = "INVOKE", target = "Lnet/minecraft/client/network/ClientPlayerEntity;getPitch()F"))
+                          at = @At(value = "INVOKE",
+                                   target = "Lnet/minecraft/client/network/ClientPlayerEntity;getPitch()F"))
    private float hookSilentRotationPitch(float original) {
-      if (AutoSwap.LOCK_ROTATION) {
-         return AutoSwap.LOCK_PITCH;
-      }
+      if (AutoSwap.LOCK_ROTATION) return AutoSwap.LOCK_PITCH;
       return AngleConnection.INSTANCE.getRotation() != null
          ? AngleConnection.INSTANCE.getRotation().getPitch()
          : original;
