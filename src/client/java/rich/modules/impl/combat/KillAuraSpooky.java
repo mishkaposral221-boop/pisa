@@ -1,7 +1,6 @@
 package rich.modules.impl.combat;
 
 import java.util.Random;
-import java.util.concurrent.ThreadLocalRandom;
 import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.LivingEntity;
@@ -12,12 +11,10 @@ import net.minecraft.registry.tag.ItemTags;
 import net.minecraft.util.Hand;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.hit.HitResult;
-import net.minecraft.util.math.Box;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.RaycastContext;
 import rich.events.api.EventHandler;
-import rich.events.impl.PlayerVelocityStrafeEvent;
 import rich.events.impl.TickEvent;
 import rich.modules.impl.combat.aura.Angle;
 import rich.modules.impl.combat.aura.AngleConnection;
@@ -25,18 +22,17 @@ import rich.modules.module.ModuleStructure;
 import rich.modules.module.category.ModuleCategory;
 import rich.modules.module.setting.implement.BooleanSetting;
 import rich.modules.module.setting.implement.SliderSettings;
-import rich.util.c;
 
 /**
- * KillAuraSpooky -- SPAngle profile (SpookyTime bypass) + moveCorrection.
+ * KillAuraSpooky -- SPAngle profile (SpookyTime bypass).
  *
- * Silent: AngleConnection.INSTANCE.setRotation() --
- *   ClientPlayerEntityMixin.hookSilentRotationYaw/Pitch (@ModifyExpressionValue)
- *   intercepts getYaw()/getPitch() only inside sendMovementPackets().
- *   Does NOT touch player.yaw -- camera always shows real mouse yaw.
+ * Silent rotation:
+ *   AngleConnection.INSTANCE.setRotation(angle) -> packet yaw = aim yaw
+ *   (via ClientPlayerEntityMixin.hookSilentRotationYaw/Pitch @ModifyExpressionValue)
  *
- * MoveCorrection: in silent mode the movement vector is recalculated
- *   under aim-yaw so the server doesn't see movement at wrong angle -> flags.
+ * MoveFix (no ground push):
+ *   ClientPlayerEntityMixin.onInputTick rotates input.movementForward/Sideways
+ *   by delta(aimYaw - realYaw) BEFORE travel() -- only horizontal, pitch untouched.
  *
  * RotationBypass (by-module.md -> SPAngle, SpookyTime/Releon):
  *   - yawLimit   = min(|yawD|, 74 + rand(0..1.03))
@@ -59,9 +55,6 @@ public class KillAuraSpooky extends ModuleStructure {
     private float curPitch;
     private boolean hasRotation = false;
 
-    private float realYaw;
-    private float realPitch;
-
     private Entity lockedTarget = null;
 
     private Entity  pendingAttack     = null;
@@ -73,10 +66,10 @@ public class KillAuraSpooky extends ModuleStructure {
     private boolean wasFalling      = false;
     private int     fallGroundTicks  = 0;
 
-    private static final int   W_PRE_MIN            = 1;
-    private static final int   W_PRE_MAX            = 15;
-    private static final int   FALL_GATE_TICKS      = 40;
-    private static final float CRIT_CHARGE          = 0.84F;
+    private static final int   W_PRE_MIN       = 1;
+    private static final int   W_PRE_MAX       = 15;
+    private static final int   FALL_GATE_TICKS = 40;
+    private static final float CRIT_CHARGE     = 0.84F;
 
     public KillAuraSpooky() {
         super("KillAuraSpooky", "SPAngle kill-aura (SpookyTime bypass)", ModuleCategory.UTILITIES);
@@ -104,9 +97,6 @@ public class KillAuraSpooky extends ModuleStructure {
             if (mc.player.getVelocity().y < -0.1) wasFalling = true;
         }
         if (wasFalling && onGround) { if (fallGroundTicks < FALL_GATE_TICKS) fallGroundTicks++; }
-
-        realYaw   = mc.player.getYaw();
-        realPitch = mc.player.getPitch();
 
         // Pending attack
         if (pendingAttack != null) {
@@ -148,42 +138,6 @@ public class KillAuraSpooky extends ModuleStructure {
             preAttackDeadline = System.currentTimeMillis() + preDelay;
             pendingWasForward = isForwardPressed();
         }
-    }
-
-    // -------------------------------------------------------------------------
-    // MoveCorrection
-    // -------------------------------------------------------------------------
-
-    @EventHandler
-    public void onPlayerVelocityStrafe(PlayerVelocityStrafeEvent event) {
-        if (!this.isState() || !silentRot.isValue() || !hasRotation) return;
-        if (mc.player == null) return;
-
-        Vec3d input = event.getMovementInput();
-        double speed = event.getSpeed();
-        if (input.lengthSquared() < 1e-9) return;
-
-        double aimYawRad  = Math.toRadians(curYaw);
-        double realYawRad = Math.toRadians(realYaw);
-
-        double sinAim  = Math.sin(aimYawRad);
-        double cosAim  = Math.cos(aimYawRad);
-        double sinReal = Math.sin(realYawRad);
-        double cosReal = Math.cos(realYawRad);
-
-        Vec3d vel = event.getVelocity();
-        double vx = vel.x;
-        double vz = vel.z;
-
-        // decode using realYaw
-        double fwd = -sinReal * vx + cosReal * vz;
-        double str = -cosReal * vx - sinReal * vz;
-
-        // re-encode using aimYaw
-        double newVx = (-sinAim * fwd - cosAim * str);
-        double newVz = ( cosAim * fwd - sinAim * str);
-
-        event.setVelocity(new Vec3d(newVx, vel.y, newVz));
     }
 
     // -------------------------------------------------------------------------
@@ -233,7 +187,7 @@ public class KillAuraSpooky extends ModuleStructure {
         float newPitch = current.getPitch() + stepPitch;
         newPitch = MathHelper.clamp(newPitch, -90.0F, 90.0F);
 
-        // Idle sway when reached target
+        // Idle sway when on target
         if (reached) {
             long ms = System.currentTimeMillis();
             double t = (ms % 12000L) / 1200.0;
