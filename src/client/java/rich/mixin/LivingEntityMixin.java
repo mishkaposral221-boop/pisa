@@ -18,8 +18,6 @@ import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.ModifyVariable;
-import org.spongepowered.asm.mixin.injection.At.Shift;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 import rich.events.api.EventManager;
@@ -48,12 +46,6 @@ public abstract class LivingEntityMixin {
    private static Method getPathingBehaviorMethod;
    @Unique
    private static Method isPathingMethod;
-
-   /** Real (camera) yaw saved before travel() so we can restore it after. */
-   @Unique
-   private float rich$realYawBeforeTravel = 0.0F;
-   @Unique
-   private boolean rich$didTravelSwap = false;
 
    @Shadow
    public abstract boolean hasStatusEffect(RegistryEntry<StatusEffect> var1);
@@ -190,79 +182,5 @@ public abstract class LivingEntityMixin {
             }
          }
       }
-   }
-
-   // =========================================================================
-   // Silent yaw swap + move correction around travel()
-   //
-   // Problem: spoofing yaw in packets (hookSilentRotationYaw) causes Grim to
-   // flag because packet.yaw != velocity.direction.
-   //
-   // Solution:
-   //   1. Before travel(): set player.yaw = aimYaw   → physics uses aimYaw
-   //   2. Rotate the travel Vec3d by (realYaw - aimYaw) → world movement stays
-   //      in the direction the player is actually pressing (W goes forward, not
-   //      toward target).
-   //   3. After travel(): restore player.yaw = realYaw → camera unchanged
-   //
-   // Result: server sees packet.yaw == velocity.direction → no flag.
-   //         Player moves where keys say, not toward target.
-   //         Camera stays at mouse position.
-   // =========================================================================
-
-   /** Step 1: save real yaw, swap to aim yaw before travel(). */
-   @Inject(method = "tickMovement",
-           at = @At(value = "INVOKE",
-                    target = "Lnet/minecraft/entity/LivingEntity;travel(Lnet/minecraft/util/math/Vec3d;)V"))
-   private void preTravelSilentSwap(CallbackInfo ci) {
-      try {
-         if ((Object)this != client.player) return;
-         Angle rot = AngleConnection.INSTANCE.getRotation();
-         if (rot == null) { rich$didTravelSwap = false; return; }
-         rich$realYawBeforeTravel = client.player.getYaw();
-         client.player.setYaw(rot.getYaw());
-         rich$didTravelSwap = true;
-      } catch (Throwable ignored) {}
-   }
-
-   /**
-    * Step 2: rotate the travel Vec3d so world movement stays in realYaw
-    * direction even though player.yaw is now aimYaw.
-    *
-    * MC applies: world_v = R(player.yaw) * input
-    * We want:    world_v = R(realYaw)    * original_input
-    * So:         new_input = R(realYaw - aimYaw) * original_input
-    */
-   @ModifyVariable(method = "tickMovement",
-                   at = @At(value = "INVOKE",
-                            target = "Lnet/minecraft/entity/LivingEntity;travel(Lnet/minecraft/util/math/Vec3d;)V"),
-                   ordinal = 0)
-   private Vec3d correctTravelVecForSilent(Vec3d input) {
-      try {
-         if ((Object)this != client.player) return input;
-         if (!rich$didTravelSwap) return input;
-         Angle rot = AngleConnection.INSTANCE.getRotation();
-         if (rot == null) return input;
-         float delta = (rich$realYawBeforeTravel - rot.getYaw()) * (float)(Math.PI / 180.0);
-         float cos = MathHelper.cos(delta);
-         float sin = MathHelper.sin(delta);
-         double newX = input.x * cos - input.z * sin;
-         double newZ = input.x * sin + input.z * cos;
-         return new Vec3d(newX, input.y, newZ);
-      } catch (Throwable ignored) { return input; }
-   }
-
-   /** Step 3: restore real yaw after travel() so camera stays on mouse. */
-   @Inject(method = "tickMovement",
-           at = @At(value = "INVOKE",
-                    target = "Lnet/minecraft/entity/LivingEntity;travel(Lnet/minecraft/util/math/Vec3d;)V",
-                    shift = Shift.AFTER))
-   private void postTravelSilentRestore(CallbackInfo ci) {
-      try {
-         if (rich$didTravelSwap && client.player != null) {
-            client.player.setYaw(rich$realYawBeforeTravel);
-            rich$didTravelSwap = false;
-         }
-      } catch (Throwable ignored) {}
    }
 }
