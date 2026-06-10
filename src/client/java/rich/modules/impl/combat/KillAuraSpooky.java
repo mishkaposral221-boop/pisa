@@ -25,11 +25,15 @@ import rich.modules.module.setting.implement.SliderSettings;
 /**
  * KillAuraSpooky -- SPAngle profile (SpookyTime bypass).
  *
- * Silent rotation (from 1st person camera is not affected):
+ * Default mode (Silent=OFF):
+ *   mc.player.setYaw / setPitch -> camera rotates visually
+ *   travel() uses same yaw -> movement matches packet -> no Grim ground-push
+ *
+ * Silent mode (Silent=ON):
  *   AngleConnection.INSTANCE.setRotation(angle)
  *   -> ClientPlayerEntityMixin @ModifyExpressionValue on sendMovementPackets
- *   -> packet yaw/pitch = aim yaw/pitch
- *   -> player.yaw is NEVER changed -> camera stays on real mouse yaw
+ *   -> packet yaw = aim yaw, player.yaw stays unchanged (camera INVISIBLE)
+ *   NOTE: causes movement mismatch on Grim -> may flag
  *
  * On disable: AngleConnection reset + bodyYaw/headYaw snapped back.
  */
@@ -38,7 +42,9 @@ public class KillAuraSpooky extends ModuleStructure {
     public final SliderSettings range      = new SliderSettings("Range",     "Attack range")      .setValue(3.1F).range(1.0F, 6.0F);
     public final SliderSettings fovSetting = new SliderSettings("FOV",       "Max FOV to target") .setValue(180.0F).range(10.0F, 180.0F);
     public final BooleanSetting onlySword  = new BooleanSetting("OnlySword", "Only sword/axe")    .setValue(true);
-    public final BooleanSetting silentRot  = new BooleanSetting("Silent",    "Silent rotation")   .setValue(true);
+    // Silent=false: camera rotates visually, movement matches -> no ground-push flags
+    // Silent=true:  camera stays on mouse, but Grim may flag movement mismatch
+    public final BooleanSetting silentRot  = new BooleanSetting("Silent",    "Silent rotation")   .setValue(false);
 
     private final Random rng = new Random();
 
@@ -82,12 +88,10 @@ public class KillAuraSpooky extends ModuleStructure {
 
     @Override
     public void deactivate() {
-        // Clear silent rotation so the next sendMovementPackets uses real yaw
         AngleConnection.INSTANCE.setRotation(null);
         hasRotation   = false;
         lockedTarget  = null;
         pendingAttack = null;
-        // Snap body/head yaw back so the model doesn't stay rotated
         if (mc.player != null) {
             mc.player.setBodyYaw(mc.player.getYaw());
             mc.player.headYaw = mc.player.getYaw();
@@ -142,8 +146,11 @@ public class KillAuraSpooky extends ModuleStructure {
         hasRotation = true;
 
         if (silentRot.isValue()) {
+            // Silent: only spoof packet, camera stays
             AngleConnection.INSTANCE.setRotation(next);
         } else {
+            // Normal: rotate actual camera (yaw/pitch) -> no movement mismatch
+            AngleConnection.INSTANCE.setRotation(null);
             mc.player.setYaw(curYaw);
             mc.player.setPitch(curPitch);
         }
@@ -226,9 +233,7 @@ public class KillAuraSpooky extends ModuleStructure {
 
     private void resetRotation() {
         hasRotation = false;
-        if (silentRot.isValue()) {
-            AngleConnection.INSTANCE.setRotation(null);
-        }
+        AngleConnection.INSTANCE.setRotation(null);
     }
 
     private Entity findTarget() {
