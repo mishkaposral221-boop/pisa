@@ -29,6 +29,7 @@ import rich.events.impl.TickEvent;
 import rich.events.impl.UsingItemEvent;
 import rich.modules.impl.combat.AutoSwap;
 import rich.modules.impl.combat.Triggerbot;
+import rich.modules.impl.combat.aura.Angle;
 import rich.modules.impl.combat.aura.AngleConnection;
 import rich.util.move.MoveUtil;
 
@@ -54,10 +55,6 @@ public abstract class ClientPlayerEntityMixin extends AbstractClientPlayerEntity
       }
    }
 
-   /**
-    * КРИТИЧНО: занулять input ДО Input.tick(), иначе Input.tick() уже
-    * посчитает движение из реального WASD и игрок начнёт двигаться.
-    */
    @Inject(method = "tickMovement", at = @At("HEAD"))
    private void onTickMovementHead(CallbackInfo ci) {
       if (IMinecraft.mc.player == null) return;
@@ -76,7 +73,6 @@ public abstract class ClientPlayerEntityMixin extends AbstractClientPlayerEntity
    private void onInputTick(CallbackInfo ci) {
       if (IMinecraft.mc.player == null) return;
 
-      // Доп. подстраховка post-Input.tick()
       try {
          if (AutoSwap.SUPPRESS_INPUT && input != null && input.playerInput != null) {
             input.playerInput = new PlayerInput(false, false, false, false, false, false, false);
@@ -132,27 +128,42 @@ public abstract class ClientPlayerEntityMixin extends AbstractClientPlayerEntity
       EventManager.callEvent(new PlayerTravelEvent(Vec3d.ZERO, false));
 
       // -----------------------------------------------------------------------
-      // MoveFix для silent rotation:
-      // Ротируем input.movementForward/movementSideways на дельту (aimYaw - realYaw)
-      // ПОСЛЕ Input.tick() и ДО travel().
-      // Только горизонтальный поворот -- pitch НЕ трогаем, иначе travel() добавит
-      // вертикальную составляющую и сервер прижмёт к земле.
-      // Input.tick() на следующем тике перезапишет значения из клавиш -- restore не нужен.
+      // MoveFix for silent rotation.
+      // Rotate WASD input booleans by delta (aimYaw - realYaw) AFTER Input.tick()
+      // and BEFORE travel() so the server sees movement direction matching aimYaw.
+      // Only horizontal rotation -- pitch is NOT touched, so no vertical component
+      // added to travel() and no ground push from the server.
+      // PlayerInput constructor: (forward, backward, left, right, jump, sneak, sprint)
+      // movementForward  = (forward ? 1 : 0) - (backward ? 1 : 0)
+      // movementSideways = (right   ? 1 : 0) - (left    ? 1 : 0)
       // -----------------------------------------------------------------------
       try {
-         rich.modules.impl.combat.aura.Angle silentAngle = AngleConnection.INSTANCE.getRotation();
-         if (silentAngle != null && IMinecraft.mc.player != null && input != null) {
+         Angle silentAngle = AngleConnection.INSTANCE.getRotation();
+         if (silentAngle != null && IMinecraft.mc.player != null
+               && input != null && input.playerInput != null) {
             float realYaw = IMinecraft.mc.player.getYaw();
             float aimYaw  = silentAngle.getYaw();
             float delta   = aimYaw - realYaw;
             if (Math.abs(delta) > 0.01F) {
-               float rad  = (float) Math.toRadians(delta);
-               float cos  = (float) Math.cos(rad);
-               float sin  = (float) Math.sin(rad);
-               float fwd  = input.movementForward;
-               float side = input.movementSideways;
-               input.movementForward  = fwd * cos - side * sin;
-               input.movementSideways = fwd * sin + side * cos;
+               PlayerInput pi = input.playerInput;
+               // Convert booleans to floats
+               float fwd  = (pi.forward()  ? 1.0F : 0.0F) - (pi.backward() ? 1.0F : 0.0F);
+               float side = (pi.right()    ? 1.0F : 0.0F) - (pi.left()    ? 1.0F : 0.0F);
+               if (fwd != 0.0F || side != 0.0F) {
+                  float rad    = (float) Math.toRadians(delta);
+                  float cosD   = (float) Math.cos(rad);
+                  float sinD   = (float) Math.sin(rad);
+                  float newFwd  = fwd  * cosD - side * sinD;
+                  float newSide = fwd  * sinD + side * cosD;
+                  // Convert back to booleans (threshold 0.1)
+                  input.playerInput = new PlayerInput(
+                     newFwd  > 0.1F,           // forward
+                     newFwd  < -0.1F,          // backward
+                     newSide < -0.1F,          // left  (A key = negative side)
+                     newSide > 0.1F,           // right (D key = positive side)
+                     pi.jump(), pi.sneak(), pi.sprint()
+                  );
+               }
             }
          }
       } catch (Throwable ignored) {}
@@ -193,9 +204,9 @@ public abstract class ClientPlayerEntityMixin extends AbstractClientPlayerEntity
    }
 
    /**
-    * Спуфим yaw/pitch ТОЛЬКО в sendMovementPackets -- там формируется пакет для сервера.
-    * НЕ трогаем player.yaw в tick() напрямую -- это сдвинет камеру и добавит вертикаль.
-    * MoveFix реализован через ротацию input до travel() (см. onInputTick выше).
+    * Spoof yaw/pitch ONLY in sendMovementPackets -- that's where the server packet is built.
+    * Do NOT touch player.yaw directly -- that moves the camera.
+    * MoveFix is handled via PlayerInput rotation in onInputTick above.
     */
    @ModifyExpressionValue(method = "sendMovementPackets",
                           at = @At(value = "INVOKE", target = "Lnet/minecraft/client/network/ClientPlayerEntity;getYaw()F"))
