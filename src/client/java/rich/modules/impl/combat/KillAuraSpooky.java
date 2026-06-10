@@ -6,7 +6,6 @@ import net.minecraft.entity.Entity;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.effect.StatusEffects;
 import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.item.Item;
 import net.minecraft.registry.tag.ItemTags;
 import net.minecraft.util.Hand;
 import net.minecraft.util.hit.BlockHitResult;
@@ -26,37 +25,28 @@ import rich.modules.module.setting.implement.SliderSettings;
 /**
  * KillAuraSpooky -- SPAngle profile (SpookyTime bypass).
  *
- * Silent rotation:
- *   AngleConnection.INSTANCE.setRotation(angle) -> packet yaw = aim yaw
- *   (via ClientPlayerEntityMixin.hookSilentRotationYaw/Pitch @ModifyExpressionValue)
+ * Silent rotation (from 1st person camera is not affected):
+ *   AngleConnection.INSTANCE.setRotation(angle)
+ *   -> ClientPlayerEntityMixin @ModifyExpressionValue on sendMovementPackets
+ *   -> packet yaw/pitch = aim yaw/pitch
+ *   -> player.yaw is NEVER changed -> camera stays on real mouse yaw
  *
- * MoveFix (no ground push):
- *   ClientPlayerEntityMixin.onInputTick rotates input.movementForward/Sideways
- *   by delta(aimYaw - realYaw) BEFORE travel() -- only horizontal, pitch untouched.
- *
- * RotationBypass (by-module.md -> SPAngle, SpookyTime/Releon):
- *   - yawLimit   = min(|yawD|, 74 + rand(0..1.03))
- *   - pitchLimit = min(|pitchD|, 32.33)
- *   - reached -> maxStep = rand(65..100); !reached -> maxStep = rand(7.7..12.1)
- *   - scale = min(total, maxStep) / total; !reached -> ease(scale)
- *   - Sway: yaw += sin(t * 3 * 2pi) * 1.15 * gaussian, t = (ms%12000)/1200
- *   - GCD-snap via angle.adjustSensitivity()
+ * On disable: AngleConnection reset + bodyYaw/headYaw snapped back.
  */
 public class KillAuraSpooky extends ModuleStructure {
 
-    public final SliderSettings range       = new SliderSettings("Range",      "Attack range")       .setValue(3.1F).range(1.0F, 6.0F);
-    public final SliderSettings fovSetting  = new SliderSettings("FOV",        "Max FOV to target")  .setValue(180.0F).range(10.0F, 180.0F);
-    public final BooleanSetting onlySword   = new BooleanSetting("OnlySword",  "Only sword/axe")     .setValue(true);
-    public final BooleanSetting silentRot   = new BooleanSetting("Silent",     "Silent rotation")    .setValue(true);
+    public final SliderSettings range      = new SliderSettings("Range",     "Attack range")      .setValue(3.1F).range(1.0F, 6.0F);
+    public final SliderSettings fovSetting = new SliderSettings("FOV",       "Max FOV to target") .setValue(180.0F).range(10.0F, 180.0F);
+    public final BooleanSetting onlySword  = new BooleanSetting("OnlySword", "Only sword/axe")    .setValue(true);
+    public final BooleanSetting silentRot  = new BooleanSetting("Silent",    "Silent rotation")   .setValue(true);
 
     private final Random rng = new Random();
 
-    private float curYaw;
-    private float curPitch;
+    private float   curYaw;
+    private float   curPitch;
     private boolean hasRotation = false;
 
-    private Entity lockedTarget = null;
-
+    private Entity  lockedTarget      = null;
     private Entity  pendingAttack     = null;
     private long    preAttackDeadline = 0L;
     private boolean pendingWasForward = false;
@@ -73,6 +63,35 @@ public class KillAuraSpooky extends ModuleStructure {
 
     public KillAuraSpooky() {
         super("KillAuraSpooky", "SPAngle kill-aura (SpookyTime bypass)", ModuleCategory.UTILITIES);
+    }
+
+    // -------------------------------------------------------------------------
+    // Enable / Disable
+    // -------------------------------------------------------------------------
+
+    @Override
+    public void activate() {
+        if (mc.player != null) {
+            curYaw   = mc.player.getYaw();
+            curPitch = mc.player.getPitch();
+        }
+        hasRotation   = false;
+        lockedTarget  = null;
+        pendingAttack = null;
+    }
+
+    @Override
+    public void deactivate() {
+        // Clear silent rotation so the next sendMovementPackets uses real yaw
+        AngleConnection.INSTANCE.setRotation(null);
+        hasRotation   = false;
+        lockedTarget  = null;
+        pendingAttack = null;
+        // Snap body/head yaw back so the model doesn't stay rotated
+        if (mc.player != null) {
+            mc.player.setBodyYaw(mc.player.getYaw());
+            mc.player.headYaw = mc.player.getYaw();
+        }
     }
 
     // -------------------------------------------------------------------------
@@ -129,7 +148,7 @@ public class KillAuraSpooky extends ModuleStructure {
             mc.player.setPitch(curPitch);
         }
 
-        // Attack
+        // Attack when on target
         boolean reached = Math.abs(MathHelper.wrapDegrees(needed.getYaw() - curYaw)) < 3.0F
                        && Math.abs(needed.getPitch() - curPitch) < 3.0F;
         if (reached && canAttack(target)) {
@@ -155,8 +174,7 @@ public class KillAuraSpooky extends ModuleStructure {
         float totalPitch = Math.abs(dp);
         boolean reached  = totalYaw <= yawLimit && totalPitch <= pitchLimit;
 
-        float maxStepYaw;
-        float maxStepPitch;
+        float maxStepYaw, maxStepPitch;
         if (reached) {
             maxStepYaw   = 65.0F + rng.nextFloat() * 35.0F;
             maxStepPitch = 65.0F + rng.nextFloat() * 35.0F;
@@ -195,7 +213,6 @@ public class KillAuraSpooky extends ModuleStructure {
             newYaw += sway;
         }
 
-        // GCD snap
         return new Angle(newYaw, newPitch).adjustSensitivity();
     }
 
