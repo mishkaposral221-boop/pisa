@@ -41,10 +41,6 @@ public abstract class ClientPlayerEntityMixin extends AbstractClientPlayerEntity
    private double prevZ = 0.0;
    private float  prevBodyYaw = 0.0F;
 
-   /** Saved real yaw before we swap it for travel(). */
-   private float   silentSavedYaw      = 0.0F;
-   private boolean didSilentYawSwap    = false;
-
    @Shadow protected abstract void autoJump(float dx, float dz);
    @Shadow public abstract boolean isUsingItem();
 
@@ -168,38 +164,6 @@ public abstract class ClientPlayerEntityMixin extends AbstractClientPlayerEntity
       } catch (Throwable ignored) {}
 
       EventManager.callEvent(new PlayerTravelEvent(Vec3d.ZERO, false));
-   }
-
-   // ---------------------------------------------------------------------------
-   // Silent rotation: swap player.yaw to aimYaw BEFORE travel() so that
-   // physics/movement use aimYaw (matching the spoofed packet) then restore
-   // the real yaw AFTER travel() so the camera never moves visually.
-   // ---------------------------------------------------------------------------
-
-   @Inject(method = "tickMovement",
-           at = @At(value = "INVOKE",
-                    target = "Lnet/minecraft/entity/LivingEntity;travel(Lnet/minecraft/util/math/Vec3d;)V"))
-   private void preTravelSilentYawSwap(CallbackInfo ci) {
-      try {
-         if (IMinecraft.mc.player != null && AngleConnection.INSTANCE.getRotation() != null) {
-            silentSavedYaw   = IMinecraft.mc.player.getYaw();
-            IMinecraft.mc.player.setYaw(AngleConnection.INSTANCE.getRotation().getYaw());
-            didSilentYawSwap = true;
-         }
-      } catch (Throwable ignored) {}
-   }
-
-   @Inject(method = "tickMovement",
-           at = @At(value = "INVOKE",
-                    target = "Lnet/minecraft/entity/LivingEntity;travel(Lnet/minecraft/util/math/Vec3d;)V",
-                    shift = Shift.AFTER))
-   private void postTravelRestoreSilentYaw(CallbackInfo ci) {
-      try {
-         if (didSilentYawSwap && IMinecraft.mc.player != null) {
-            IMinecraft.mc.player.setYaw(silentSavedYaw);
-            didSilentYawSwap = false;
-         }
-      } catch (Throwable ignored) {}
    }
 
    // ---------------------------------------------------------------------------
