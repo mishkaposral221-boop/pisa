@@ -6,7 +6,6 @@ import java.util.List;
 import java.util.Set;
 import rich.modules.impl.combat.AimAssist;
 import rich.modules.impl.combat.AutoSwap;
-import rich.modules.impl.combat.KillAuraSpooky;
 import rich.modules.impl.combat.Triggerbot;
 import rich.modules.impl.misc.AutoDuel;
 import rich.modules.impl.misc.AutoTpAccept;
@@ -81,7 +80,6 @@ public class ModuleRepository {
       this.builder()
          .add(new AimAssist())
          .add(new Triggerbot())
-         .add(new KillAuraSpooky())
           .add(new Nametags())
           .add(new GlowESP())
           .add(new Hud())
@@ -145,7 +143,6 @@ public class ModuleRepository {
          .add(new InventoryHUDModule())
          .add(new InfoModule())
          .add(new NotificationsModule())
-         // PanicMode — всегда последний, чтобы гарантированно инициализировать instance
          .add(new PanicMode());
    }
 
